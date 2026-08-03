@@ -1,0 +1,16 @@
+{
+  "asset_id": "WTG-044",
+  "telemetry": {
+    "vibration_mms": 4.8,
+    "temperature_c": 82.0,
+    "rpm": 1780,
+    "oil_viscosity_cst": 12.0,
+    "load_pct": 95.0
+  },
+  "bnn_state": {
+    "predicted_rul_days": 14.2,
+    "epistemic_uncertainty": 0.04,
+    "aleatoric_uncertainty": 0.12
+  },
+  "operator_intent": "end-of-quarter reliability review"
+}

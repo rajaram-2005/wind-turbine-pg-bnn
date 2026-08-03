@@ -22,7 +22,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.4", "pytest-cov>=4.1"]
+api = ["fastapi>=0.110", "uvicorn>=0.29"]
+ui = ["streamlit>=1.32"]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+wind-turbine-bnn = "src.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
