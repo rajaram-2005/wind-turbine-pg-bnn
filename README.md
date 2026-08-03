@@ -20,11 +20,15 @@
 | `src/models/telemetry/` | AeroZip-style delta + deadband + quantize compression with anomaly-bypass |
 | `src/eval/` | ECE calibration, expected asset utilization, failure-type classification metrics |
 | `src/utils/` | Safety gates, logging, schema |
+| `src/api/` | FastAPI advisory service (`/health`, `/advisory`, `/advisory/fleet`) — see [API service](#api-service) |
+| `src/cli.py` | `wind-turbine-bnn` CLI (`advisory`, `fleet`, `report`) — see [CLI](#cli) |
+| `src/reporting/` | Text/markdown report rendering and fleet summaries — see [Reports](#reports) |
+| `src/ui/` | Streamlit advisory UI — see [Streamlit UI](#streamlit-ui) |
 
 ## Quick start (research / offline mode)
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[api,ui,dev]"
 python scripts/train_demo.py           # trains on synthetic drivetrain data
 pytest -q                              # runs unit tests
 ```
@@ -32,3 +36,72 @@ pytest -q                              # runs unit tests
 Outputs from `predict_rul()` are always wrapped in an `AdvisoryRecommendation`
 object that explicitly marks itself as non-actuating. The safety gate in
 `src/utils/safety.py` will refuse to emit numeric "throttle" or "LOTO" fields.
+
+## API service
+
+A thin FastAPI layer over `run_advisory()`. Every response is screened by
+`enforce_safety_contract` before it leaves the service, and the response
+schemas model no actuation fields.
+
+```bash
+pip install -e ".[api]"
+uvicorn src.api.app:app --reload        # http://127.0.0.1:8000/docs
+```
+
+Single asset:
+
+```bash
+curl -s -X POST localhost:8000/advisory \
+  -H 'Content-Type: application/json' \
+  -d @examples/payload.json | jq
+```
+
+Fleet batch (`POST /advisory/fleet`) returns one advisory per asset plus an
+aggregate `summary` (mean RUL, mean utilization, fraction at risk). `GET /health`
+is a liveness probe that always reports `advisory_only: true`.
+
+## CLI
+
+```bash
+wind-turbine-bnn advisory examples/payload.json              # JSON advisory to stdout
+wind-turbine-bnn fleet examples/fleet.csv -o report.md        # markdown fleet report
+wind-turbine-bnn fleet examples/fleet.csv --format json       # JSON records
+wind-turbine-bnn report --fleet examples/fleet.csv --title "Q3 review"
+cat examples/payload.json | wind-turbine-bnn advisory -       # payload via stdin
+```
+
+Subcommands: `advisory` (single JSON payload), `fleet` (fleet CSV → markdown or
+JSON), `report` (markdown report from `--payload` or `--fleet`). Use `-` for
+stdin/stdout.
+
+## Reports
+
+`src/reporting/reports.py` renders advisory records (the dict from
+`run_advisory()`) into plain text and markdown, with fleet summaries built on
+`expected_asset_utilization`:
+
+```python
+from src.reporting.reports import advisories_from_csv, build_fleet_report
+
+records = advisories_from_csv("examples/fleet.csv")
+print(build_fleet_report(records, title="Q3 review"))
+```
+
+## Streamlit UI
+
+```bash
+pip install -e ".[ui]"
+streamlit run src/ui/app.py
+```
+
+Two tabs: **Single asset** (enter telemetry + BNN state, get a formatted
+advisory) and **Fleet** (upload a CSV, see a sortable table + summary metrics and
+download a markdown report). The UI deliberately exposes no actuation controls.
+
+### Fleet CSV format
+
+`examples/fleet.csv` is the canonical format for the fleet CLI and UI:
+
+```
+asset_id,vibration_mms,temperature_c,rpm,oil_viscosity_cst,load_pct,predicted_rul_days,epistemic_uncertainty,aleatoric_uncertainty
+```
