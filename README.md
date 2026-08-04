@@ -54,6 +54,24 @@ and how this differs from conventional predictive maintenance.
 | `src/cli.py` | `wind-turbine-bnn` CLI (`advisory`, `fleet`, `report`) — see [CLI](#cli) |
 | `src/reporting/` | Text/markdown report rendering and fleet summaries — see [Reports](#reports) |
 | `src/ui/` | Streamlit advisory UI — see [Streamlit UI](#streamlit-ui) |
+| `src/meta/` | Reptile meta-learning — few-shot adaptation of the PG-BNN to newly onboarded assets from a handful of labeled windows — see `docs/META_LEARNING.md` |
+| `src/agents/hermes.py` | Hermes self-training onboarding agent: confidence-filtered pseudo-labeling + fail-closed promotion gate (advisory-only) — see `docs/META_LEARNING.md` |
+
+## Few-shot fleet onboarding (Reptile + Hermes)
+
+New turbines arrive with almost no labeled failure data. **Reptile** meta-training
+(`src/meta/reptile.py`) learns a fleet-wise initialization from historical
+turbines; the **Hermes** agent (`src/agents/hermes.py`) then adapts it to the
+new asset from a few labeled shots, self-trains on its unlabeled telemetry
+pool (pseudo-labels accepted only when epistemic σ ≤ τ days), and promotes
+the model to advisory duty only through a fail-closed gate (held-out RMSE +
+45-day early-warning accuracy thresholds). Everything stays advisory-only.
+
+```bash
+python scripts/onboard_demo.py     # meta-train on the fleet, onboard a new asset
+```
+
+See `docs/META_LEARNING.md` for the algorithm, the safety posture, and the API.
 
 ## Quick start (research / offline mode)
 

@@ -29,6 +29,28 @@ telemetry:
   window_stride_s: 200
   sample_interval_s: 10  # high-frequency channel sample rate
 
+meta:
+  reptile:               # Reptile meta-learning over the fleet (src/meta/reptile.py)
+    inner_lr: 5.0e-3     # Adam lr inside the task loop
+    inner_steps: 5       # gradient steps per task support set
+    meta_lr: 0.4         # epsilon: interpolation toward adapted weights (1.0 = full)
+    tasks_per_iter: 4
+    meta_iterations: 25
+    num_samples: 3       # MC samples per ELBO evaluation in the inner loop
+    kl_weight: 1.0e-3
+    eval_mc_samples: 16
+    seed: 0
+
+hermes:                  # self-training onboarding agent (src/agents/hermes.py)
+  confidence_tau_days: 40.0    # pseudo-label only if epistemic sigma <= tau (RUL days)
+  max_rounds: 4
+  max_pseudo_per_round: 32
+  promotion_max_rmse_days: 120.0
+  promotion_min_accuracy: 0.8
+  min_eval_shots: 4
+  eval_mc_samples: 16
+  seed: 0
+
 safety:
   mode: advisory_only    # MUST remain "advisory_only"
   allow_actuation: false # MUST remain false
