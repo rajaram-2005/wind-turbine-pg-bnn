@@ -16,12 +16,12 @@ import sys
 # Adjust path to import src
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.digital_twin import (
+from src.digital_twin import (  # noqa: E402
     WindTurbineDigitalTwin,
     generate_engineering_prompt,
     get_spec,
 )
-from src.utils.schema import BNNState, Telemetry
+from src.utils.schema import BNNState, Telemetry  # noqa: E402
 
 
 def main():
@@ -42,7 +42,7 @@ def main():
     print("\n=====================================================================")
     # 3. Ingest SCADA Telemetry & update state
     print("Step 3: Ingesting Telemetry snapshots...")
-    
+
     # Ingest a healthy snapshot
     healthy_tel = Telemetry(
         vibration_mms=1.4,
@@ -56,7 +56,7 @@ def main():
         epistemic_uncertainty=0.02,
         aleatoric_uncertainty=0.06,
     )
-    
+
     state_rec = twin.update_state(healthy_tel, bnn)
     print("Healthy State Updated:")
     print(f" - Active Violations: {state_rec['physics_violations']}")

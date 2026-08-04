@@ -117,7 +117,7 @@ class TrainConfig:
     num_epochs: int = 300
     num_samples: int = 10       # MC samples per batch for ELBO
     kl_weight: float = 1e-3     # KL scaling factor (to weight against NLL)
-    physics_weight: float = 0.2 # L_physics weight
+    physics_weight: float = 0.2  # L_physics weight
     batch_size: int = 256
 
 

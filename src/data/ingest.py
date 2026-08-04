@@ -56,7 +56,7 @@ def sliding_features(
     starts = list(range(0, n - w + 1, s))
     feats: list[np.ndarray] = []
     for st in starts:
-        win = data[st : st + w]
+        win = data[st: st + w]
         vec = []
         for stat in cfg.stats:
             if stat == "mean":
