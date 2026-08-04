@@ -23,32 +23,41 @@ class SyntheticConfig:
     seed: int = 42
 
 
-def _turbine_sequence(rng: np.random.Generator, seq_len: int) -> tuple[pd.DataFrame, float]:
-    """Return (telemetry_df, rul_at_end_days). Damage integrates exponentially
-    toward end-of-life; RUL at end is set by how close to threshold we got."""
+def _degradation_health(rng: np.random.Generator, seq_len: int) -> np.ndarray:
+    """Simulated health state h ∈ [0,1] over one turbine life (h=1 healthy,
+    h=0 failure). Damage integrates exponentially with a random shock in late
+    life, so the curve is monotone-decreasing with a stress-accelerated tail.
+    """
     t = np.arange(seq_len)
-    # Health state h ∈ [0,1], h=1 healthy, h=0 failure
     failure_rate = rng.exponential(0.0004) + 1e-5
     damage = np.cumsum(failure_rate * (1.0 + 0.5 * np.sin(t / 200.0)))
     # Random shock in late life
     shock_idx = seq_len - rng.integers(100, 400)
     shock_mag = rng.uniform(0.5, 2.0)
     damage[shock_idx:] += shock_mag * np.linspace(0, 1, seq_len - shock_idx) ** 2
-    h = np.clip(1.0 - damage / damage[-1], 0.0, 1.0)
-    rul_days = float(np.clip(h[-1] * 365.0, 0.0, 365.0))
+    return np.clip(1.0 - damage / damage[-1], 0.0, 1.0)
 
-    # Telemetry: start at healthy levels, drift toward fault levels as h→0
-    vib = 1.5 + (4.0 - 1.5) * (1.0 - h) + rng.normal(0, 0.1, seq_len)
-    temp = 55.0 + (30.0) * (1.0 - h) + rng.normal(0, 0.3, seq_len)
-    rpm = 1650 + 100 * (1.0 - h) + rng.normal(0, 5, seq_len)
-    visc = 30.0 - 20 * (1.0 - h) + rng.normal(0, 0.3, seq_len)
-    load = 70.0 + 25 * (1.0 - h) + rng.normal(0, 1.0, seq_len)
+
+def _telemetry_from_health(
+    h: np.ndarray,
+    rng: np.random.Generator,
+    noise_scale: float = 1.0,
+) -> pd.DataFrame:
+    """Map a health curve to SCADA-style telemetry, drifting from healthy
+    levels toward fault levels as h→0. `noise_scale` scales sensor noise
+    (used by the accuracy campaign to stress-test the warning boundary)."""
+    seq_len = len(h)
+    vib = 1.5 + (4.0 - 1.5) * (1.0 - h) + rng.normal(0, 0.1 * noise_scale, seq_len)
+    temp = 55.0 + 30.0 * (1.0 - h) + rng.normal(0, 0.3 * noise_scale, seq_len)
+    rpm = 1650 + 100 * (1.0 - h) + rng.normal(0, 5 * noise_scale, seq_len)
+    visc = 30.0 - 20.0 * (1.0 - h) + rng.normal(0, 0.3 * noise_scale, seq_len)
+    load = 70.0 + 25.0 * (1.0 - h) + rng.normal(0, 1.0 * noise_scale, seq_len)
     rpm = np.clip(rpm, 0, 2000)
     visc = np.clip(visc, 2, 80)
     load = np.clip(load, 0, 115)
     vib = np.clip(vib, 0, 20)
 
-    df = pd.DataFrame(
+    return pd.DataFrame(
         {
             "vibration_mms": vib.astype(np.float32),
             "temperature_c": temp.astype(np.float32),
@@ -57,6 +66,14 @@ def _turbine_sequence(rng: np.random.Generator, seq_len: int) -> tuple[pd.DataFr
             "load_pct": load.astype(np.float32),
         }
     )
+
+
+def _turbine_sequence(rng: np.random.Generator, seq_len: int) -> tuple[pd.DataFrame, float]:
+    """Return (telemetry_df, rul_at_end_days). Damage integrates exponentially
+    toward end-of-life; RUL at end is set by how close to threshold we got."""
+    h = _degradation_health(rng, seq_len)
+    rul_days = float(np.clip(h[-1] * 365.0, 0.0, 365.0))
+    df = _telemetry_from_health(h, rng)
     df["timestamp"] = pd.date_range("2025-01-01", periods=seq_len, freq="10min")
     return df, rul_days
 

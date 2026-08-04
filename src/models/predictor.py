@@ -15,7 +15,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from src.eval.calibration import classify_failure_mode
+from src.eval.calibration import EARLY_WARNING_HORIZON_DAYS, classify_failure_mode
 from src.physics.constraints import check_violations
 from src.utils.safety import AdvisoryRecommendation, enforce_safety_contract
 from src.utils.schema import TurbinePayload
@@ -93,6 +93,17 @@ def run_advisory(
             "OEM procedures."
         )
 
+    # 45-day early-warning horizon: the system's guarantee is that the problem
+    # is announced (advisory-level) at least 45 days before the predicted failure.
+    early_warning_triggered = rul_days < EARLY_WARNING_HORIZON_DAYS
+    if early_warning_triggered:
+        rationale_parts.append(
+            f"EARLY WARNING: predicted failure within {EARLY_WARNING_HORIZON_DAYS:.0f} days "
+            f"(RUL = {rul_days:.1f} days). Schedule a detailed condition "
+            "inspection and order spares for the probable failure mode. "
+            "Advisory only — no curtailment or stop command is implied."
+        )
+
     rec = AdvisoryRecommendation(
         asset_id=payload.asset_id,
         predicted_rul_days=rul_days,
@@ -100,6 +111,8 @@ def run_advisory(
         aleatoric_std=ale,
         physics_violations=violations,
         suggested_inspection_window_days=_inspection_window(rul_days, epi),
+        early_warning_triggered=early_warning_triggered,
+        warning_horizon_days=EARLY_WARNING_HORIZON_DAYS,
         rationale=" ".join(rationale_parts),
     )
     return enforce_safety_contract(rec.to_dict())

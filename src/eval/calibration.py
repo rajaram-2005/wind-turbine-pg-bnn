@@ -5,6 +5,10 @@ Provides:
   - expected_calibration_error: ECE over predictive CDF intervals.
   - expected_asset_utilization: simple availability-style metric given a
     fleet of predicted RULs and a maintenance scheduling horizon.
+  - early_warning_metrics: binary early-warning classification accuracy at a
+    fixed warning horizon (default 45 days) — the headline fleet metric.
+  - first_warning_lead_time_days: how far ahead of failure the first warning
+    fires along a turbine's degradation trajectory.
   - classify_failure_mode: rule-based failure-type flagging from telemetry.
 """
 
@@ -64,6 +68,85 @@ def expected_asset_utilization(
         "fraction_at_risk": float((ruls < planning_horizon_days + safety_buffer_days).mean()),
         "mean_rul_days": float(ruls.mean()),
     }
+
+
+EARLY_WARNING_HORIZON_DAYS = 45.0
+
+
+def early_warning_metrics(
+    y_true_rul: Sequence[float],
+    y_pred_rul: Sequence[float],
+    warning_horizon_days: float = EARLY_WARNING_HORIZON_DAYS,
+) -> dict[str, float]:
+    """
+    Binary early-warning classification metrics at a fixed warning horizon.
+
+    An asset is "at risk" (positive) when its *true* RUL is below the warning
+    horizon; the system raises a warning when the *predicted* RUL is below the
+    horizon. Accuracy is the fraction of assets whose warning status matches
+    reality — the headline metric for the 45-day early-warning claim.
+
+    Also reports precision/recall/F1, the false-alarm rate, and the mean lead
+    time (days before failure) of true warnings.
+
+    Returns a dict with keys: accuracy, precision, recall, f1,
+    false_alarm_rate, mean_lead_time_days, n_assets, n_true_positive,
+    n_true_negative, n_false_positive, n_false_negative.
+    """
+    yt = np.asarray(y_true_rul, dtype=np.float64)
+    yp = np.asarray(y_pred_rul, dtype=np.float64)
+    if yt.shape != yp.shape or yt.ndim != 1:
+        raise ValueError("y_true_rul and y_pred_rul must be 1-D arrays of equal length")
+    at_risk = yt < warning_horizon_days
+    warned = yp < warning_horizon_days
+    tp = int((at_risk & warned).sum())
+    tn = int((~at_risk & ~warned).sum())
+    fp = int((~at_risk & warned).sum())
+    fn = int((at_risk & ~warned).sum())
+    n = int(len(yt))
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+    mean_lead_time = float(yt[at_risk & warned].mean()) if tp else 0.0
+    return {
+        "accuracy": float((tp + tn) / n),
+        "precision": float(precision),
+        "recall": float(recall),
+        "f1": float(f1),
+        "false_alarm_rate": float(fp / n),
+        "mean_lead_time_days": mean_lead_time,
+        "n_assets": n,
+        "n_true_positive": tp,
+        "n_true_negative": tn,
+        "n_false_positive": fp,
+        "n_false_negative": fn,
+    }
+
+
+def first_warning_lead_time_days(
+    rul_remaining_days: Sequence[float],
+    warned: Sequence[bool],
+) -> float | None:
+    """
+    Days before failure at the moment the first early warning fires, along a
+    single turbine's degradation trajectory.
+
+    ``rul_remaining_days[i]`` is the true remaining useful life at assessment
+    step ``i`` and ``warned[i]`` is whether the system raised a warning at
+    that step. The first True entry marks the earliest warning; its remaining
+    life is the lead time. Returns None if the system never warned.
+
+    Lead time >= 45 days means the problem was announced at least 45 days
+    before failure — the guarantee the early-warning system is designed for.
+    """
+    ruls = np.asarray(rul_remaining_days, dtype=np.float64)
+    warned = np.asarray(warned, dtype=bool)
+    if ruls.shape != warned.shape or ruls.ndim != 1:
+        raise ValueError("rul_remaining_days and warned must be 1-D arrays of equal length")
+    idx = np.argmax(warned) if warned.any() else -1
+    if idx < 0:
+        return None
+    return float(ruls[idx])
 
 
 def classify_failure_mode(

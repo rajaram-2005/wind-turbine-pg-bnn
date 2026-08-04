@@ -59,6 +59,8 @@ class AdvisoryRecommendation:
     aleatoric_std: float
     physics_violations: list[str] = field(default_factory=list)
     suggested_inspection_window_days: float = 7.0
+    early_warning_triggered: bool = False
+    warning_horizon_days: float = 45.0
     rationale: str = ""
     advisory_only: bool = True
     generated_at: str = field(
@@ -75,6 +77,8 @@ class AdvisoryRecommendation:
             "aleatoric_std": float(self.aleatoric_std),
             "physics_violations": list(self.physics_violations),
             "suggested_inspection_window_days": float(self.suggested_inspection_window_days),
+            "early_warning_triggered": bool(self.early_warning_triggered),
+            "warning_horizon_days": float(self.warning_horizon_days),
             "rationale": self.rationale,
             "advisory_only": True,
             "generated_at": self.generated_at,
