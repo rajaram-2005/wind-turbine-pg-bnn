@@ -98,6 +98,11 @@ class BayesianNeuralNetwork(nn.Module):
             h = F.relu(h)
         mean = self.out_mean(h, sample=sample).squeeze(-1)
         log_var = self.out_log_var(h).squeeze(-1)
+        # Clamp the learned observation variance: an unbounded log_var lets the
+        # optimizer "explain away" the regression loss by inflating noise
+        # (variance collapse → near-constant predictions). Bounding it keeps
+        # the heteroscedastic head honest: var ∈ [e^-5, e^3] ≈ [0.007, 20].
+        log_var = torch.clamp(log_var, min=-5.0, max=3.0)
         return mean, log_var
 
     def kl(self) -> torch.Tensor:

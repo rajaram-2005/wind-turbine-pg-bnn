@@ -7,10 +7,14 @@ All operations and recommendations are strictly aligned with the advisory-only e
 ## Features
 
 1. **Turbine Specifications Library (`src.digital_twin.specs`)**:
-   Predefined structural, mechanical, and gearbox limitations for common wind turbines:
+   Predefined structural, mechanical, and gearbox limitations for 8 common wind turbines:
    - **GE 1.5 SLE** (GE-1.5)
    - **Vestas V90-2.0 MW** (Vestas-V90)
    - **Siemens SWT-2.3-101** (Siemens-SWT-2.3)
+   - **Suzlon S97 2.1 MW** (Suzlon-S97) — most-deployed turbine in Indian wind farms
+   - **Gamesa G114-2.0 MW** (Gamesa-G114)
+   - **Nordex N100/2500** (Nordex-N100)
+   - **Senvion MM92** (Senvion-MM92)
    - **NREL 5MW Reference Turbine** (NREL-5MW)
 
 2. **WindTurbineDigitalTwin (`src.digital_twin.twin`)**:

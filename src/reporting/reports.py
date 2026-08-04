@@ -88,6 +88,8 @@ def format_advisory_text(rec: dict) -> str:
         f"{'=' * 72}\n"
         f"Generated:       {rec.get('generated_at', 'n/a')}\n"
         f"ADVISORY ONLY — Decision-support, NOT an actuation command.\n\n"
+        f"EARLY WARNING (45-day horizon): "
+        f"{'⚠️ TRIGGERED — predicted failure within 45 days' if rec.get('early_warning_triggered') else 'not triggered'}\n\n"
         f"Predicted RUL:               {rec['predicted_rul_days']:.1f} days\n"
         f"Epistemic uncertainty (σ):   {rec['epistemic_std']:.3f}\n"
         f"Aleatoric uncertainty (σ):   {rec['aleatoric_std']:.3f}\n"
@@ -106,6 +108,11 @@ def format_advisory_markdown(rec: dict) -> str:
     else:
         viol_block = "_None — all channels within nominal bounds._"
 
+    if rec.get("early_warning_triggered"):
+        early_warning_cell = "**⚠️ TRIGGERED — predicted failure within 45 days**"
+    else:
+        early_warning_cell = "not triggered"
+
     return (
         f"# Advisory — `{rec['asset_id']}`\n"
         f"\n"
@@ -118,6 +125,7 @@ def format_advisory_markdown(rec: dict) -> str:
         f"| Epistemic uncertainty (σ) | {rec['epistemic_std']:.3f} |\n"
         f"| Aleatoric uncertainty (σ) | {rec['aleatoric_std']:.3f} |\n"
         f"| Suggested inspection window | {rec['suggested_inspection_window_days']:.1f} days |\n"
+        f"| Early warning (45-day horizon) | {early_warning_cell} |\n"
         f"\n"
         f"## Physics violations\n\n{viol_block}\n\n"
         f"## Rationale\n\n{rec.get('rationale', '').strip()}\n\n"
@@ -143,16 +151,17 @@ def fleet_summary(records: Sequence[dict]) -> dict:
 def fleet_summary_table(records: Sequence[dict]) -> str:
     """Render a compact markdown table of all fleet advisories."""
     header = (
-        "| Asset | RUL (days) | Epistemic σ | Aleatoric σ | Inspect in (days) "
-        "| Violations |\n"
-        "| --- | ---: | ---: | ---: | ---: | --- |\n"
+        "| Asset | RUL (days) | Early warning | Epistemic σ | Aleatoric σ "
+        "| Inspect in (days) | Violations |\n"
+        "| --- | ---: | --- | ---: | ---: | ---: | --- |\n"
     )
     rows = []
     for r in records:
         n_viol = len(r.get("physics_violations") or [])
         viol = f"{n_viol}" if n_viol else "0"
+        ew = "⚠️ within 45d" if r.get("early_warning_triggered") else "no"
         rows.append(
-            f"| {r['asset_id']} | {r['predicted_rul_days']:.1f} "
+            f"| {r['asset_id']} | {r['predicted_rul_days']:.1f} | {ew} "
             f"| {r['epistemic_std']:.3f} | {r['aleatoric_std']:.3f} "
             f"| {r['suggested_inspection_window_days']:.1f} | {viol} |"
         )

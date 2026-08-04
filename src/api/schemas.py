@@ -47,6 +47,8 @@ class AdvisoryResponse(BaseModel):
     aleatoric_std: float
     physics_violations: list[str] = Field(default_factory=list)
     suggested_inspection_window_days: float
+    early_warning_triggered: bool = False
+    warning_horizon_days: float = 45.0
     rationale: str
     advisory_only: bool = True
     generated_at: str
