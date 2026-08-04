@@ -11,6 +11,7 @@ from pathlib import Path
 from src.digital_twin.prompts import generate_engineering_prompt
 from src.digital_twin.specs import get_spec
 from src.digital_twin.twin import WindTurbineDigitalTwin
+from src.utils.encoding import configure_utf8_stdio
 from src.utils.schema import BNNState, Telemetry
 
 
@@ -19,7 +20,7 @@ def load_optional_telemetry(payload_path: str | None) -> tuple[Telemetry | None,
     if not payload_path:
         return None, None
     try:
-        data = json.loads(Path(payload_path).read_text())
+        data = json.loads(Path(payload_path).read_text(encoding="utf-8"))
         tel_data = data.get("telemetry", data)
         telemetry = Telemetry(
             vibration_mms=tel_data["vibration_mms"],
@@ -58,6 +59,8 @@ def status_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format.")
 
     args = parser.parse_args(argv)
+
+    configure_utf8_stdio()
 
     try:
         spec = get_spec(args.model)
@@ -135,6 +138,8 @@ def simulate_main(argv: Sequence[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
+    configure_utf8_stdio()
+
     try:
         spec = get_spec(args.model)
     except KeyError as e:
@@ -152,7 +157,7 @@ def simulate_main(argv: Sequence[str] | None = None) -> int:
     print(f"Final simulated state bearing L10 life: {records[-1]['bearing_l10_hours']:.1f} hours")
 
     if args.output:
-        Path(args.output).write_text(json.dumps(records, indent=2))
+        Path(args.output).write_text(json.dumps(records, indent=2), encoding="utf-8")
         print(f"Saved simulation history of {len(records)} steps to {args.output}")
     else:
         # Print summary table of last few steps
@@ -185,6 +190,8 @@ def prompt_main(argv: Sequence[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
+    configure_utf8_stdio()
+
     try:
         spec = get_spec(args.model)
     except KeyError as e:
@@ -215,7 +222,7 @@ def prompt_main(argv: Sequence[str] | None = None) -> int:
     prompt = generate_engineering_prompt(twin)
 
     if args.output:
-        Path(args.output).write_text(prompt)
+        Path(args.output).write_text(prompt, encoding="utf-8")
         print(f"Contextual prompt saved to {args.output}")
     else:
         sys.stdout.write(prompt if prompt.endswith("\n") else prompt + "\n")
