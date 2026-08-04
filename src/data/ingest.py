@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Iterable, List, Sequence
 
 import numpy as np
 import pandas as pd
-
 
 CHANNELS = ("vibration_mms", "temperature_c", "rpm", "oil_viscosity_cst", "load_pct")
 
@@ -39,13 +38,15 @@ def robust_normalize(df: pd.DataFrame, quantile_lo: float = 0.01, quantile_hi: f
 
 def sliding_features(
     df: pd.DataFrame,
-    cfg: SlidingWindowConfig = SlidingWindowConfig(),
+    cfg: SlidingWindowConfig | None = None,
     channels: Sequence[str] = CHANNELS,
 ) -> np.ndarray:
     """
     Convert a time-indexed telemetry frame into a 2D array of windowed feature
     vectors of shape (n_windows, len(channels)*len(stats)).
     """
+    if cfg is None:
+        cfg = SlidingWindowConfig()
     data = df[list(channels)].to_numpy(dtype=np.float32)
     n = len(data)
     w = cfg.window_size
@@ -53,7 +54,7 @@ def sliding_features(
     if n < w:
         return np.zeros((0, len(channels) * len(cfg.stats)), dtype=np.float32)
     starts = list(range(0, n - w + 1, s))
-    feats: List[np.ndarray] = []
+    feats: list[np.ndarray] = []
     for st in starts:
         win = data[st : st + w]
         vec = []

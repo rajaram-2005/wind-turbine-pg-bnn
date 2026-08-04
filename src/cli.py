@@ -22,7 +22,6 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import List, Optional
 
 from src.models.predictor import run_advisory
 from src.reporting.reports import (
@@ -34,14 +33,14 @@ from src.utils.safety import enforce_safety_contract
 from src.utils.schema import TurbinePayload
 
 
-def _read_text(arg: Optional[str]) -> str:
+def _read_text(arg: str | None) -> str:
     """Read a payload from a path, or from stdin when ``arg`` is ``-``/None."""
     if arg in (None, "-"):
         return sys.stdin.read()
     return Path(arg).read_text()
 
 
-def _emit(content: str, output: Optional[str]) -> None:
+def _emit(content: str, output: str | None) -> None:
     """Write ``content`` to ``output`` (file path) or stdout (``-``/None)."""
     if output in (None, "-"):
         sys.stdout.write(content if content.endswith("\n") else content + "\n")
@@ -118,7 +117,7 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     args.func(args)

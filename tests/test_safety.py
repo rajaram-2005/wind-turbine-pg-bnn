@@ -1,5 +1,10 @@
 import pytest
-from src.utils.safety import AdvisoryRecommendation, enforce_safety_contract, SafetyBoundaryError
+
+from src.utils.safety import (
+    AdvisoryRecommendation,
+    SafetyBoundaryError,
+    enforce_safety_contract,
+)
 
 
 def test_advisory_recommendation_has_disclaimer():

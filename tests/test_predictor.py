@@ -1,5 +1,5 @@
 from src.models.predictor import run_advisory
-from src.utils.schema import TurbinePayload, Telemetry, BNNState
+from src.utils.schema import BNNState, Telemetry, TurbinePayload
 
 
 def test_run_advisory_low_rul_returns_inspection_window():

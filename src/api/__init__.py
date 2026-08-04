@@ -10,11 +10,11 @@ from src.api.schemas import (
 )
 
 __all__ = [
-    "app",
-    "create_app",
     "AdvisoryResponse",
     "FleetRequest",
     "FleetResponse",
     "FleetSummary",
     "HealthResponse",
+    "app",
+    "create_app",
 ]

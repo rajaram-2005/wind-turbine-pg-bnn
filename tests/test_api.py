@@ -6,10 +6,11 @@ import pytest
 pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
 
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
-from src.api.app import create_app  # noqa: E402
-from src.api.schemas import AdvisoryResponse, FleetSummary  # noqa: E402
+from src.api.app import create_app
+from src.api.schemas import AdvisoryResponse, FleetSummary
 
 # Fields that must NEVER appear in any advisory payload (see src/utils/safety.py).
 BLOCKED_KEYS = ("throttle_pct", "rpm_setpoint", "loto_steps", "part_sku", "torque_demand")
@@ -103,7 +104,7 @@ def test_advisory_response_schema_strict():
     resp = AdvisoryResponse(**rec)
     assert resp.advisory_only is True
     # extra="forbid" rejects unknown (and therefore any blocked) keys.
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         AdvisoryResponse(**{**rec, "throttle_pct": -10})
 
 

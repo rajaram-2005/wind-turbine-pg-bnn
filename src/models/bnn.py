@@ -18,11 +18,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from src.physics.constraints import physics_loss
 
@@ -79,7 +78,7 @@ class BayesianNeuralNetwork(nn.Module):
     def __init__(
         self,
         in_features: int,
-        hidden_sizes: Tuple[int, ...] = (64, 64),
+        hidden_sizes: tuple[int, ...] = (64, 64),
         prior_sigma: float = 1.0,
     ):
         super().__init__()
@@ -92,7 +91,7 @@ class BayesianNeuralNetwork(nn.Module):
         self.out_log_var = nn.Linear(dims[-1], 1)
         nn.init.constant_(self.out_log_var.bias, -1.0)
 
-    def forward(self, x: torch.Tensor, sample: bool = True) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor, sample: bool = True) -> tuple[torch.Tensor, torch.Tensor]:
         h = x
         for layer in self.linears:
             h = layer(h, sample=sample)
@@ -126,10 +125,12 @@ def elbo_loss(
     model: BayesianNeuralNetwork,
     x: torch.Tensor,
     y: torch.Tensor,
-    telemetry: Optional[Dict[str, torch.Tensor]] = None,
-    cfg: TrainConfig = TrainConfig(),
-) -> Tuple[torch.Tensor, Dict[str, float]]:
+    telemetry: dict[str, torch.Tensor] | None = None,
+    cfg: TrainConfig | None = None,
+) -> tuple[torch.Tensor, dict[str, float]]:
     """Compute negative ELBO = E_q[ NLL ] + KL_weight * KL(q||p) + physics_weight * L_physics."""
+    if cfg is None:
+        cfg = TrainConfig()
     nll_acc = torch.tensor(0.0, device=x.device)
     n = y.shape[0]
     for _ in range(cfg.num_samples):
@@ -163,7 +164,7 @@ def predict(
     model: BayesianNeuralNetwork,
     x: torch.Tensor,
     mc_samples: int = 50,
-) -> Dict[str, torch.Tensor]:
+) -> dict[str, torch.Tensor]:
     """
     Predict RUL with uncertainty decomposition.
 

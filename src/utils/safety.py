@@ -17,27 +17,26 @@ into a control path cannot silently emit dangerous payloads.
 
 from __future__ import annotations
 
+import datetime as _dt
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
-import datetime as _dt
-
+from typing import Any
 
 # Fields that are NEVER permitted in a recommendation payload.
 # Matched case-insensitively against both top-level keys and nested keys.
-_BLOCKED_KEY_PATTERNS: List[re.Pattern] = [
-    re.compile(r"throttle", re.I),
-    re.compile(r"torque_demand", re.I),
-    re.compile(r"pitch_command", re.I),
-    re.compile(r"rpm_setpoint", re.I),
-    re.compile(r"breaker", re.I),
-    re.compile(r"loto", re.I),
-    re.compile(r"lockout", re.I),
-    re.compile(r"tagout", re.I),
-    re.compile(r"sku", re.I),
-    re.compile(r"part_number", re.I),
-    re.compile(r"tool_part", re.I),
-    re.compile(r"actuat(e|ion)", re.I),
+_BLOCKED_KEY_PATTERNS: list[re.Pattern] = [
+    re.compile(r"throttle", re.IGNORECASE),
+    re.compile(r"torque_demand", re.IGNORECASE),
+    re.compile(r"pitch_command", re.IGNORECASE),
+    re.compile(r"rpm_setpoint", re.IGNORECASE),
+    re.compile(r"breaker", re.IGNORECASE),
+    re.compile(r"loto", re.IGNORECASE),
+    re.compile(r"lockout", re.IGNORECASE),
+    re.compile(r"tagout", re.IGNORECASE),
+    re.compile(r"sku", re.IGNORECASE),
+    re.compile(r"part_number", re.IGNORECASE),
+    re.compile(r"tool_part", re.IGNORECASE),
+    re.compile(r"actuat(e|ion)", re.IGNORECASE),
 ]
 
 
@@ -58,7 +57,7 @@ class AdvisoryRecommendation:
     predicted_rul_days: float
     epistemic_std: float
     aleatoric_std: float
-    physics_violations: List[str] = field(default_factory=list)
+    physics_violations: list[str] = field(default_factory=list)
     suggested_inspection_window_days: float = 7.0
     rationale: str = ""
     advisory_only: bool = True
@@ -66,7 +65,7 @@ class AdvisoryRecommendation:
         default_factory=lambda: _dt.datetime.now(_dt.timezone.utc).isoformat()
     )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         # Freeze-by-contract: explicitly list allowed keys, do NOT pass through
         # arbitrary kwargs that consumers might try to stuff with commands.
         return {
@@ -87,7 +86,7 @@ class AdvisoryRecommendation:
         }
 
 
-def enforce_safety_contract(payload: Dict[str, Any]) -> Dict[str, Any]:
+def enforce_safety_contract(payload: dict[str, Any]) -> dict[str, Any]:
     """
     Walk a candidate payload dict and raise SafetyBoundaryError if any
     forbidden direct-actuation field is present.
