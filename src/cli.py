@@ -29,6 +29,7 @@ from src.reporting.reports import (
     build_fleet_report,
     format_advisory_markdown,
 )
+from src.utils.encoding import configure_utf8_stdio
 from src.utils.safety import enforce_safety_contract
 from src.utils.schema import TurbinePayload
 
@@ -37,7 +38,7 @@ def _read_text(arg: str | None) -> str:
     """Read a payload from a path, or from stdin when ``arg`` is ``-``/None."""
     if arg in (None, "-"):
         return sys.stdin.read()
-    return Path(arg).read_text()
+    return Path(arg).read_text(encoding="utf-8")
 
 
 def _emit(content: str, output: str | None) -> None:
@@ -45,7 +46,7 @@ def _emit(content: str, output: str | None) -> None:
     if output in (None, "-"):
         sys.stdout.write(content if content.endswith("\n") else content + "\n")
     else:
-        Path(output).write_text(content)
+        Path(output).write_text(content, encoding="utf-8")
 
 
 # --------------------------------------------------------------------------- #
@@ -118,6 +119,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_utf8_stdio()
     parser = build_parser()
     args = parser.parse_args(argv)
     args.func(args)
