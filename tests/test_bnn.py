@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from src.models.bnn import BayesianNeuralNetwork, elbo_loss, predict, TrainConfig
+from src.models.bnn import BayesianNeuralNetwork, TrainConfig, elbo_loss, predict
 
 
 def _mk_model(dim=25):

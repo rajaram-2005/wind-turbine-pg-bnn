@@ -8,7 +8,6 @@ Labels are true RUL (days) derived from the damage integral.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -24,7 +23,7 @@ class SyntheticConfig:
     seed: int = 42
 
 
-def _turbine_sequence(rng: np.random.Generator, seq_len: int) -> Tuple[pd.DataFrame, float]:
+def _turbine_sequence(rng: np.random.Generator, seq_len: int) -> tuple[pd.DataFrame, float]:
     """Return (telemetry_df, rul_at_end_days). Damage integrates exponentially
     toward end-of-life; RUL at end is set by how close to threshold we got."""
     t = np.arange(seq_len)
@@ -62,16 +61,20 @@ def _turbine_sequence(rng: np.random.Generator, seq_len: int) -> Tuple[pd.DataFr
     return df, rul_days
 
 
-def generate(cfg: SyntheticConfig = SyntheticConfig()) -> List[Tuple[pd.DataFrame, float]]:
+def generate(cfg: SyntheticConfig | None = None) -> list[tuple[pd.DataFrame, float]]:
+    if cfg is None:
+        cfg = SyntheticConfig()
     rng = np.random.default_rng(cfg.seed)
     return [_turbine_sequence(rng, cfg.seq_len) for _ in range(cfg.n_turbines)]
 
 
 def features_and_labels(
-    cfg: SyntheticConfig = SyntheticConfig(),
+    cfg: SyntheticConfig | None = None,
 ):
     """Return (X, y, (scale_lo, scale_hi)) ready for BNN training."""
-    from src.data.ingest import sliding_features, SlidingWindowConfig, robust_normalize
+    if cfg is None:
+        cfg = SyntheticConfig()
+    from src.data.ingest import SlidingWindowConfig, robust_normalize, sliding_features
 
     seqs = generate(cfg)
     sw = SlidingWindowConfig(window_size=60, stride=20)

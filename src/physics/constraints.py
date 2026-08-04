@@ -13,7 +13,6 @@ must substitute asset-specific OEM limits.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
 
 import torch
 
@@ -35,11 +34,13 @@ class GeneratorPhysicsConstraints:
 
 
 def check_violations(
-    telemetry: Dict[str, float],
-    gb: GearboxPhysicsConstraints = GearboxPhysicsConstraints(),
-) -> List[str]:
+    telemetry: dict[str, float],
+    gb: GearboxPhysicsConstraints | None = None,
+) -> list[str]:
     """Return a list of human-readable violation strings (empty if all nominal)."""
-    v: List[str] = []
+    if gb is None:
+        gb = GearboxPhysicsConstraints()
+    v: list[str] = []
     if telemetry["vibration_mms"] > gb.vibration_limit_mms:
         v.append(
             f"Vibration {telemetry['vibration_mms']:.2f} mm/s exceeds limit "
@@ -71,10 +72,10 @@ def _soft_relu_penalty(x: torch.Tensor, limit: torch.Tensor, beta: float = 10.0)
 
 
 def physics_loss(
-    telemetry: Dict[str, torch.Tensor],
+    telemetry: dict[str, torch.Tensor],
     rul_pred: torch.Tensor,
-    gb: GearboxPhysicsConstraints = GearboxPhysicsConstraints(),
-) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    gb: GearboxPhysicsConstraints | None = None,
+) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """
     Compute L_physics: a soft penalty that encourages predicted RUL to
     decrease smoothly as operating variables exceed their physical limits.
@@ -82,6 +83,8 @@ def physics_loss(
     This is NOT a safety interlock — it is a training regularizer.
     Returns (total_loss, breakdown_dict).
     """
+    if gb is None:
+        gb = GearboxPhysicsConstraints()
     vib_lim = torch.tensor(gb.vibration_limit_mms, dtype=torch.float32)
     tmp_lim = torch.tensor(gb.temperature_limit_c, dtype=torch.float32)
     rpm_lim = torch.tensor(gb.rpm_limit_hss, dtype=torch.float32)

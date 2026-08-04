@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import struct
 import zlib
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -25,14 +25,14 @@ import numpy as np
 @dataclass
 class AeroZipConfig:
     channels: Sequence[str] = ("vibration_mms", "temperature_c", "rpm", "oil_viscosity_cst", "load_pct")
-    deadbands: Dict[str, float] = field(default_factory=lambda: {
+    deadbands: dict[str, float] = field(default_factory=lambda: {
         "vibration_mms": 0.02,
         "temperature_c": 0.05,
         "rpm": 1.0,
         "oil_viscosity_cst": 0.1,
         "load_pct": 0.2,
     })
-    quanta: Dict[str, float] = field(default_factory=lambda: {
+    quanta: dict[str, float] = field(default_factory=lambda: {
         "vibration_mms": 0.01,
         "temperature_c": 0.01,
         "rpm": 1.0,
@@ -54,7 +54,7 @@ def _encode_varint(value: int) -> bytes:
     return bytes(out)
 
 
-def _decode_varint(buf: bytes, pos: int) -> Tuple[int, int]:
+def _decode_varint(buf: bytes, pos: int) -> tuple[int, int]:
     shift = 0
     result = 0
     while True:
@@ -69,9 +69,9 @@ def _decode_varint(buf: bytes, pos: int) -> Tuple[int, int]:
 
 
 def anomaly_score(
-    window: Dict[str, np.ndarray],
-    baseline_mean: Dict[str, float],
-    baseline_std: Dict[str, float],
+    window: dict[str, np.ndarray],
+    baseline_mean: dict[str, float],
+    baseline_std: dict[str, float],
 ) -> float:
     """Simple z-based anomaly score in [0,1] across channels. Higher = more anomalous."""
     z_max = 0.0
@@ -85,17 +85,17 @@ def anomaly_score(
 
 
 class AeroZipCompressor:
-    def __init__(self, cfg: Optional[AeroZipConfig] = None):
+    def __init__(self, cfg: AeroZipConfig | None = None):
         self.cfg = cfg or AeroZipConfig()
         # Per-channel running previous quantized value
-        self._prev_q: Dict[str, int] = {c: 0 for c in self.cfg.channels}
+        self._prev_q: dict[str, int] = {c: 0 for c in self.cfg.channels}
 
     def compress(
         self,
-        window: Dict[str, np.ndarray],
-        anomaly_score_value: Optional[float] = None,
-        baseline_mean: Optional[Dict[str, float]] = None,
-        baseline_std: Optional[Dict[str, float]] = None,
+        window: dict[str, np.ndarray],
+        anomaly_score_value: float | None = None,
+        baseline_mean: dict[str, float] | None = None,
+        baseline_std: dict[str, float] | None = None,
     ) -> bytes:
         # Auto-score if not provided
         if anomaly_score_value is None:
@@ -113,7 +113,7 @@ class AeroZipCompressor:
             return b"AZ" + zlib.compress(payload, level=1)
 
         # Normal mode: delta + quantize + varint
-        parts: List[bytes] = [b"\x00", struct.pack("<f", anomaly_score_value)]
+        parts: list[bytes] = [b"\x00", struct.pack("<f", anomaly_score_value)]
         for ch in self.cfg.channels:
             q = self.cfg.quanta[ch]
             d = self.cfg.deadbands[ch]
@@ -137,7 +137,7 @@ class AeroZipCompressor:
 
         return b"AZ" + zlib.compress(b"".join(parts), level=6)
 
-    def compress_stats(self, window: Dict[str, np.ndarray]) -> Dict[str, float]:
+    def compress_stats(self, window: dict[str, np.ndarray]) -> dict[str, float]:
         """Helper: compare compressed vs raw size for reporting."""
         raw = b"".join(window[c].astype(np.float64).tobytes() for c in self.cfg.channels)
         comp = self.compress(window, anomaly_score_value=0.0)
@@ -149,7 +149,7 @@ class AeroZipCompressor:
         }
 
     @staticmethod
-    def inspect_header(blob: bytes) -> Dict[str, float]:
+    def inspect_header(blob: bytes) -> dict[str, float]:
         """Quickly inspect whether a payload was anomaly-bypassed and its score."""
         if not blob.startswith(b"AZ"):
             raise ValueError("Not an AeroZip payload")

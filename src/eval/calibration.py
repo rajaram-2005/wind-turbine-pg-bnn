@@ -10,7 +10,7 @@ Provides:
 
 from __future__ import annotations
 
-from typing import Dict, List, Sequence
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -48,7 +48,7 @@ def expected_asset_utilization(
     predicted_rul_days: Sequence[float],
     planning_horizon_days: float = 90.0,
     safety_buffer_days: float = 14.0,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Heuristic fleet utilization metric.
 
@@ -67,11 +67,13 @@ def expected_asset_utilization(
 
 
 def classify_failure_mode(
-    telemetry: Dict[str, float],
-    gb: GearboxPhysicsConstraints = GearboxPhysicsConstraints(),
-) -> List[str]:
+    telemetry: dict[str, float],
+    gb: GearboxPhysicsConstraints | None = None,
+) -> list[str]:
     """Rule-based probable failure mode flags (advisory only)."""
-    flags: List[str] = []
+    if gb is None:
+        gb = GearboxPhysicsConstraints()
+    flags: list[str] = []
     v = telemetry["vibration_mms"]
     t = telemetry["temperature_c"]
     rpm = telemetry["rpm"]

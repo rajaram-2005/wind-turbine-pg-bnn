@@ -12,8 +12,8 @@ it is formatted.
 from __future__ import annotations
 
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Optional, Sequence
 
 import pandas as pd
 
@@ -41,7 +41,7 @@ FLEET_REQUIRED = ("asset_id",) + TELEMETRY_COLUMNS
 # --------------------------------------------------------------------------- #
 # Pipeline helpers (data -> advisory records)                                 #
 # --------------------------------------------------------------------------- #
-def advisories_from_dataframe(df: pd.DataFrame) -> List[dict]:
+def advisories_from_dataframe(df: pd.DataFrame) -> list[dict]:
     """Build one advisory record per row of a fleet :class:`~pandas.DataFrame`.
 
     Expects ``asset_id`` + the five telemetry channels + the three
@@ -54,7 +54,7 @@ def advisories_from_dataframe(df: pd.DataFrame) -> List[dict]:
     if missing:
         raise ValueError(f"Fleet data missing required columns: {missing}")
 
-    records: List[dict] = []
+    records: list[dict] = []
     for _, row in df.iterrows():
         payload = TurbinePayload(
             asset_id=str(row["asset_id"]),
@@ -67,7 +67,7 @@ def advisories_from_dataframe(df: pd.DataFrame) -> List[dict]:
     return records
 
 
-def advisories_from_csv(path: str) -> List[dict]:
+def advisories_from_csv(path: str) -> list[dict]:
     """Load a fleet CSV and return one advisory record per asset."""
     return advisories_from_dataframe(pd.read_csv(path))
 
@@ -193,7 +193,7 @@ def build_fleet_report(
 # --------------------------------------------------------------------------- #
 # Output                                                                      #
 # --------------------------------------------------------------------------- #
-def write_report(content: str, path: Optional[str] = None) -> None:
+def write_report(content: str, path: str | None = None) -> None:
     """Write a report to ``path``; ``None`` or ``"-"`` writes to stdout."""
     if path in (None, "-"):
         sys.stdout.write(content if content.endswith("\n") else content + "\n")

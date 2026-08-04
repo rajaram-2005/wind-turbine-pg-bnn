@@ -6,16 +6,18 @@ Usage:
 
 from __future__ import annotations
 
-import sys, os
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from src.data.synthetic import features_and_labels, SyntheticConfig
-from src.models.bnn import BayesianNeuralNetwork, TrainConfig, elbo_loss, predict
+from src.data.synthetic import SyntheticConfig, features_and_labels
 from src.eval.calibration import expected_calibration_error
+from src.models.bnn import BayesianNeuralNetwork, TrainConfig, elbo_loss, predict
 
 
 def main():

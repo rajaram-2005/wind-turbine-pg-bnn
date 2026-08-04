@@ -12,23 +12,21 @@ these schemas, and every payload is screened by ``enforce_safety_contract``
 
 from __future__ import annotations
 
-from typing import List
-
 from pydantic import BaseModel, ConfigDict, Field
 
 # Re-export the domain models so API consumers can import everything from
 # ``src.api.schemas`` in one place.
-from src.utils.schema import BNNState, Telemetry, TurbinePayload  # noqa: F401
+from src.utils.schema import BNNState, Telemetry, TurbinePayload
 
 __all__ = [
-    "Telemetry",
-    "BNNState",
-    "TurbinePayload",
     "AdvisoryResponse",
+    "BNNState",
     "FleetRequest",
-    "FleetSummary",
     "FleetResponse",
+    "FleetSummary",
     "HealthResponse",
+    "Telemetry",
+    "TurbinePayload",
 ]
 
 
@@ -47,7 +45,7 @@ class AdvisoryResponse(BaseModel):
     predicted_rul_days: float
     epistemic_std: float
     aleatoric_std: float
-    physics_violations: List[str] = Field(default_factory=list)
+    physics_violations: list[str] = Field(default_factory=list)
     suggested_inspection_window_days: float
     rationale: str
     advisory_only: bool = True
@@ -58,7 +56,7 @@ class AdvisoryResponse(BaseModel):
 class FleetRequest(BaseModel):
     """A batch of single-turbine snapshots (one advisory per asset)."""
 
-    assets: List[TurbinePayload] = Field(..., min_length=1)
+    assets: list[TurbinePayload] = Field(..., min_length=1)
 
 
 class FleetSummary(BaseModel):
@@ -73,7 +71,7 @@ class FleetSummary(BaseModel):
 class FleetResponse(BaseModel):
     """Per-asset advisories plus an aggregate fleet summary."""
 
-    assets: List[AdvisoryResponse]
+    assets: list[AdvisoryResponse]
     summary: FleetSummary
 
 

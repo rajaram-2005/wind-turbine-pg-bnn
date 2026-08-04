@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Telemetry(BaseModel):
@@ -28,5 +27,5 @@ class BNNState(BaseModel):
 class TurbinePayload(BaseModel):
     asset_id: str = Field(..., min_length=1)
     telemetry: Telemetry
-    bnn_state: Optional[BNNState] = None
-    operator_intent: Optional[str] = None
+    bnn_state: BNNState | None = None
+    operator_intent: str | None = None

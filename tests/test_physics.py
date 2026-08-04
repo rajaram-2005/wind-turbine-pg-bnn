@@ -1,10 +1,9 @@
-import math
 import torch
+
 from src.physics.constraints import (
-    GearboxPhysicsConstraints,
     check_violations,
-    physics_loss,
     iso_281_l10_hours,
+    physics_loss,
 )
 
 

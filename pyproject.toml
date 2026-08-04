@@ -32,6 +32,9 @@ dev = [
 
 [project.scripts]
 wind-turbine-bnn = "src.cli:main"
+twin-status = "src.cli_twin:status_main"
+twin-simulate = "src.cli_twin:simulate_main"
+twin-prompt = "src.cli_twin:prompt_main"
 
 [tool.setuptools.packages.find]
 where = ["."]

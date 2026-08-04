@@ -12,8 +12,6 @@ numbers.
 
 from __future__ import annotations
 
-from typing import Dict, Optional
-
 import numpy as np
 import torch
 
@@ -36,10 +34,10 @@ def _inspection_window(rul_days: float, epistemic: float) -> float:
 
 def run_advisory(
     payload: TurbinePayload,
-    model: Optional[torch.nn.Module] = None,
-    feature_vector: Optional[np.ndarray] = None,
+    model: torch.nn.Module | None = None,
+    feature_vector: np.ndarray | None = None,
     device: str = "cpu",
-) -> Dict:
+) -> dict:
     """
     Produce an advisory recommendation for a single turbine snapshot.
 
