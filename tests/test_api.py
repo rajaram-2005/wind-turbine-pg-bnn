@@ -6,11 +6,11 @@ import pytest
 pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
 
-from fastapi.testclient import TestClient
-from pydantic import ValidationError
+from fastapi.testclient import TestClient  # noqa: E402
+from pydantic import ValidationError  # noqa: E402
 
-from src.api.app import create_app
-from src.api.schemas import AdvisoryResponse, FleetSummary
+from src.api.app import create_app  # noqa: E402
+from src.api.schemas import AdvisoryResponse, FleetSummary  # noqa: E402
 
 # Fields that must NEVER appear in any advisory payload (see src/utils/safety.py).
 BLOCKED_KEYS = ("throttle_pct", "rpm_setpoint", "loto_steps", "part_sku", "torque_demand")
