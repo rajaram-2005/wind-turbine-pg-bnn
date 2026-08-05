@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wind-turbine-pg-bnn"
-version = "0.1.0"
-description = "Physics-Guided Bayesian Neural Network for wind-turbine drivetrain remaining-useful-life prediction (advisory/decision-support only)."
+version = "1.0.0"
+description = "AeroVigil — Physics-Guided Bayesian Neural Network for wind-turbine drivetrain remaining-useful-life prediction (advisory/decision-support only)."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -20,6 +20,11 @@ dependencies = [
     "pyyaml>=6.0",
     "matplotlib>=3.8",
 ]
+
+[project.urls]
+Homepage = "https://aerovigil.abacusai.app"
+Documentation = "https://aerovigil.abacusai.app"
+Repository = "https://github.com/rajaram-2005/wind-turbine-pg-bnn"
 
 [project.optional-dependencies]
 api = ["fastapi>=0.110", "uvicorn>=0.29"]

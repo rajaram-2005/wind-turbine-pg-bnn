@@ -1,8 +1,9 @@
-"""Request/response Pydantic schemas for the FastAPI advisory service.
+"""Request/response Pydantic schemas for the AeroVigil FastAPI advisory service.
 
-These are thin API-layer wrappers around the domain models in
-``src.utils.schema`` (``Telemetry``, ``BNNState``, ``TurbinePayload``) and the
-advisory dict produced by ``src.models.predictor.run_advisory``.
+AeroVigil v1.0.0 — https://aerovigil.abacusai.app. These are thin API-layer
+wrappers around the domain models in ``src.utils.schema`` (``Telemetry``,
+``BNNState``, ``TurbinePayload``) and the advisory dict produced by
+``src.models.predictor.run_advisory``.
 
 Every response is ADVISORY-ONLY. No direct-actuation fields (throttle, torque,
 pitch, rpm-setpoint, breaker, LOTO, part-number, ...) are modelled anywhere in
@@ -83,4 +84,6 @@ class HealthResponse(BaseModel):
     status: str = "ok"
     advisory_only: bool = True
     service: str = "wind-turbine-pg-bnn"
-    version: str = "0.1.0"
+    product: str = "AeroVigil"
+    version: str = "1.0.0"
+    website: str = "https://aerovigil.abacusai.app"
