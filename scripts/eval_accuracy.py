@@ -172,6 +172,9 @@ def build_campaign(
 
 
 def main(argv: list[str] | None = None) -> int:
+    from src.utils.encoding import configure_utf8_stdio  # noqa: E402
+
+    configure_utf8_stdio()
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])

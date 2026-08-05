@@ -25,6 +25,9 @@ from src.utils.schema import BNNState, Telemetry  # noqa: E402
 
 
 def main():
+    from src.utils.encoding import configure_utf8_stdio  # noqa: E402
+
+    configure_utf8_stdio()
     print("=====================================================================")
     # 1. Load a turbine specification
     print("Step 1: Loading Turbine Specification from Library...")
