@@ -36,6 +36,10 @@ from src.api.schemas import (
     FleetResponse,
     FleetSummary,
     HealthResponse,
+    TelemetryCompressRequest,
+    TelemetryCompressResponse,
+    TelemetryRestoreRequest,
+    TelemetryRestoreResponse,
 )
 from src.eval.calibration import expected_asset_utilization
 from src.models.predictor import run_advisory
@@ -180,6 +184,62 @@ def create_app() -> FastAPI:
             assets=[AdvisoryResponse(**r) for r in records],
             summary=summary,
         )
+
+    # ------------------------------------------------------------------ #
+    # AeroZip telemetry pipeline                                          #
+    # ------------------------------------------------------------------ #
+    @app.post("/telemetry/compress", response_model=TelemetryCompressResponse)
+    def telemetry_compress(req: TelemetryCompressRequest) -> TelemetryCompressResponse:
+        """Compress one telemetry window with AeroZip (delta + deadband +
+        quantize, anomaly bypass to lossless raw)."""
+        from src.models.telemetry.pipeline import compress_window
+
+        try:
+            comp = compress_window(
+                req.channels.model_dump(),
+                baseline_mean=req.baseline_mean,
+                baseline_std=req.baseline_std,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        body = comp.to_dict()
+        enforce_safety_contract(body)
+        return TelemetryCompressResponse(**body)
+
+    @app.post("/telemetry/restore", response_model=TelemetryRestoreResponse)
+    def telemetry_restore(req: TelemetryRestoreRequest) -> TelemetryRestoreResponse:
+        """Restore a window compressed by /telemetry/compress (AeroZip lossiness
+        semantics; lossless for anomaly-bypassed windows)."""
+        from src.data.ingest import CHANNELS
+        from src.models.telemetry.pipeline import CompressedWindow, restore_window
+
+        channels = tuple(req.channels or CHANNELS)
+        unknown = [c for c in channels if c not in CHANNELS]
+        if unknown:
+            raise HTTPException(status_code=422, detail=f"Unknown channels: {unknown}")
+        try:
+            rest = restore_window(
+                CompressedWindow(
+                    codec="aerozip-v1",
+                    payload_b64=req.payload_b64,
+                    channels=channels,
+                    n_samples=0,
+                    anomaly_score=0.0,
+                    bypass=False,
+                    raw_bytes=0,
+                    compressed_bytes=0,
+                )
+            )
+        except Exception as exc:  # decode failures are client errors (bad base64/zlib/format)
+            raise HTTPException(status_code=422, detail=f"could not decode payload: {exc}")
+        body = {
+            "channels": {c: rest.channels[c].tolist() for c in channels},
+            "n_samples": rest.n_samples,
+            "anomaly_score": rest.anomaly_score,
+            "bypass": rest.bypass,
+        }
+        enforce_safety_contract(body)
+        return TelemetryRestoreResponse(**body)
 
     return app
 

@@ -28,6 +28,10 @@ __all__ = [
     "FleetSummary",
     "HealthResponse",
     "Telemetry",
+    "TelemetryCompressRequest",
+    "TelemetryCompressResponse",
+    "TelemetryRestoreRequest",
+    "TelemetryRestoreResponse",
     "TelemetryWindow",
     "TurbinePayload",
 ]
@@ -62,6 +66,49 @@ class TelemetryWindow(BaseModel):
         if len(lengths) != 1:
             raise ValueError("all telemetry_window channels must have equal sample counts")
         return self
+
+
+class TelemetryCompressRequest(BaseModel):
+    """Wire format for POST /telemetry/compress (AeroZip)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    channels: TelemetryWindow
+    sample_interval_s: int = Field(600, ge=1, le=86_400)
+    baseline_mean: dict[str, float] | None = None
+    baseline_std: dict[str, float] | None = None
+
+
+class TelemetryCompressResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    codec: str
+    payload_b64: str
+    channels: list[str]
+    n_samples: int
+    anomaly_score: float
+    bypass: bool
+    raw_bytes: int
+    compressed_bytes: int
+    ratio: float
+    advisory_only: bool = True
+
+
+class TelemetryRestoreRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    payload_b64: str
+    channels: list[str] | None = None  # defaults to the five canonical channels
+
+
+class TelemetryRestoreResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    channels: dict[str, list[float]]
+    n_samples: int
+    anomaly_score: float
+    bypass: bool
+    advisory_only: bool = True
 
 
 class AdvisoryRequest(TurbinePayload):
