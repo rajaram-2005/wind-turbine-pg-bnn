@@ -1,4 +1,6 @@
-# wind-turbine-pg-bnn
+# AeroVigil — wind-turbine-pg-bnn
+
+**AeroVigil v1.0.0** · [https://aerovigil.abacusai.app](https://aerovigil.abacusai.app)
 
 **Physics-Guided Bayesian Neural Network for wind-turbine drivetrain Remaining Useful Life (RUL) prediction.**
 
@@ -88,7 +90,8 @@ object that explicitly marks itself as non-actuating. The safety gate in
 
 ## API service
 
-A thin FastAPI layer over `run_advisory()`. Every response is screened by
+The **AeroVigil** FastAPI advisory service (v1.0.0 — https://aerovigil.abacusai.app)
+is a thin layer over `run_advisory()`. Every response is screened by
 `enforce_safety_contract` before it leaves the service, and the response
 schemas model no actuation fields.
 
@@ -137,6 +140,8 @@ print(build_fleet_report(records, title="Q3 review"))
 ```
 
 ## Streamlit UI
+
+The **AeroVigil** Streamlit advisory UI (v1.0.0 — https://aerovigil.abacusai.app):
 
 ```bash
 pip install -e ".[ui]"

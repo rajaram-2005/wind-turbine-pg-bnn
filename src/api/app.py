@@ -1,4 +1,6 @@
-"""FastAPI advisory service for wind-turbine-pg-bnn.
+"""FastAPI advisory service for AeroVigil (wind-turbine-pg-bnn engine).
+
+AeroVigil v1.0.0 — https://aerovigil.abacusai.app
 
 Run locally::
 
@@ -36,9 +38,12 @@ from src.models.predictor import run_advisory
 from src.utils.safety import enforce_safety_contract
 from src.utils.schema import TurbinePayload
 
-VERSION = "0.1.0"
+VERSION = "1.0.0"
+PRODUCT = "AeroVigil"
+WEBSITE = "https://aerovigil.abacusai.app"
 SAFETY_BANNER = (
-    "wind-turbine-pg-bnn advisory service — DECISION-SUPPORT ONLY. "
+    "AeroVigil v1.0.0 (wind-turbine-pg-bnn advisory service) — "
+    "DECISION-SUPPORT ONLY. https://aerovigil.abacusai.app. "
     "Outputs are not actuation commands; review by a qualified operator "
     "and an OEM documentation cross-check are required before any "
     "maintenance action. See docs/SAFETY.md."
@@ -57,7 +62,7 @@ def _advisory_or_422(payload: TurbinePayload) -> dict:
 def create_app() -> FastAPI:
     """Application factory. Creates a fresh FastAPI instance each call."""
     app = FastAPI(
-        title="wind-turbine-pg-bnn advisory API",
+        title="AeroVigil advisory API (wind-turbine-pg-bnn) v1.0.0",
         version=VERSION,
         description=SAFETY_BANNER,
     )
@@ -71,8 +76,10 @@ def create_app() -> FastAPI:
     @app.get("/")
     def root() -> dict:
         return {
+            "product": PRODUCT,
             "service": "wind-turbine-pg-bnn",
             "version": VERSION,
+            "website": WEBSITE,
             "advisory_only": True,
             "endpoints": ["/health", "/advisory", "/advisory/fleet", "/docs"],
             "disclaimer": SAFETY_BANNER,
@@ -85,6 +92,8 @@ def create_app() -> FastAPI:
             advisory_only=True,
             service="wind-turbine-pg-bnn",
             version=VERSION,
+            product=PRODUCT,
+            website=WEBSITE,
         )
 
     @app.post("/advisory", response_model=AdvisoryResponse)

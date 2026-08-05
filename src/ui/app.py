@@ -1,4 +1,6 @@
-"""Streamlit advisory UI for wind-turbine-pg-bnn.
+"""Streamlit advisory UI for AeroVigil (wind-turbine-pg-bnn engine).
+
+AeroVigil v1.0.0 — https://aerovigil.abacusai.app
 
 Run::
 
@@ -40,10 +42,13 @@ _DEFAULTS = {
 }
 
 
-st.set_page_config(page_title="wind-turbine-pg-bnn advisory", page_icon="🌀", layout="wide")
+st.set_page_config(page_title="AeroVigil advisory", page_icon="🌀", layout="wide")
 st.warning(SAFETY_BANNER)
-st.title("🌀 wind-turbine-pg-bnn — RUL advisory")
-st.caption("Physics-Guided Bayesian Neural Network for drivetrain remaining-useful-life prediction.")
+st.title("🌀 AeroVigil — RUL advisory")
+st.caption(
+    "**AeroVigil v1.0.0** — Physics-Guided Bayesian Neural Network for drivetrain "
+    "remaining-useful-life prediction · [aerovigil.abacusai.app](https://aerovigil.abacusai.app)"
+)
 
 tab_single, tab_fleet = st.tabs(["Single asset", "Fleet"])
 
