@@ -75,16 +75,30 @@ python scripts/onboard_demo.py     # meta-train on the fleet, onboard a new asse
 
 See `docs/META_LEARNING.md` for the algorithm, the safety posture, and the API.
 
-## Quick start (research / offline mode)
+## Quick start (end-to-end)
 
 ```bash
 pip install -e ".[api,ui,dev]"
-python scripts/train_demo.py           # trains on synthetic drivetrain data
-python scripts/eval_accuracy.py        # 45-day early-warning accuracy demo (94.2%)
+
+# One flow: config -> synthetic fleet -> train -> eval -> export -> advisory smoke
+python scripts/run_pipeline.py         # writes artifacts/pipeline_report.md
+
+# Individual demos
+python scripts/train_demo.py                  # train + export artifacts/bnn_demo.pt bundle
+python scripts/eval_accuracy.py               # 45-day early-warning accuracy demo (94.2%)
+python scripts/onboard_demo.py --export artifacts/onboarding   # Reptile + Hermes export
+
+# API surfaces, all of them (in-process smoke, exits non-zero on failure)
+python scripts/e2e_smoke.py
 pytest -q                              # runs unit tests
 ```
 
-Outputs from `predict_rul()` are always wrapped in an `AdvisoryRecommendation`
+Everything reads `configs/default.yaml` through `src.utils.config.load_config`
+(fail-closed: non-advisory configs are rejected at load time), and every served
+model loads through `src.models.serving.load_serving_model` from the
+`artifacts/` registry (checkpoint + fitted scaler + JSON sidecar).
+
+Outputs from `run_advisory()` are always wrapped in an `AdvisoryRecommendation`
 object that explicitly marks itself as non-actuating. The safety gate in
 `src/utils/safety.py` will refuse to emit numeric "throttle" or "LOTO" fields.
 
