@@ -72,7 +72,7 @@ class BayesianLinear(nn.Module):
 
 
 # --------------------------------------------------------------------------
-# BNN: maps feature vector → (rul_mean, rul_log_var)
+# BNN: maps feature vector -> (rul_mean, rul_log_var)
 # --------------------------------------------------------------------------
 class BayesianNeuralNetwork(nn.Module):
     def __init__(
@@ -100,7 +100,7 @@ class BayesianNeuralNetwork(nn.Module):
         log_var = self.out_log_var(h).squeeze(-1)
         # Clamp the learned observation variance: an unbounded log_var lets the
         # optimizer "explain away" the regression loss by inflating noise
-        # (variance collapse → near-constant predictions). Bounding it keeps
+        # (variance collapse -> near-constant predictions). Bounding it keeps
         # the heteroscedastic head honest: var ∈ [e^-5, e^3] ≈ [0.007, 20].
         log_var = torch.clamp(log_var, min=-5.0, max=3.0)
         return mean, log_var
@@ -175,26 +175,42 @@ def predict(
 
     Returns dict with:
       - mean_pred   : predictive mean (averaged over MC samples)
-      - epistemic_std: std of per-sample means → model uncertainty
-      - aleatoric_std: sqrt(mean of per-sample predicted vars) → sensor noise
+      - epistemic_std: std of per-sample means -> model uncertainty
+      - aleatoric_std: sqrt(mean of per-sample predicted vars) -> sensor noise
       - total_std   : sqrt(epistemic^2 + aleatoric^2)
     """
     model.eval()
+    device = next(model.parameters()).device if any(p.numel() for p in model.parameters()) else x.device
     means = []
     vars_ = []
     for _ in range(mc_samples):
         m, lv = model(x, sample=True)
+        # ensure tensors are on the same device
+        m = m.to(device)
+        lv = lv.to(device)
         means.append(m)
+        # store variance (not log-var) per sample
         vars_.append(torch.exp(lv))
+
     means_t = torch.stack(means, dim=0)           # (T, B)
     vars_t = torch.stack(vars_, dim=0)            # (T, B)
-    pred_mean = means_t.mean(dim=0)
-    epistemic_var = means_t.var(dim=0)
-    aleatoric_var = vars_t.mean(dim=0)
+
+    # Use population variance (unbiased=False) to avoid small-sample negative-ish artifacts
+    epistemic_var = torch.var(means_t, dim=0, unbiased=False)
+    aleatoric_var = torch.mean(vars_t, dim=0)
     total_var = epistemic_var + aleatoric_var
+
+    # Numerical safety: clamp variances to >= 0 before sqrt
+    eps = 1e-8
+    epistemic_std = torch.sqrt(torch.clamp(epistemic_var, min=eps))
+    aleatoric_std = torch.sqrt(torch.clamp(aleatoric_var, min=eps))
+    total_std = torch.sqrt(torch.clamp(total_var, min=eps))
+
+    pred_mean = means_t.mean(dim=0)
+
     return {
         "mean_pred": pred_mean,
-        "epistemic_std": torch.sqrt(torch.clamp(epistemic_var, min=1e-8)),
-        "aleatoric_std": torch.sqrt(torch.clamp(aleatoric_var, min=1e-8)),
-        "total_std": torch.sqrt(torch.clamp(total_var, min=1e-8)),
+        "epistemic_std": epistemic_std,
+        "aleatoric_std": aleatoric_std,
+        "total_std": total_std,
     }
