@@ -34,6 +34,7 @@ __all__ = [
     "TelemetryRestoreResponse",
     "TelemetryWindow",
     "TurbinePayload",
+    "TwinSimulateRequest",
 ]
 
 
@@ -167,6 +168,17 @@ class FleetResponse(BaseModel):
 
     assets: list[AdvisoryResponse]
     summary: FleetSummary
+
+
+class TwinSimulateRequest(BaseModel):
+    """Wire format for POST /twin/simulate (digital-twin scenario replay)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: str = Field(..., min_length=1)
+    model: str = "GE-1.5"
+    profile: str = Field("nominal", pattern="^(nominal|overload|derated|viscosity_loss)$")
+    hours: float = Field(24.0, gt=0.0, le=720.0)
 
 
 class HealthResponse(BaseModel):

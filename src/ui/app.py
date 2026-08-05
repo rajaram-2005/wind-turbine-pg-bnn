@@ -74,7 +74,9 @@ st.caption(
     "remaining-useful-life prediction · [aerovigil.abacusai.app](https://aerovigil.abacusai.app)"
 )
 
-tab_single, tab_fleet, tab_telemetry = st.tabs(["Single asset", "Fleet", "Telemetry (AeroZip)"])
+tab_single, tab_fleet, tab_twin, tab_telemetry = st.tabs(
+    ["Single asset", "Fleet", "Digital Twin", "Telemetry (AeroZip)"]
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -212,6 +214,101 @@ with tab_fleet:
                 file_name="fleet_advisory_report.md",
                 mime="text/markdown",
             )
+
+
+# --------------------------------------------------------------------------- #
+# Digital Twin                                                                #
+# --------------------------------------------------------------------------- #
+with tab_twin:
+    from src.digital_twin.prompts import generate_engineering_prompt
+    from src.digital_twin.specs import SPECS_LIBRARY, get_spec
+    from src.digital_twin.twin import WindTurbineDigitalTwin
+
+    st.subheader("Digital twin ↔ advisory bridge")
+    st.caption(
+        "Each twin update flows through the advisory engine: with a serving "
+        "model attached the PG-BNN computes RUL/uncertainties from the twin's "
+        "rolling telemetry buffer; otherwise the incoming bnn_state block is "
+        "used. Advisory-only, as everywhere else."
+    )
+
+    t1, t2 = st.columns(2)
+    twin_model_key = t1.selectbox("Turbine spec", list(SPECS_LIBRARY.keys()), index=0)
+    twin_asset = t2.text_input("Twin asset ID", value="WTG-TWIN-1")
+    twin_model_path = st.text_input(
+        "Serving model bundle (optional)",
+        value="",
+        help="artifacts/bnn_demo.pt or a Hermes export. Attached to the twin "
+        "so advisories come from the trained model.",
+    )
+
+    if "twins" not in st.session_state:
+        st.session_state["twins"] = {}
+
+    def _get_or_create_twin():
+        if twin_asset not in st.session_state["twins"]:
+            serving = _load_serving(twin_model_path) if twin_model_path else None
+            st.session_state["twins"][twin_asset] = WindTurbineDigitalTwin(
+                twin_asset, get_spec(twin_model_key), serving_model=serving
+            )
+        return st.session_state["twins"][twin_asset]
+
+    tc1, tc2 = st.columns(2)
+    with tc1:
+        st.markdown("**Ingest a snapshot** (defaults from configs/default.yaml)")
+        twin_bnn = st.checkbox(
+            "Attach demo bnn_state (else model/none)",
+            value=True,
+            help="Without a serving model the bnn_state path is used.",
+        )
+        if st.button("Update twin state"):
+            try:
+                twin = _get_or_create_twin()
+                bnn = (
+                    BNNState(
+                        predicted_rul_days=180.0,
+                        epistemic_uncertainty=0.05,
+                        aleatoric_uncertainty=0.1,
+                    )
+                    if twin_bnn
+                    else None
+                )
+                twin.update_state(Telemetry(**_DEFAULTS), bnn)
+                rec = twin.state_history[-1]
+                st.session_state["twin_last"] = rec
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"Twin update failed: {exc}")
+    with tc2:
+        st.markdown("**Simulate a scenario**")
+        profile = st.selectbox("Profile", ["nominal", "overload", "derated", "viscosity_loss"])
+        hours = st.slider("Duration (hours)", 1, 72, 12)
+        if st.button("Run simulation"):
+            try:
+                twin = _get_or_create_twin()
+                records = twin.simulate_scenario(profile=profile, hours=float(hours))
+                st.session_state["twin_last"] = records[-1]
+                st.session_state["twin_sim_wear"] = twin.cumulative_wear
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"Simulation failed: {exc}")
+
+    last = st.session_state.get("twin_last")
+    if last:
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Cumulative wear", f"{last['cumulative_wear']:.4f}")
+        m2.metric("Bearing L10 life", f"{last['bearing_l10_hours']:.0f} h")
+        m3.metric("Violations", len(last["physics_violations"]))
+        adv = last.get("advisory")
+        if adv:
+            st.markdown(f"**Advisory** (source: `{last.get('advisory_source')}`)")
+            st.markdown(format_advisory_markdown(adv))
+        else:
+            st.info("No advisory on this state (attach a serving model or a bnn_state).")
+        with st.expander("Reliability-copilot prompt"):
+            twin = st.session_state["twins"].get(twin_asset)
+            if twin is not None:
+                st.code(generate_engineering_prompt(twin), language="text")
+    else:
+        st.info("Update the twin state or run a simulation to see the bridged advisory.")
 
 
 # --------------------------------------------------------------------------- #

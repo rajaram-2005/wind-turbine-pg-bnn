@@ -40,6 +40,7 @@ from src.api.schemas import (
     TelemetryCompressResponse,
     TelemetryRestoreRequest,
     TelemetryRestoreResponse,
+    TwinSimulateRequest,
 )
 from src.eval.calibration import expected_asset_utilization
 from src.models.predictor import run_advisory
@@ -240,6 +241,106 @@ def create_app() -> FastAPI:
         }
         enforce_safety_contract(body)
         return TelemetryRestoreResponse(**body)
+
+    # ------------------------------------------------------------------ #
+    # Digital twin ↔ advisory bridge                                      #
+    # ------------------------------------------------------------------ #
+    def _get_twin(asset_id: str, model_key: str):
+        """Fetch (or lazily create) the in-memory twin for an asset.
+
+        When the service has a serving model loaded it is attached so every
+        twin update computes its advisory from the trained PG-BNN; otherwise
+        the bnn_state path applies (unchanged engine semantics).
+        """
+        from src.digital_twin.specs import get_spec
+        from src.digital_twin.twin import WindTurbineDigitalTwin
+
+        twin = app.state.twins.get(asset_id)
+        if twin is None:
+            try:
+                spec = get_spec(model_key)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc))
+            twin = WindTurbineDigitalTwin(asset_id, spec, serving_model=app.state.serving)
+            # Seed with the spec's nominal operating point so status/prompt
+            # are meaningful from the first call.
+            from src.utils.schema import Telemetry as _Tel
+
+            vib = spec.vibration_limit_mms * 0.6
+            twin.update_state(
+                _Tel(
+                    vibration_mms=vib,
+                    temperature_c=spec.temperature_limit_c * 0.75,
+                    rpm=spec.rpm_limit_hss * 0.85,
+                    oil_viscosity_cst=(spec.viscosity_min_cst + spec.viscosity_max_cst) / 2.0,
+                    load_pct=75.0,
+                ),
+                None,
+            )
+            app.state.twins[asset_id] = twin
+        elif app.state.serving is not None and twin.serving_model is None:
+            twin.attach_serving_model(app.state.serving)
+        return twin
+
+    def _twin_status_payload(twin) -> dict:
+        last = twin.state_history[-1] if twin.state_history else None
+        body = {
+            "asset_id": twin.asset_id,
+            "model_name": twin.spec.model_name,
+            "manufacturer": twin.spec.manufacturer,
+            "rated_power_mw": twin.spec.rated_power_mw,
+            "cumulative_wear": twin.cumulative_wear,
+            "last_updated": twin.last_updated.isoformat(),
+            "n_state_records": len(twin.state_history),
+            "last_state": last,
+            "advisory_only": True,
+        }
+        enforce_safety_contract(body)
+        return body
+
+    @app.get("/twin/status")
+    def twin_status(asset_id: str = "WTG-001", model: str = "GE-1.5") -> dict:
+        """Current digital-twin state, including the advisory engine output."""
+        twin = _get_twin(asset_id, model)
+        return _twin_status_payload(twin)
+
+    @app.post("/twin/simulate")
+    def twin_simulate(req: TwinSimulateRequest) -> dict:
+        """Replay an operating profile on the asset's digital twin (advisory only)."""
+        twin = _get_twin(req.asset_id, req.model)
+        try:
+            records = twin.simulate_scenario(profile=req.profile, hours=req.hours)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        advisories = [r["advisory"] for r in records if r.get("advisory")]
+        body = {
+            "asset_id": twin.asset_id,
+            "profile": req.profile,
+            "hours": req.hours,
+            "steps_executed": len(records),
+            "advisories_computed": len(advisories),
+            "cumulative_wear": twin.cumulative_wear,
+            "final_bearing_l10_hours": records[-1]["bearing_l10_hours"] if records else None,
+            "last_records": records[-5:],
+            "last_advisory": advisories[-1] if advisories else None,
+            "advisory_only": True,
+        }
+        enforce_safety_contract(body)
+        return body
+
+    @app.get("/twin/prompt")
+    def twin_prompt(asset_id: str = "WTG-001", model: str = "GE-1.5") -> dict:
+        """Generate the contextual reliability-copilot prompt for an asset twin."""
+        from src.digital_twin.prompts import generate_engineering_prompt
+
+        twin = _get_twin(asset_id, model)
+        body = {
+            "asset_id": asset_id,
+            "prompt": generate_engineering_prompt(twin),
+            "advisory_only": True,
+        }
+        enforce_safety_contract(body)
+        return body
 
     return app
 
