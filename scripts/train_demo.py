@@ -10,13 +10,16 @@ Usage:
 """
 
 from __future__ import annotations
-from src.utils.encoding import configure_utf8_stdio
-configure_utf8_stdio()
+
 import argparse
 import os
 import sys
 
+# Make the repository root importable before importing from `src`.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.utils.encoding import configure_utf8_stdio
+configure_utf8_stdio()
 
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
@@ -44,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    device = "cpu"
+    device = torch.device("cpu")
     cfg = load_config()
     print("[1/5] Generating synthetic drivetrain telemetry ...")
     X, y = features_and_labels(SyntheticConfig(n_turbines=20, seq_len=1500))
@@ -68,7 +71,14 @@ def main(argv: list[str] | None = None) -> int:
     opt = torch.optim.Adam(model.parameters(), lr=1e-3)
     tcfg = TrainConfig(num_epochs=100, num_samples=5, batch_size=256)
 
-    ds = TensorDataset(torch.tensor(Xtr), torch.tensor(ytr))
+    # Ensure tensors are float32 (models/ops expect float32) and that labels
+    # have the right shape (N, 1) if they are 1-D.
+    Xtr_t = torch.as_tensor(Xtr, dtype=torch.float32)
+    ytr_t = torch.as_tensor(ytr, dtype=torch.float32)
+    if ytr_t.ndim == 1:
+        ytr_t = ytr_t.unsqueeze(1)
+
+    ds = TensorDataset(Xtr_t, ytr_t)
     dl = DataLoader(ds, batch_size=tcfg.batch_size, shuffle=True)
 
     print("[2/5] Training PG-BNN (MCVI + physics penalty) ...")
