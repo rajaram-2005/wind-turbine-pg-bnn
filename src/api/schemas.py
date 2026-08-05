@@ -13,13 +13,14 @@ these schemas, and every payload is screened by ``enforce_safety_contract``
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Re-export the domain models so API consumers can import everything from
 # ``src.api.schemas`` in one place.
 from src.utils.schema import BNNState, Telemetry, TurbinePayload
 
 __all__ = [
+    "AdvisoryRequest",
     "AdvisoryResponse",
     "BNNState",
     "FleetRequest",
@@ -27,8 +28,51 @@ __all__ = [
     "FleetSummary",
     "HealthResponse",
     "Telemetry",
+    "TelemetryWindow",
     "TurbinePayload",
 ]
+
+
+class TelemetryWindow(BaseModel):
+    """A raw per-channel telemetry window (list of samples per channel).
+
+    Used with the model-serving path: when the service has a trained PG-BNN
+    loaded (``AV_MODEL_PATH`` / config) and the request carries this block,
+    RUL + uncertainties are computed by the model from these samples. Equal
+    sample counts are enforced for all five canonical channels.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    vibration_mms: list[float] = Field(..., min_length=1, max_length=10_000)
+    temperature_c: list[float] = Field(..., min_length=1, max_length=10_000)
+    rpm: list[float] = Field(..., min_length=1, max_length=10_000)
+    oil_viscosity_cst: list[float] = Field(..., min_length=1, max_length=10_000)
+    load_pct: list[float] = Field(..., min_length=1, max_length=10_000)
+
+    @model_validator(mode="after")
+    def _equal_lengths(self) -> "TelemetryWindow":
+        lengths = {
+            len(self.vibration_mms),
+            len(self.temperature_c),
+            len(self.rpm),
+            len(self.oil_viscosity_cst),
+            len(self.load_pct),
+        }
+        if len(lengths) != 1:
+            raise ValueError("all telemetry_window channels must have equal sample counts")
+        return self
+
+
+class AdvisoryRequest(TurbinePayload):
+    """``TurbinePayload`` + optional raw telemetry window.
+
+    Backward compatible: without ``telemetry_window`` (or without a loaded
+    model) the request is served from the ``bnn_state`` block exactly as
+    before.
+    """
+
+    telemetry_window: TelemetryWindow | None = None
 
 
 class AdvisoryResponse(BaseModel):
@@ -87,3 +131,4 @@ class HealthResponse(BaseModel):
     product: str = "AeroVigil"
     version: str = "1.0.0"
     website: str = "https://aerovigil.abacusai.app"
+    serving_model_loaded: bool = False

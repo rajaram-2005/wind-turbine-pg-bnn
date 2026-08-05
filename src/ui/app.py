@@ -38,6 +38,33 @@ SAFETY_BANNER = (
 _DEFAULTS = default_snapshot()
 
 
+@st.cache_resource(show_spinner=False)
+def _load_serving(bundle_path: str):
+    """Load a trained PG-BNN serving bundle (cached across reruns)."""
+    from src.models.serving import load_serving_model
+
+    return load_serving_model(bundle_path)
+
+
+def _model_based_advisory(payload, model_path: str, window_csv, tel: dict) -> dict:
+    """Serving path: model computes RUL/uncertainties from a telemetry window.
+
+    If no window CSV is uploaded, the current snapshot is repeated over the
+    model's expected window size so a single reading still yields an
+    advisory (documented demo behavior).
+    """
+    serving = _load_serving(model_path)
+    channels = list(serving.features_config.channels)
+    if window_csv is not None:
+        df = pd.read_csv(window_csv)
+        if "timestamp" in df.columns:
+            df = df.drop(columns=["timestamp"])
+    else:
+        n = max(int(serving.features_config.window_size), 1)
+        df = pd.DataFrame({ch: [float(tel[ch])] * n for ch in channels})
+    return serving.advisory(payload, df)
+
+
 st.set_page_config(page_title="AeroVigil advisory", page_icon="🌀", layout="wide")
 st.warning(SAFETY_BANNER)
 st.title("🌀 AeroVigil — RUL advisory")
@@ -76,9 +103,31 @@ with tab_single:
             ),
         }
         st.markdown("**BNN state** (pre-computed RUL + uncertainties)")
-        rul = st.number_input("Predicted RUL (days)", 0.0, 3650.0, 120.0, step=1.0)
-        epi = st.number_input("Epistemic uncertainty σ", 0.0, 100.0, 0.05, step=0.01)
-        ale = st.number_input("Aleatoric uncertainty σ", 0.0, 100.0, 0.10, step=0.01)
+        use_trained = st.toggle(
+            "Use trained model",
+            value=False,
+            help="Load a trained PG-BNN bundle (artifact registry) and compute "
+            "RUL/uncertainties from a telemetry window; otherwise the values "
+            "below are used unchanged.",
+        )
+        model_path = st.text_input(
+            "Model bundle path",
+            value="artifacts/bnn_demo.pt",
+            disabled=not use_trained,
+        )
+        window_csv = st.file_uploader(
+            "Telemetry window CSV (timestamp + 5 channels)",
+            type=["csv"],
+            disabled=not use_trained,
+            help="Window used to build model features. If omitted, the "
+            "single snapshot above is used as a degenerate one-sample window.",
+        )
+        rul = st.number_input("Predicted RUL (days)", 0.0, 3650.0, 120.0, step=1.0,
+                              disabled=use_trained)
+        epi = st.number_input("Epistemic uncertainty σ", 0.0, 100.0, 0.05, step=0.01,
+                              disabled=use_trained)
+        ale = st.number_input("Aleatoric uncertainty σ", 0.0, 100.0, 0.10, step=0.01,
+                              disabled=use_trained)
 
         compute = st.button("Compute advisory", type="primary")
 
@@ -94,7 +143,10 @@ with tab_single:
                         aleatoric_uncertainty=float(ale),
                     ),
                 )
-                rec = run_advisory(payload)
+                if use_trained:
+                    rec = _model_based_advisory(payload, model_path, window_csv, tel)
+                else:
+                    rec = run_advisory(payload)
                 enforce_safety_contract(rec)
             except Exception as exc:  # noqa: BLE001 - surface validation errors to the user
                 st.error(f"Could not compute advisory: {exc}")

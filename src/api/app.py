@@ -23,10 +23,14 @@ without a trained feature-extraction pipeline).
 
 from __future__ import annotations
 
+import os
+
+import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.schemas import (
+    AdvisoryRequest,
     AdvisoryResponse,
     FleetRequest,
     FleetResponse,
@@ -41,6 +45,7 @@ from src.utils.schema import TurbinePayload
 VERSION = "1.0.0"
 PRODUCT = "AeroVigil"
 WEBSITE = "https://aerovigil.abacusai.app"
+ENV_MODEL_PATH = "AV_MODEL_PATH"
 SAFETY_BANNER = (
     "AeroVigil v1.0.0 (wind-turbine-pg-bnn advisory service) — "
     "DECISION-SUPPORT ONLY. https://aerovigil.abacusai.app. "
@@ -50,10 +55,29 @@ SAFETY_BANNER = (
 )
 
 
-def _advisory_or_422(payload: TurbinePayload) -> dict:
+def _serving_model_path() -> str | None:
+    """Where to load the serving PG-BNN from, if anywhere.
+
+    Precedence: ``AV_MODEL_PATH`` environment variable (deployment knob),
+    then ``serving.model_path`` in configs/default.yaml (normally unset).
+    """
+    path = os.environ.get(ENV_MODEL_PATH)
+    if path:
+        return path
+    try:
+        from src.utils.config import load_config
+
+        return load_config().serving.model_path
+    except Exception:
+        return None
+
+
+def _advisory_or_422(payload: TurbinePayload, serving=None, window_df=None) -> dict:
     """Run the advisory, mapping the no-model/no-bnn_state precondition to a
     clean 422 instead of an opaque 500."""
     try:
+        if serving is not None and window_df is not None:
+            return serving.advisory(payload, window_df)
         return run_advisory(payload)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
@@ -66,6 +90,24 @@ def create_app() -> FastAPI:
         version=VERSION,
         description=SAFETY_BANNER,
     )
+
+    # Optional model serving: load a trained PG-BNN bundle when configured.
+    # Requests without a ``telemetry_window`` still take the bnn_state path
+    # untouched, so payload-based clients see zero behavior change.
+    app.state.serving = None
+    app.state.serving_model_path = _serving_model_path()
+    if app.state.serving_model_path:
+        from src.models.serving import load_serving_model
+
+        try:
+            app.state.serving = load_serving_model(app.state.serving_model_path)
+        except (FileNotFoundError, ValueError, TypeError) as exc:
+            raise RuntimeError(
+                f"Failed to load serving model from {app.state.serving_model_path}: {exc}"
+            ) from exc
+
+    # In-memory digital-twin registry (Phase 4): per-process, advisory-only.
+    app.state.twins = {}
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -81,7 +123,19 @@ def create_app() -> FastAPI:
             "version": VERSION,
             "website": WEBSITE,
             "advisory_only": True,
-            "endpoints": ["/health", "/advisory", "/advisory/fleet", "/docs"],
+            "serving_model_loaded": app.state.serving is not None,
+            "endpoints": [
+                "/health",
+                "/advisory",
+                "/advisory/fleet",
+                "/twin/status",
+                "/twin/simulate",
+                "/twin/prompt",
+                "/telemetry/compress",
+                "/telemetry/restore",
+                "/fleet/report",
+                "/docs",
+            ],
             "disclaimer": SAFETY_BANNER,
         }
 
@@ -94,11 +148,17 @@ def create_app() -> FastAPI:
             version=VERSION,
             product=PRODUCT,
             website=WEBSITE,
+            serving_model_loaded=app.state.serving is not None,
         )
 
     @app.post("/advisory", response_model=AdvisoryResponse)
-    def advisory(payload: TurbinePayload) -> AdvisoryResponse:
-        rec = _advisory_or_422(payload)
+    def advisory(payload: AdvisoryRequest) -> AdvisoryResponse:
+        # Model-serving path requires BOTH a loaded model and a raw window.
+        # Anything else is the unchanged bnn_state behavior.
+        window_df = None
+        if payload.telemetry_window is not None:
+            window_df = pd.DataFrame(payload.telemetry_window.model_dump())
+        rec = _advisory_or_422(payload, serving=app.state.serving, window_df=window_df)
         enforce_safety_contract(rec)  # defense in depth
         return AdvisoryResponse(**rec)
 
