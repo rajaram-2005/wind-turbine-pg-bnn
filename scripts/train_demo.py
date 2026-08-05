@@ -39,6 +39,9 @@ from src.utils.config import load_config  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
+    from src.utils.encoding import configure_utf8_stdio  # noqa: E402
+
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--out",

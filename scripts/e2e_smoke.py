@@ -74,6 +74,9 @@ def _build_tiny_bundle(path: str) -> None:
 
 
 def main() -> int:
+    from src.utils.encoding import configure_utf8_stdio  # noqa: E402
+
+    configure_utf8_stdio()
     from fastapi.testclient import TestClient
 
     from src.data.ingest import CHANNELS

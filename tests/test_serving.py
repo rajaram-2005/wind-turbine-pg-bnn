@@ -4,6 +4,7 @@ CLI / API wiring — with backward compatibility of the bnn_state path."""
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 
@@ -333,16 +334,24 @@ def test_api_unequal_window_lengths_rejected(monkeypatch):
 
 
 def test_train_demo_bundle_loads_via_serving_cli(tmp_path):
-    """End-to-end: the demo trainer's own export loads through load_serving_model."""
+    """End-to-end: the demo trainer's own export loads through load_serving_model.
+
+    Runs the script with PYTHONIOENCODING=cp1252 (Windows' default console codec)
+    to prove the script's configure_utf8_stdio() guard survives non-UTF-8 stdio:
+    without it, printing ``σ`` would raise UnicodeEncodeError.
+    """
     from src.models.serving import load_serving_model
 
+    env = dict(os.environ, PYTHONIOENCODING="cp1252")
     out = subprocess.run(
         [sys.executable, "scripts/train_demo.py", "--out", str(tmp_path / "demo.pt")],
+        env=env,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         timeout=1200,
     )
     assert out.returncode == 0, out.stderr
+    assert "σ" in out.stdout
     assert (tmp_path / "demo.pt").is_file()
     assert (tmp_path / "demo.json").is_file()
     serving = load_serving_model(tmp_path / "demo.pt")
