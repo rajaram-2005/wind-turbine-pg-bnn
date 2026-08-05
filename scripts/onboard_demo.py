@@ -7,10 +7,13 @@ docs/META_LEARNING.md.
 
 Usage:
     python scripts/onboard_demo.py
+    python scripts/onboard_demo.py --export artifacts/onboarding
 """
 
 from __future__ import annotations
 
+import argparse
+import json
 import os
 import sys
 
@@ -25,7 +28,17 @@ from src.meta.tasks import task_from_telemetry  # noqa: E402
 from src.models.bnn import BayesianNeuralNetwork  # noqa: E402
 
 
-def main():
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--export",
+        default=None,
+        metavar="DIR",
+        help="Export the meta model, the Hermes-adapted model, and the "
+        "OnboardingReport (JSON) as serving bundles under DIR, then verify "
+        "the adapted model loads through the Phase-2 serving path.",
+    )
+    args = parser.parse_args(argv)
     print("[1/5] Generating synthetic fleet (meta-train turbines + new asset) ...")
     cfg_syn = SyntheticConfig(n_turbines=10, seq_len=1200, seed=11)
     seqs = generate(cfg_syn)
@@ -87,11 +100,50 @@ def main():
         support_x=new.support_x, support_y=new.support_y,
         unlabeled_x=pool_x, eval_x=eval_x, eval_y=eval_y,
     )
-    import json
     print(json.dumps(report.to_dict(), indent=2))
-    _ = adapted  # promoted clone feeds the same advisory pipeline (run_advisory)
+
+    if args.export:
+        print(f"[export] Writing deployable bundles to {args.export} ...")
+        from src.utils.artifacts import export_onboarding_bundle, save_model_bundle
+
+        # The meta-initialization itself is the fleet asset (re-shared for every
+        # new turbine); the adapted clone serves the onboarded asset.
+        meta_bundle = save_model_bundle(
+            meta_model,
+            os.path.join(args.export, "meta_model.pt"),
+            metadata={"produced_by": "scripts/onboard_demo.py", "kind": "reptile-meta"},
+        )
+        print(f"    meta model:          {meta_bundle.checkpoint_path}")
+
+        paths = export_onboarding_bundle(
+            adapted,
+            report,
+            os.path.join(args.export, "turbine-NEW-001"),
+            extra_metadata={"produced_by": "scripts/onboard_demo.py"},
+        )
+        for k, p in paths.items():
+            print(f"    {k:<20} {p}")
+
+        # Deployment verification: both checkpoints must load through the
+        # Phase-2 serving path and produce an advisory.
+        from src.models.serving import load_serving_model
+        from src.utils.schema import Telemetry, TurbinePayload
+
+        holdout_df = holdout_seqs[0][0]
+        snap = holdout_df.iloc[-1]
+        payload = TurbinePayload(
+            asset_id="turbine-NEW-001",
+            telemetry=Telemetry(**{c: float(snap[c]) for c in holdout_df.columns if c != "timestamp"}),
+        )
+        for name, ckpt in (("meta", meta_bundle.checkpoint_path), ("adapted", paths["checkpoint"])):
+            serving = load_serving_model(ckpt)
+            rec = serving.advisory(payload, holdout_df.drop(columns=["timestamp"]))
+            print(f"    [{name}] serving advisory OK: RUL={rec['predicted_rul_days']:.1f} d "
+                  f"(epistemic σ={rec['epistemic_std']:.3f})")
+
     print("Done. Reminder: onboarding configures ADVISORY models only — no control path.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
