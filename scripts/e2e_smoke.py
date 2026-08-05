@@ -216,7 +216,16 @@ def main() -> int:
             f"max rount-trip err={max_err:.3f}",
         )
 
-        print("\n[7] Safety gate spot-checks")
+        print("\n[7] Fleet report endpoint")
+        r = client.get("/fleet/report")
+        check(
+            "GET /fleet/report (markdown, twin-sourced)",
+            r.status_code == 200 and r.text.lstrip().startswith("#")
+            and "E2E-TWIN" in r.text,
+            f"{len(r.text)} chars of markdown",
+        )
+
+        print("\n[8] Safety gate spot-checks")
         r = client.post(
             "/advisory",
             json={

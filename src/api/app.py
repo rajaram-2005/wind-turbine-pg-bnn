@@ -342,6 +342,49 @@ def create_app() -> FastAPI:
         enforce_safety_contract(body)
         return body
 
+    # ------------------------------------------------------------------ #
+    # Reporting                                                           #
+    # ------------------------------------------------------------------ #
+    @app.get("/fleet/report")
+    def fleet_report(title: str = "Fleet RUL advisory report"):
+        """Markdown fleet report (text/markdown) via build_fleet_report.
+
+        Sources the advisory records of every live digital twin in the
+        registry (model or bnn_state path); when no twin carries an advisory
+        yet, falls back to the bundled examples/fleet.csv snapshot so the
+        endpoint is demonstrable out of the box.
+        """
+        from fastapi.responses import PlainTextResponse
+
+        from src.reporting.reports import build_fleet_report
+
+        records = []
+        for twin in app.state.twins.values():
+            last = twin.state_history[-1] if twin.state_history else {}
+            if last.get("advisory"):
+                records.append(last["advisory"])
+
+        if not records:
+            from pathlib import Path
+
+            from src.reporting.reports import advisories_from_csv
+
+            example = Path(__file__).resolve().parents[2] / "examples" / "fleet.csv"
+            if not example.is_file():
+                raise HTTPException(
+                    status_code=404,
+                    detail="No advisories in the twin registry and no example fleet CSV available.",
+                )
+            records = advisories_from_csv(str(example))
+            title = f"{title} (example fleet snapshot)"
+
+        for rec in records:
+            enforce_safety_contract(rec)
+        return PlainTextResponse(
+            content=build_fleet_report(records, title=title),
+            media_type="text/markdown",
+        )
+
     return app
 
 
