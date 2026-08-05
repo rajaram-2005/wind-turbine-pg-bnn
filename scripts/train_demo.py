@@ -10,7 +10,8 @@ Usage:
 """
 
 from __future__ import annotations
-
+from src.utils.encoding import configure_utf8_stdio
+configure_utf8_stdio()
 import argparse
 import os
 import sys
