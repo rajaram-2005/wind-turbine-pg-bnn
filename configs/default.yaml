@@ -51,6 +51,17 @@ hermes:                  # self-training onboarding agent (src/agents/hermes.py)
   eval_mc_samples: 16
   seed: 0
 
+eval:
+  early_warning_horizon_days: 45.0  # headline guarantee: warn >= this many days before failure
+
+ui:
+  default_snapshot:            # Streamlit single-asset defaults (documentation values)
+    vibration_mms: 2.5
+    temperature_c: 62.0
+    rpm: 1500.0
+    oil_viscosity_cst: 32.0
+    load_pct: 80.0
+
 safety:
   mode: advisory_only    # MUST remain "advisory_only"
   allow_actuation: false # MUST remain false

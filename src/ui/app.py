@@ -17,6 +17,7 @@ import pandas as pd
 import streamlit as st
 
 from src.models.predictor import run_advisory
+from src.ui.defaults import default_snapshot
 from src.reporting.reports import (
     advisories_from_dataframe,
     build_fleet_report,
@@ -32,14 +33,9 @@ SAFETY_BANNER = (
     "against OEM documentation before any maintenance action. See `docs/SAFETY.md`."
 )
 
-# Sensible defaults that double as field documentation.
-_DEFAULTS = {
-    "vibration_mms": 2.5,
-    "temperature_c": 62.0,
-    "rpm": 1500.0,
-    "oil_viscosity_cst": 32.0,
-    "load_pct": 80.0,
-}
+# Sensible defaults that double as field documentation — threaded from
+# configs/default.yaml (ui.default_snapshot); values unchanged.
+_DEFAULTS = default_snapshot()
 
 
 st.set_page_config(page_title="AeroVigil advisory", page_icon="🌀", layout="wide")
