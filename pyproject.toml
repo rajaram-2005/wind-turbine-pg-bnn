@@ -43,7 +43,7 @@ twin-simulate = "src.cli_twin:simulate_main"
 twin-prompt = "src.cli_twin:prompt_main"
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 include = ["src*"]
 
 [tool.pytest.ini_options]
