@@ -57,6 +57,19 @@ def status_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--model", default="GE-1.5", help="Turbine model from specs library.")
     parser.add_argument("--payload", help="Path to optional telemetry payload JSON.")
     parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format.")
+    parser.add_argument(
+        "--advisory",
+        action="store_true",
+        help="Compute and print the advisory engine output for this state "
+        "(trained-model path when --model-path is given, else the bnn_state block).",
+    )
+    parser.add_argument(
+        "--model-path",
+        default=None,
+        metavar="CHECKPOINT",
+        help="Optional trained PG-BNN bundle to attach to the twin "
+        "(advisories then come from the model, not bnn_state).",
+    )
 
     args = parser.parse_args(argv)
 
@@ -68,7 +81,13 @@ def status_main(argv: Sequence[str] | None = None) -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 1
 
-    twin = WindTurbineDigitalTwin(args.asset_id, spec)
+    serving = None
+    if args.model_path:
+        from src.models.serving import load_serving_model
+
+        serving = load_serving_model(args.model_path)
+
+    twin = WindTurbineDigitalTwin(args.asset_id, spec, serving_model=serving)
 
     telemetry, bnn_state = load_optional_telemetry(args.payload)
     if telemetry:
@@ -114,6 +133,18 @@ def status_main(argv: Sequence[str] | None = None) -> int:
         print(f"Active Physical Violations: {', '.join(last_rec['physics_violations']) if last_rec['physics_violations'] else 'None'}")
         if last_rec["bnn_state"]:
             print(f"Probabilistic predicted RUL: {last_rec['bnn_state']['predicted_rul_days']:.1f} days")
+        if args.advisory:
+            adv = last_rec.get("advisory")
+            print("------------------------------------------------------------")
+            if adv:
+                print(f"Advisory (source: {last_rec.get('advisory_source')}):")
+                print(f"  Predicted RUL: {adv['predicted_rul_days']:.1f} days "
+                      f"(epistemic σ={adv['epistemic_std']:.3f}, aleatoric σ={adv['aleatoric_std']:.3f})")
+                print(f"  Suggested inspection window: {adv['suggested_inspection_window_days']:.1f} days")
+                print("  Early warning (45d): "
+                      f"{'TRIGGERED' if adv['early_warning_triggered'] else 'not triggered'}")
+            else:
+                print("Advisory: none available (no serving model attached and no bnn_state)")
         print("============================================================")
 
     return 0

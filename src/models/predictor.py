@@ -55,7 +55,10 @@ def run_advisory(
         model.eval()
         from src.models.bnn import predict
         out = predict(model, x, mc_samples=64)
-        rul_days = float(out["mean_pred"].item())
+        # Clamp the raw regression head into the same engineering range the
+        # BNNState schema enforces (0..3650 days): a negative remaining-life
+        # estimate means "failure now", not negative time.
+        rul_days = float(np.clip(out["mean_pred"].item(), 0.0, 3650.0))
         epi = float(out["epistemic_std"].item())
         ale = float(out["aleatoric_std"].item())
     else:

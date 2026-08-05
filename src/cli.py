@@ -54,7 +54,19 @@ def _emit(content: str, output: str | None) -> None:
 # --------------------------------------------------------------------------- #
 def cmd_advisory(args: argparse.Namespace) -> None:
     payload = TurbinePayload(**json.loads(_read_text(args.payload)))
-    rec = run_advisory(payload)
+    if args.model:
+        # Model-serving path: RUL + uncertainties come from the trained PG-BNN.
+        from src.data.ingest import load_csv
+        from src.models.serving import load_serving_model
+
+        if not args.telemetry_csv:
+            raise SystemExit("--telemetry-csv is required when --model is used")
+        serving = load_serving_model(args.model)
+        df = load_csv(args.telemetry_csv)
+        rec = serving.advisory(payload, df)
+    else:
+        # Backward-compatible path: pre-computed bnn_state in the payload.
+        rec = run_advisory(payload)
     enforce_safety_contract(rec)
     _emit(json.dumps(rec, indent=2), args.output)
 
@@ -93,6 +105,21 @@ def build_parser() -> argparse.ArgumentParser:
     pa = sub.add_parser("advisory", help="Advisory for a single turbine payload (JSON).")
     pa.add_argument("payload", help="Path to JSON payload, or '-' for stdin.")
     pa.add_argument("-o", "--output", default=None, help="Write to file (default: stdout).")
+    pa.add_argument(
+        "--model",
+        default=None,
+        metavar="CHECKPOINT",
+        help="Optional trained PG-BNN bundle (e.g. artifacts/bnn_demo.pt). "
+        "When given, RUL and uncertainties are computed by the model; "
+        "otherwise the payload's bnn_state block is used (unchanged behavior).",
+    )
+    pa.add_argument(
+        "--telemetry-csv",
+        default=None,
+        metavar="WINDOW_CSV",
+        help="Raw telemetry window CSV (timestamp + 5 channels) used to build "
+        "model features when --model is set.",
+    )
     pa.set_defaults(func=cmd_advisory)
 
     pf = sub.add_parser("fleet", help="Advisories for a fleet CSV.")

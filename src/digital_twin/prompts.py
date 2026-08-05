@@ -82,6 +82,15 @@ PROBABILISTIC BNN PREDICTIONS:
 - Epistemic Uncertainty (Model Ignorance): {bnn['epistemic_uncertainty']:.3f}
 - Aleatoric Uncertainty (Sensor Noise): {bnn['aleatoric_uncertainty']:.3f}
 """
+        advisory = current_state.get("advisory")
+        if advisory:
+            prompt += f"""
+ADVISORY ENGINE OUTPUT (source: {current_state.get('advisory_source', 'unknown')}):
+- Predicted RUL: {advisory['predicted_rul_days']:.1f} days
+- Epistemic σ: {advisory['epistemic_std']:.3f} | Aleatoric σ: {advisory['aleatoric_std']:.3f}
+- Suggested inspection window: {advisory['suggested_inspection_window_days']:.1f} days
+- Early warning (45-day horizon): {'TRIGGERED' if advisory['early_warning_triggered'] else 'not triggered'}
+"""
     else:
         prompt += "(No telemetry records available)\n"
 

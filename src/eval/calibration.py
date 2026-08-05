@@ -18,7 +18,20 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from src.physics.constraints import GearboxPhysicsConstraints
+from src.physics.constraints import (
+    GearboxPhysicsConstraints,
+    default_gearbox_constraints,
+)
+
+
+def _default_warning_horizon() -> float:
+    """45-day early-warning horizon, sourced from configs/default.yaml
+    (``eval.early_warning_horizon_days``). The YAML value is identical to the
+    historical hardcoded constant, so behavior is unchanged — the config file
+    is now the single source of truth for the system guarantee."""
+    from src.utils.config import load_config
+
+    return float(load_config().eval.early_warning_horizon_days)
 
 
 def expected_calibration_error(
@@ -70,7 +83,8 @@ def expected_asset_utilization(
     }
 
 
-EARLY_WARNING_HORIZON_DAYS = 45.0
+# Threaded from configs/default.yaml (eval.early_warning_horizon_days = 45.0).
+EARLY_WARNING_HORIZON_DAYS = _default_warning_horizon()
 
 
 def early_warning_metrics(
@@ -155,7 +169,7 @@ def classify_failure_mode(
 ) -> list[str]:
     """Rule-based probable failure mode flags (advisory only)."""
     if gb is None:
-        gb = GearboxPhysicsConstraints()
+        gb = default_gearbox_constraints()
     flags: list[str] = []
     v = telemetry["vibration_mms"]
     t = telemetry["temperature_c"]

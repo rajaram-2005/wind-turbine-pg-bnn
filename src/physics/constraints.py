@@ -33,13 +33,41 @@ class GeneratorPhysicsConstraints:
     rpm_limit: float = 1800.0
 
 
+# Default limits are threaded from configs/default.yaml via src.utils.config.
+# The YAML values are identical to the dataclass defaults above, so behavior
+# is unchanged — the config file is simply the single source of truth.
+_APP_CONFIG_CACHE = None
+
+
+def _default_physics_config():
+    """Load the app config (cached); imported lazily to avoid import cycles."""
+    global _APP_CONFIG_CACHE
+    if _APP_CONFIG_CACHE is None:
+        from src.utils.config import load_config
+
+        _APP_CONFIG_CACHE = load_config()
+    return _APP_CONFIG_CACHE
+
+
+def default_gearbox_constraints() -> GearboxPhysicsConstraints:
+    """Gearbox limits from configs/default.yaml (identical to class defaults)."""
+    cfg = _default_physics_config()
+    return GearboxPhysicsConstraints(**cfg.physics.gearbox.model_dump())
+
+
+def default_generator_constraints() -> GeneratorPhysicsConstraints:
+    """Generator limits from configs/default.yaml (identical to class defaults)."""
+    cfg = _default_physics_config()
+    return GeneratorPhysicsConstraints(**cfg.physics.generator.model_dump())
+
+
 def check_violations(
     telemetry: dict[str, float],
     gb: GearboxPhysicsConstraints | None = None,
 ) -> list[str]:
     """Return a list of human-readable violation strings (empty if all nominal)."""
     if gb is None:
-        gb = GearboxPhysicsConstraints()
+        gb = default_gearbox_constraints()
     v: list[str] = []
     if telemetry["vibration_mms"] > gb.vibration_limit_mms:
         v.append(
@@ -84,7 +112,7 @@ def physics_loss(
     Returns (total_loss, breakdown_dict).
     """
     if gb is None:
-        gb = GearboxPhysicsConstraints()
+        gb = default_gearbox_constraints()
     vib_lim = torch.tensor(gb.vibration_limit_mms, dtype=torch.float32)
     tmp_lim = torch.tensor(gb.temperature_limit_c, dtype=torch.float32)
     rpm_lim = torch.tensor(gb.rpm_limit_hss, dtype=torch.float32)

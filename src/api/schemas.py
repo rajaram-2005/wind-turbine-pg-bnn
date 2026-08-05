@@ -13,13 +13,14 @@ these schemas, and every payload is screened by ``enforce_safety_contract``
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Re-export the domain models so API consumers can import everything from
 # ``src.api.schemas`` in one place.
 from src.utils.schema import BNNState, Telemetry, TurbinePayload
 
 __all__ = [
+    "AdvisoryRequest",
     "AdvisoryResponse",
     "BNNState",
     "FleetRequest",
@@ -27,8 +28,99 @@ __all__ = [
     "FleetSummary",
     "HealthResponse",
     "Telemetry",
+    "TelemetryCompressRequest",
+    "TelemetryCompressResponse",
+    "TelemetryRestoreRequest",
+    "TelemetryRestoreResponse",
+    "TelemetryWindow",
     "TurbinePayload",
+    "TwinSimulateRequest",
 ]
+
+
+class TelemetryWindow(BaseModel):
+    """A raw per-channel telemetry window (list of samples per channel).
+
+    Used with the model-serving path: when the service has a trained PG-BNN
+    loaded (``AV_MODEL_PATH`` / config) and the request carries this block,
+    RUL + uncertainties are computed by the model from these samples. Equal
+    sample counts are enforced for all five canonical channels.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    vibration_mms: list[float] = Field(..., min_length=1, max_length=10_000)
+    temperature_c: list[float] = Field(..., min_length=1, max_length=10_000)
+    rpm: list[float] = Field(..., min_length=1, max_length=10_000)
+    oil_viscosity_cst: list[float] = Field(..., min_length=1, max_length=10_000)
+    load_pct: list[float] = Field(..., min_length=1, max_length=10_000)
+
+    @model_validator(mode="after")
+    def _equal_lengths(self) -> "TelemetryWindow":
+        lengths = {
+            len(self.vibration_mms),
+            len(self.temperature_c),
+            len(self.rpm),
+            len(self.oil_viscosity_cst),
+            len(self.load_pct),
+        }
+        if len(lengths) != 1:
+            raise ValueError("all telemetry_window channels must have equal sample counts")
+        return self
+
+
+class TelemetryCompressRequest(BaseModel):
+    """Wire format for POST /telemetry/compress (AeroZip)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    channels: TelemetryWindow
+    sample_interval_s: int = Field(600, ge=1, le=86_400)
+    baseline_mean: dict[str, float] | None = None
+    baseline_std: dict[str, float] | None = None
+
+
+class TelemetryCompressResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    codec: str
+    payload_b64: str
+    channels: list[str]
+    n_samples: int
+    anomaly_score: float
+    bypass: bool
+    raw_bytes: int
+    compressed_bytes: int
+    ratio: float
+    advisory_only: bool = True
+
+
+class TelemetryRestoreRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    payload_b64: str
+    channels: list[str] | None = None  # defaults to the five canonical channels
+
+
+class TelemetryRestoreResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    channels: dict[str, list[float]]
+    n_samples: int
+    anomaly_score: float
+    bypass: bool
+    advisory_only: bool = True
+
+
+class AdvisoryRequest(TurbinePayload):
+    """``TurbinePayload`` + optional raw telemetry window.
+
+    Backward compatible: without ``telemetry_window`` (or without a loaded
+    model) the request is served from the ``bnn_state`` block exactly as
+    before.
+    """
+
+    telemetry_window: TelemetryWindow | None = None
 
 
 class AdvisoryResponse(BaseModel):
@@ -78,6 +170,17 @@ class FleetResponse(BaseModel):
     summary: FleetSummary
 
 
+class TwinSimulateRequest(BaseModel):
+    """Wire format for POST /twin/simulate (digital-twin scenario replay)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: str = Field(..., min_length=1)
+    model: str = "GE-1.5"
+    profile: str = Field("nominal", pattern="^(nominal|overload|derated|viscosity_loss)$")
+    hours: float = Field(24.0, gt=0.0, le=720.0)
+
+
 class HealthResponse(BaseModel):
     """Liveness / readiness probe."""
 
@@ -87,3 +190,4 @@ class HealthResponse(BaseModel):
     product: str = "AeroVigil"
     version: str = "1.0.0"
     website: str = "https://aerovigil.abacusai.app"
+    serving_model_loaded: bool = False

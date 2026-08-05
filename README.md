@@ -44,20 +44,30 @@ and how this differs from conventional predictive maintenance.
 
 ## Modules
 
+See **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** for the full connection
+diagram (config → data → physics → model/serving → predictor → safety →
+reporting → api/ui/cli, plus digital-twin and meta/hermes paths).
+
 | Path | Purpose |
 | ---- | ------- |
-| `src/data/` | SCADA-style CSV/parquet ingestion, sliding-window feature extraction, robust normalization |
-| `src/physics/` | ISO 281 bearing $L_{10}$ life, gearbox/generator hard limits, differentiable $L_{\text{physics}}$ penalty |
+| `configs/default.yaml` + `src/utils/config.py` | Single source of truth (physics, bnn, telemetry, meta, hermes, eval, ui); fail-closed advisory-only loader |
+| `src/data/` | SCADA-style CSV/parquet ingestion, sliding-window feature extraction, robust normalization, AeroZip-compressed CSV path |
+| `src/physics/` | ISO 281 bearing $L_{10}$ life, config-sourced gearbox/generator hard limits, differentiable $L_{\text{physics}}$ penalty |
 | `src/models/bnn.py` | Bayesian MLP (PyTorch) trained with Monte Carlo Variational Inference; outputs mean RUL + epistemic + aleatoric variance |
-| `src/models/telemetry/` | AeroZip-style delta + deadband + quantize compression with anomaly-bypass |
+| `src/models/serving.py` | `load_serving_model(checkpoint)` → model + feature pipeline → model-based `run_advisory` |
+| `src/utils/artifacts.py` | Artifact registry: checkpoint + fitted scaler + JSON sidecar (`artifacts/`), Hermes/onboarding export |
+| `src/models/telemetry/` | AeroZip compressor core + `pipeline.py` (`compress_window`/`restore_window`, anomaly score) |
 | `src/eval/` | ECE calibration, expected asset utilization, **45-day early-warning metrics (94.2% demo accuracy)**, failure-type classification |
-| `src/utils/` | Safety gates, logging, schema |
-| `src/api/` | FastAPI advisory service (`/health`, `/advisory`, `/advisory/fleet`) — see [API service](#api-service) |
+| `src/utils/safety.py` | `enforce_safety_contract` — fail-closed advisory-only gate on every boundary |
+| `src/api/` | FastAPI advisory service: `/health`, `/advisory` (bnn_state **and** model modes), `/advisory/fleet`, `/twin/*`, `/telemetry/*`, `/fleet/report` — see [API service](#api-service) |
 | `src/cli.py` | `wind-turbine-bnn` CLI (`advisory`, `fleet`, `report`) — see [CLI](#cli) |
 | `src/reporting/` | Text/markdown report rendering and fleet summaries — see [Reports](#reports) |
-| `src/ui/` | Streamlit advisory UI — see [Streamlit UI](#streamlit-ui) |
+| `src/ui/` | Streamlit advisory UI (single asset, fleet, Digital Twin, AeroZip panel) — see [Streamlit UI](#streamlit-ui) |
+| `src/digital_twin/` | Spec library, digital twin with advisory bridge (`update_state` → `run_advisory`), scenario simulation, copilot prompts |
 | `src/meta/` | Reptile meta-learning — few-shot adaptation of the PG-BNN to newly onboarded assets from a handful of labeled windows — see `docs/META_LEARNING.md` |
 | `src/agents/hermes.py` | Hermes self-training onboarding agent: confidence-filtered pseudo-labeling + fail-closed promotion gate (advisory-only) — see `docs/META_LEARNING.md` |
+| `scripts/run_pipeline.py` | End-to-end flow: config → synthetic fleet → train → eval → export → model-based advisory smoke → `artifacts/pipeline_report.md` |
+| `scripts/e2e_smoke.py` | In-process FastAPI smoke over every endpoint; exits non-zero on any failure |
 
 ## Few-shot fleet onboarding (Reptile + Hermes)
 
@@ -75,16 +85,30 @@ python scripts/onboard_demo.py     # meta-train on the fleet, onboard a new asse
 
 See `docs/META_LEARNING.md` for the algorithm, the safety posture, and the API.
 
-## Quick start (research / offline mode)
+## Quick start (end-to-end)
 
 ```bash
 pip install -e ".[api,ui,dev]"
-python scripts/train_demo.py           # trains on synthetic drivetrain data
-python scripts/eval_accuracy.py        # 45-day early-warning accuracy demo (94.2%)
+
+# One flow: config -> synthetic fleet -> train -> eval -> export -> advisory smoke
+python scripts/run_pipeline.py         # writes artifacts/pipeline_report.md
+
+# Individual demos
+python scripts/train_demo.py                  # train + export artifacts/bnn_demo.pt bundle
+python scripts/eval_accuracy.py               # 45-day early-warning accuracy demo (94.2%)
+python scripts/onboard_demo.py --export artifacts/onboarding   # Reptile + Hermes export
+
+# API surfaces, all of them (in-process smoke, exits non-zero on failure)
+python scripts/e2e_smoke.py
 pytest -q                              # runs unit tests
 ```
 
-Outputs from `predict_rul()` are always wrapped in an `AdvisoryRecommendation`
+Everything reads `configs/default.yaml` through `src.utils.config.load_config`
+(fail-closed: non-advisory configs are rejected at load time), and every served
+model loads through `src.models.serving.load_serving_model` from the
+`artifacts/` registry (checkpoint + fitted scaler + JSON sidecar).
+
+Outputs from `run_advisory()` are always wrapped in an `AdvisoryRecommendation`
 object that explicitly marks itself as non-actuating. The safety gate in
 `src/utils/safety.py` will refuse to emit numeric "throttle" or "LOTO" fields.
 
@@ -100,7 +124,7 @@ pip install -e ".[api]"
 uvicorn src.api.app:app --reload        # http://127.0.0.1:8000/docs
 ```
 
-Single asset:
+Single asset (payload `bnn_state` mode — unchanged from v0.1.0):
 
 ```bash
 curl -s -X POST localhost:8000/advisory \
@@ -108,9 +132,52 @@ curl -s -X POST localhost:8000/advisory \
   -d @examples/payload.json | jq
 ```
 
+Model-serving mode: set `AV_MODEL_PATH` to a serving bundle
+(e.g. `artifacts/bnn_demo.pt` from `scripts/train_demo.py`) and send the raw
+telemetry window alongside the snapshot:
+
+```bash
+export AV_MODEL_PATH=artifacts/bnn_demo.pt
+uvicorn src.api.app:app
+# payload.json + "telemetry_window": {"vibration_mms": [...60 samples...], ...}
+```
+
+Without a `telemetry_window` (or without a loaded model) the request is served
+from the `bnn_state` block exactly as before — backward compatible by contract.
+
 Fleet batch (`POST /advisory/fleet`) returns one advisory per asset plus an
 aggregate `summary` (mean RUL, mean utilization, fraction at risk). `GET /health`
 is a liveness probe that always reports `advisory_only: true`.
+
+Full endpoint surface:
+
+| Endpoint | Purpose |
+| -------- | ------- |
+| `GET /health` | liveness probe (`advisory_only: true`, `serving_model_loaded`) |
+| `POST /advisory` | single-asset advisory (`bnn_state` fallback or model+`telemetry_window`) |
+| `POST /advisory/fleet` | batch advisories + fleet summary |
+| `GET /twin/status` | digital-twin state incl. advisory bridge output |
+| `POST /twin/simulate` | scenario replay (`nominal`/`overload`/`derated`/`viscosity_loss`) |
+| `GET /twin/prompt` | contextual reliability-copilot prompt |
+| `POST /telemetry/compress` | AeroZip compress (surfaces anomaly score) |
+| `POST /telemetry/restore` | AeroZip restore (lossless for bypassed windows) |
+| `GET /fleet/report` | fleet advisory report, `text/markdown` |
+
+### Deployment notes (aerovigil.abacusai.app)
+
+The hosted AeroVigil service runs `uvicorn src.api.app:app`:
+
+- **`AV_MODEL_PATH`** — optional serving bundle; when set, `/advisory` accepts
+  `telemetry_window` blocks and `/twin/*` advisories come from the trained model.
+- **Config** — `configs/default.yaml` loaded via `src.utils.config.load_config`;
+  the service refuses to boot from a non-advisory safety block (fail closed).
+- **CORS** — `allow_origins=["*"]`, methods `GET`/`POST` (already in `create_app`;
+  tighten per deployment policy).
+- **Health probe** — `GET /health` (liveness/readiness; always `advisory_only: true`).
+- **Artifacts** — the `artifacts/` registry is local-disk state (gitignored);
+  ship bundles with the deployment or bake them into the image.
+- **Never add actuation fields.** The safety gate and `extra="forbid"` response
+  schemas are the contract; `docs/SAFETY.md` is the policy.
 
 ## CLI
 

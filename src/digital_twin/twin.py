@@ -3,15 +3,22 @@
 from __future__ import annotations
 
 import datetime
+from collections import deque
 from typing import Any
 
+import pandas as pd
+
+from src.data.ingest import CHANNELS
 from src.digital_twin.specs import TurbineSpec
 from src.physics.constraints import (
     GearboxPhysicsConstraints,
     check_violations,
     iso_281_l10_hours,
 )
-from src.utils.schema import BNNState, Telemetry
+from src.utils.schema import BNNState, Telemetry, TurbinePayload
+
+# Rolling telemetry buffer size used to build model features for advisories.
+_ADVISORY_BUFFER_MAX = 512
 
 
 class WindTurbineDigitalTwin:
@@ -23,12 +30,57 @@ class WindTurbineDigitalTwin:
     models cumulative wear, and supports operator scenario simulation.
     """
 
-    def __init__(self, asset_id: str, spec: TurbineSpec):
+    def __init__(self, asset_id: str, spec: TurbineSpec, serving_model=None):
         self.asset_id = asset_id
         self.spec = spec
         self.state_history: list[dict[str, Any]] = []
         self.cumulative_wear: float = 0.0  # Normalized wear index (0.0 = brand new, 1.0 = failure)
         self.last_updated: datetime.datetime = datetime.datetime.now(datetime.timezone.utc)
+        # Raw snapshot buffer feeding the advisory feature pipeline.
+        self._telemetry_buffer: deque[dict[str, float]] = deque(maxlen=_ADVISORY_BUFFER_MAX)
+        self.serving_model = None
+        if serving_model is not None:
+            self.attach_serving_model(serving_model)
+
+    def attach_serving_model(self, serving_model) -> None:
+        """Attach a :class:`src.models.serving.ServingModel` so every state
+        update computes its advisory from the trained PG-BNN (rather than the
+        incoming bnn_state block). Fails fast on feature-dim mismatch."""
+        channels = tuple(serving_model.features_config.channels)
+        if tuple(sorted(channels)) != tuple(sorted(CHANNELS)):
+            raise ValueError(
+                f"serving model channels {channels} do not match the twin's "
+                f"telemetry channels {CHANNELS}"
+            )
+        expected = len(CHANNELS) * len(serving_model.features_config.stats)
+        if serving_model.expected_feature_dim != expected:
+            raise ValueError(
+                f"feature-dim mismatch: serving model expects "
+                f"{serving_model.expected_feature_dim} features, twin provides {expected}"
+            )
+        self.serving_model = serving_model
+
+    def _compute_advisory(
+        self, telemetry: Telemetry, bnn_state: BNNState | None
+    ) -> tuple[dict[str, Any] | None, str | None]:
+        """Compute the advisory for this snapshot.
+
+        Model path (when a serving model is attached) uses the rolling
+        telemetry buffer to build window features; otherwise the incoming
+        bnn_state block drives the advisory (previous behavior). Both paths
+        flow through run_advisory → enforce_safety_contract.
+        """
+        payload = TurbinePayload(
+            asset_id=self.asset_id, telemetry=telemetry, bnn_state=bnn_state
+        )
+        if self.serving_model is not None:
+            df = pd.DataFrame(list(self._telemetry_buffer), columns=list(CHANNELS))
+            return self.serving_model.advisory(payload, df), "model"
+        if bnn_state is not None:
+            from src.models.predictor import run_advisory
+
+            return run_advisory(payload), "bnn_state"
+        return None, None
 
     def update_state(
         self,
@@ -86,6 +138,11 @@ class WindTurbineDigitalTwin:
 
         self.cumulative_wear = min(1.0, self.cumulative_wear + wear_increment)
         self.last_updated = timestamp
+        self._telemetry_buffer.append(telemetry_dict)
+
+        # Bridge to the advisory engine: model path when a serving model is
+        # attached, else the incoming bnn_state block (previous behavior).
+        advisory, advisory_source = self._compute_advisory(telemetry, bnn_state)
 
         state_record = {
             "timestamp": timestamp.isoformat(),
@@ -94,6 +151,8 @@ class WindTurbineDigitalTwin:
             "physics_violations": violations,
             "bearing_l10_hours": l10_hours,
             "cumulative_wear": self.cumulative_wear,
+            "advisory": advisory,
+            "advisory_source": advisory_source,
         }
         self.state_history.append(state_record)
         return state_record
