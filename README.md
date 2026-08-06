@@ -17,23 +17,36 @@ pipeline_tag: other
 
 # Physics-Guided Bayesian Neural Network for Wind Turbine RUL Prediction
 
-## Model Overview
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
+[![PyTorch 2.0+](https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c.svg)](https://pytorch.org/)
+[![Hugging Face Model](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-ffd21e.svg)](https://huggingface.co/AerovigilAI/wind-turbine-pg-bnn)
+[![Live Demo](https://img.shields.io/badge/demo-live-22c55e.svg)](https://aerovigil.abacusai.app)
 
-**Aerovigil AI** presents a Physics-Guided Bayesian Neural Network (PG-BNN) designed for **Remaining Useful Life (RUL) prediction and diagnostic advisory** of wind turbine drivetrain components. This model integrates ISO 281 bearing physics with Monte Carlo Variational Inference to deliver uncertainty-aware prognostics for predictive maintenance in wind energy operations.
+**Aerovigil AI** presents a Physics-Guided Bayesian Neural Network (PG-BNN) for
+**Remaining Useful Life (RUL) prediction and diagnostic advisory** of wind
+turbine drivetrain components. The model combines ISO 281 bearing-life physics
+with Monte Carlo Variational Inference (MCVI) to provide uncertainty-aware
+prognostics for predictive-maintenance planning.
+
+> **Advisory only.** This repository produces decision-support outputs for
+> reliability engineers and maintenance planners. It does not emit turbine
+> control commands, LOTO procedures, part numbers, or authoritative work
+> instructions. See [`docs/SAFETY.md`](docs/SAFETY.md).
 
 | Attribute | Value |
 |-----------|-------|
 | **Developer** | [Aerovigil AI](https://huggingface.co/AerovigilAI) |
 | **Model Name** | `wind-turbine-pg-bnn` |
-| **Domain** | Wind Turbine Predictive Maintenance |
-| **Task** | Remaining Useful Life (RUL) Prediction & Diagnostic Advisory |
-| **Architecture** | Bayesian Neural Network with Physics Constraints |
+| **Domain** | Wind turbine predictive maintenance |
+| **Task** | Remaining Useful Life (RUL) prediction and diagnostic advisory |
+| **Architecture** | Bayesian neural network with physics constraints |
 | **Framework** | PyTorch |
 | **Inference** | Monte Carlo Variational Inference (MCVI) |
-| **Physics Engine** | ISO 281 Bearing Life Theory |
+| **Physics Engine** | ISO 281 bearing-life theory |
 | **Early Warning Horizon** | 45 days |
-| **Accuracy** | 94.2% |
-| **Recall** | 100% |
+| **Demo Accuracy** | 94.2% early-warning accuracy |
+| **Demo Recall** | 100% |
 | **Live Demo** | [aerovigil.abacusai.app](https://aerovigil.abacusai.app) |
 | **Source Code** | [github.com/rajaram-2005/wind-turbine-pg-bnn](https://github.com/rajaram-2005/wind-turbine-pg-bnn) |
 
@@ -41,100 +54,174 @@ pipeline_tag: other
 
 ## Model Description
 
-The Physics-Guided Bayesian Neural Network combines data-driven deep learning with first-principles physics to predict the remaining useful life of wind turbine drivetrain bearings. Unlike traditional black-box models, PG-BNN embeds ISO 281 bearing fatigue life equations as soft physics constraints within a Bayesian neural architecture. This hybrid approach ensures:
+The PG-BNN couples data-driven deep learning with first-principles physics to
+predict remaining useful life for wind turbine drivetrain bearings. Unlike a
+black-box point estimator, PG-BNN returns a probabilistic RUL estimate and uses
+ISO 281 bearing-fatigue guidance as a soft physics constraint during training.
 
-- **Uncertainty Quantification**: Probabilistic RUL estimates via Monte Carlo dropout variational inference
-- **Physics Compliance**: Predictions respect fundamental bearing degradation mechanics
-- **Early Detection**: 45-day advance warning horizon for maintenance scheduling
-- **High Reliability**: 100% recall ensures no critical failures are missed
+Key properties:
+
+- **Uncertainty quantification:** probabilistic RUL estimates from variational
+  Bayesian layers and MC sampling.
+- **Physics compliance:** predictions are regularized against a simplified ISO
+  281 L10-life relationship based on cumulative operating hours.
+- **Early detection:** the advisory threshold and evaluation horizon are 45
+  days.
+- **Decision support:** outputs are intended for inspection and maintenance
+  planning, not direct turbine actuation.
 
 ### Key Innovations
 
 | Feature | Benefit |
 |---------|---------|
-| ISO 281 Physics Integration | Grounds predictions in tribological first principles |
-| Bayesian Layers | Captures epistemic uncertainty in sparse data regimes |
-| SCADA Telemetry Fusion | Ingests operational vibration, temperature, and power signals |
-| Variational Inference | Enables real-time probabilistic inference at scale |
+| ISO 281 physics integration | Grounds predictions in tribological first principles |
+| Bayesian layers | Captures epistemic uncertainty in sparse-data regimes |
+| SCADA telemetry fusion | Uses vibration, temperature, power, wind-speed, and runtime signals |
+| Variational inference | Enables repeated stochastic forward passes for uncertainty estimates |
+
+---
+
+## Quick Start
+
+### Option 1: Use the packaged model code locally
+
+```bash
+git clone https://github.com/rajaram-2005/wind-turbine-pg-bnn.git
+cd wind-turbine-pg-bnn
+python -m pip install -e .
+```
+
+For development and the full quality pipeline:
+
+```bash
+python -m pip install -e ".[dev]"
+make ci
+```
+
+### Option 2: Install only the model dependencies for a Hugging Face download
+
+If you are using the model class from this repository with weights hosted on
+Hugging Face, install PyTorch and Hugging Face Hub:
+
+```bash
+python -m pip install torch huggingface_hub
+```
+
+### Python inference
+
+```python
+import torch
+from aerovigil_pg_bnn import MonteCarloVI, PhysicsGuidedBNN
+
+# Downloads config.json and bnn_demo.pt from the Hugging Face model repo.
+model = PhysicsGuidedBNN.from_pretrained("AerovigilAI/wind-turbine-pg-bnn")
+
+vi = MonteCarloVI(model, num_samples=100)
+result = vi.predict_single([1.5, 45.0, 60.0, 2000.0, 9.0, 1000.0])
+print(result)
+```
+
+`predict_single` returns the mean RUL, uncertainty, 95% interval, risk level,
+and whether maintenance planning is recommended at the 45-day threshold.
+
+### Command-line inference
+
+Create `telemetry.json`:
+
+```json
+{
+  "vibration_rms": 1.5,
+  "bearing_temp": 45.0,
+  "generator_temp": 60.0,
+  "power_output": 2000.0,
+  "wind_speed": 9.0,
+  "operating_hours": 1000.0
+}
+```
+
+Then run:
+
+```bash
+aerovigil-infer --input telemetry.json --samples 100
+```
+
+### REST API
+
+Install API dependencies and start the lightweight inference server:
+
+```bash
+python -m pip install -e ".[api]"
+python -m aerovigil_pg_bnn.api
+```
+
+The server listens on `0.0.0.0:8000` and exposes:
+
+- `GET /health` — model-health check
+- `GET /model/info` — model metadata
+- `POST /predict` — single-telemetry RUL prediction
+- `POST /predict/batch` — batch predictions
+- `POST /predict/stream` — streamed Monte Carlo samples
+- `GET /docs` — OpenAPI UI
+
+Example request:
+
+```bash
+curl -X POST "http://localhost:8000/predict?n_mcmc_samples=100" \
+  -H "Content-Type: application/json" \
+  -d @telemetry.json
+```
+
+The repository also contains the broader AeroVigil advisory service in
+[`src/api/app.py`](src/api/app.py), including `/advisory`, digital-twin,
+telemetry-compression, and fleet-report endpoints.
 
 ---
 
 ## Intended Use
 
 ### Direct Use
-- **Wind farm operators** seeking to optimize maintenance schedules and reduce unplanned downtime
-- **Condition monitoring engineers** requiring uncertainty-aware RUL estimates for drivetrain bearings
-- **Asset managers** evaluating remaining life of turbine mechanical components
+
+- **Wind-farm operators** optimizing maintenance schedules and reducing
+  unplanned downtime.
+- **Condition-monitoring engineers** needing uncertainty-aware RUL estimates
+  for drivetrain bearings.
+- **Asset managers** evaluating the remaining life of turbine mechanical
+  components alongside inspection and CMMS workflows.
 
 ### Out-of-Scope Use
-- This model is trained specifically for **wind turbine drivetrain bearings** and should not be applied to other rotating machinery without domain adaptation
-- Not intended for real-time control decisions without human-in-the-loop validation
-- Predictions assume standard ISO 281 operating conditions; extreme environments may require recalibration
+
+- This model is designed for **wind turbine drivetrain bearings** and should
+  not be applied to other rotating machinery without domain adaptation.
+- It is not intended for real-time turbine control.
+- Predictions should not replace OEM service manuals, inspections, oil
+  analysis, or qualified engineering review.
+- The simplified ISO 281 constraint may be insufficient for extreme
+  environments, contaminated lubrication, sensor outages, or unusual operating
+  regimes.
 
 ---
 
-## How to Use
-
-### Installation
-
-```bash
-pip install torch huggingface_hub
-```
-
-### Loading the Model
+## Loading the Model Manually
 
 ```python
-import torch
 import json
+import torch
 from huggingface_hub import hf_hub_download
+from aerovigil_pg_bnn import PhysicsGuidedBNN
 
-# Download model weights and config
-model_path = hf_hub_download(
-    repo_id="AerovigilAI/wind-turbine-pg-bnn",
-    filename="bnn_demo.pt"
-)
-config_path = hf_hub_download(
-    repo_id="AerovigilAI/wind-turbine-pg-bnn",
-    filename="config.json"
-)
+repo_id = "AerovigilAI/wind-turbine-pg-bnn"
+config_path = hf_hub_download(repo_id=repo_id, filename="config.json")
+model_path = hf_hub_download(repo_id=repo_id, filename="bnn_demo.pt")
 
-# Load configuration
 with open(config_path) as f:
     config = json.load(f)
 
-# Load weights into your model architecture
-# NOTE: Replace PhysicsGuidedBNN with your actual model class
-from your_module import PhysicsGuidedBNN  # Import your architecture
-
 model = PhysicsGuidedBNN(config)
 model.load_state_dict(torch.load(model_path, map_location="cpu"))
-model.eval()
 ```
 
-### Inference Example
-
-```python
-import torch
-
-# Enable Monte Carlo dropout for uncertainty estimation
-model.train()  # Keep dropout active for MCVI
-
-# Run multiple forward passes for probabilistic prediction
-n_mcmc_samples = config["inference"]["num_samples"]
-predictions = []
-
-with torch.no_grad():
-    for _ in range(n_mcmc_samples):
-        rul_pred = model(input_telemetry)
-        predictions.append(rul_pred)
-
-# Compute mean prediction and epistemic uncertainty
-mean_rul = torch.stack(predictions).mean(dim=0)
-uncertainty = torch.stack(predictions).std(dim=0)
-
-print(f"Predicted RUL: {mean_rul.item():.1f} days")
-print(f"Uncertainty (±): {uncertainty.item():.1f} days")
-```
+For MCVI, keep dropout active by calling `model.train()` before repeated
+forward passes, or use `MonteCarloVI` as shown above.
 
 ---
 
@@ -144,12 +231,14 @@ print(f"Uncertainty (±): {uncertainty.item():.1f} days")
 
 | Component | Specification |
 |-----------|---------------|
-| Input Layer | SCADA telemetry features (vibration, temperature, power, wind speed) |
-| Hidden Layers | Fully-connected Bayesian layers with learnable mean/variance |
-| Physics Layer | ISO 281 bearing life constraint regularization |
-| Output Layer | Gaussian-distributed RUL prediction (mean + log-variance) |
-| Activation | ReLU with Monte Carlo dropout (p=0.2) |
-| Inference | Mean-field variational approximation |
+| Input layer | 6 SCADA telemetry features |
+| Hidden layers | Bayesian linear layers: 128 → 64 → 32 |
+| Activations | ReLU with dropout (`p=0.2`) |
+| Output heads | RUL mean and log-variance |
+| Variational family | Mean-field Gaussian weights and biases |
+| Physics term | MSE against clamped ISO 281 L10-life reference minus operating hours |
+| Loss | Gaussian negative log-likelihood + β KL term + physics loss |
+| Inference | Stochastic forward passes; mean, standard deviation, and percentile intervals |
 
 ### Input Format
 
@@ -164,44 +253,60 @@ print(f"Uncertainty (±): {uncertainty.item():.1f} days")
 
 ### Output Format
 
+`PhysicsGuidedBNN.forward` returns:
+
 | Output | Description | Shape |
 |--------|-------------|-------|
 | `rul_mean` | Expected remaining useful life | `(batch, 1)` |
-| `rul_log_var` | Log-variance for uncertainty | `(batch, 1)` |
+| `rul_log_var` | Log-variance for uncertainty modeling | `(batch, 1)` |
+
+The higher-level `MonteCarloVI.predict_single` helper returns a dictionary with
+`predicted_rul_days`, `uncertainty_days`, `confidence_interval_95`,
+`risk_level`, and `maintenance_recommended`.
 
 ---
 
 ## Training Details
 
 ### Training Data
-- **Source**: Historical SCADA and condition monitoring data from operational wind farms
-- **Preprocessing**: ISO 281 physics-informed feature engineering, z-score normalization
-- **Split**: 70% training, 15% validation, 15% testing (chronological)
+
+The repository includes deterministic synthetic-data and evaluation scripts
+for demonstration and CI. Historical SCADA/condition-monitoring data from
+operational wind farms would be required for production calibration.
+
+Preprocessing in the current configuration uses z-score normalization and
+physics-informed feature handling. The configuration declares a chronological
+70/15/15 train/validation/test split as the intended training regime.
 
 ### Training Regime
 
 | Parameter | Value |
 |-----------|-------|
 | Optimizer | Adam |
-| Learning Rate | 1e-3 with cosine annealing |
-| Batch Size | 64 |
+| Learning rate | 1e-3 with cosine annealing |
+| Batch size | 64 |
 | Epochs | 200 |
-| Physics Loss Weight | 0.1 |
-| ELBO Weight (β) | 0.01 (annealed) |
+| Physics loss weight | 0.1 |
+| ELBO weight (β) | 0.01 |
+| Early stopping patience | 20 epochs |
 
 ---
 
 ## Evaluation
 
-### Performance Metrics
+> **Metric caveat.** The headline values below come from the repository's
+> deterministic 500-asset demonstration campaign in
+> [`scripts/eval_accuracy.py`](scripts/eval_accuracy.py). They are useful for
+> illustrating the model and early-warning logic, but should not be interpreted
+> as field-validated production performance without site-specific validation.
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| MAE (Mean Absolute Error) | 4.3 days | On 45-day horizon |
+| MAE | 4.3 days | Configuration/reporting value for the 45-day horizon |
 | RMSE | 6.1 days | Root mean squared error |
-| Accuracy @ 45 days | 94.2% | Within ±5 day tolerance |
-| Recall | 100% | No missed critical failures |
-| Calibration Error | 0.03 | Well-calibrated uncertainties |
+| Accuracy @ 45 days | 94.2% | Early-warning classification demo result (471/500) |
+| Recall | 100% | No within-horizon failures missed in the demo campaign |
+| Calibration error | 0.03 | Expected calibration error |
 
 ### Benchmark Comparison
 
@@ -209,22 +314,82 @@ print(f"Uncertainty (±): {uncertainty.item():.1f} days")
 |-------|------------|-------------|---------------|
 | Standard LSTM | 8.7 | ❌ No | ❌ No |
 | Deep Ensembles | 5.2 | ✅ Yes | ❌ No |
-| **PG-BNN (Ours)** | **4.3** | **✅ Yes** | **✅ Yes** |
+| **PG-BNN** | **4.3** | **✅ Yes** | **✅ Yes** |
+
+Run the evaluation locally:
+
+```bash
+python scripts/eval_accuracy.py
+```
+
+---
+
+## Repository Layout
+
+| Path | Purpose |
+|------|---------|
+| [`model.py`](model.py) | Compact standalone model reference |
+| [`src/aerovigil_pg_bnn/`](src/aerovigil_pg_bnn) | Packaged model, MCVI utility, CLI, and inference API |
+| [`src/models/`](src/models) | Research BNN, predictor, serving, and telemetry pipeline |
+| [`src/physics/`](src/physics) | ISO 281 and operating-limit physics constraints |
+| [`src/digital_twin/`](src/digital_twin) | Turbine specs, virtual asset, and scenario simulation |
+| [`src/agents/hermes.py`](src/agents/hermes.py) | Few-shot onboarding and promotion gating |
+| [`scripts/`](scripts) | Training, evaluation, pipeline, and smoke-test scripts |
+| [`tests/`](tests) | Unit and integration tests |
+| [`docs/`](docs) | Architecture, proposal, and safety documentation |
 
 ---
 
 ## Bias, Risks, and Limitations
 
 ### Known Limitations
-- **Data dependency**: Performance degrades with sensor drift or missing telemetry channels
-- **Domain specificity**: Trained on onshore horizontal-axis turbines; offshore or vertical-axis applications require retraining
-- **Physics simplification**: ISO 281 assumes standard lubrication; contaminated or starved conditions not modeled
-- **Temporal scope**: 45-day horizon validated; longer predictions have increasing uncertainty
+
+- **Data dependency:** performance can degrade under sensor drift, missing
+  channels, calibration faults, or distribution shift.
+- **Domain specificity:** the model and specs focus on onshore horizontal-axis
+  turbines; offshore, vertical-axis, or OEM-specific deployments require
+  retraining and validation.
+- **Physics simplification:** the training physics term is a simplified ISO
+  281 operating-hours constraint, not a full load-history bearing-life model.
+- **Temporal scope:** the 45-day horizon is the supported early-warning target;
+  longer predictions carry increasing uncertainty.
+- **Synthetic demonstration metrics:** repository numbers should be validated
+  on real site data before operational decisions depend on them.
 
 ### Risk Mitigation
-- Always combine model output with scheduled inspections
-- Retrain model quarterly with new operational data
-- Flag predictions with uncertainty >10 days for human review
+
+- Use predictions as one input to maintenance planning, together with
+  inspections, SCADA trends, vibration/CMS trends, oil analysis, and OEM
+  guidance.
+- Retrain or recalibrate periodically with newly labeled operational data.
+- Route high-uncertainty predictions to human review.
+- Keep all outputs in advisory/decision-support workflows.
+
+---
+
+## Development
+
+```bash
+# Install development dependencies
+python -m pip install -e ".[dev]"
+
+# Run the full local quality gate
+make ci
+
+# Individual checks
+make lint
+make format-check
+make typecheck
+make security
+make test
+```
+
+Container images and Kubernetes manifests are also provided for API and demo
+deployments:
+
+```bash
+docker compose up api
+```
 
 ---
 
@@ -233,10 +398,10 @@ print(f"Uncertainty (±): {uncertainty.item():.1f} days")
 If you use this model in your research, please cite:
 
 ```bibtex
-@software{aerovigil_pgbnn_2024,
+@software{aerovigil_pgbnn_2026,
   author = {Aerovigil AI},
   title = {Physics-Guided Bayesian Neural Network for Wind Turbine RUL Prediction},
-  year = {2024},
+  year = {2026},
   url = {https://huggingface.co/AerovigilAI/wind-turbine-pg-bnn}
 }
 ```
