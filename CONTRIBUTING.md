@@ -65,19 +65,32 @@ pre-commit install
 
 ### Code Quality
 
+The project ships a [`Makefile`](Makefile) and a portable
+[`scripts/ci.sh`](scripts/ci.sh) that run the full quality pipeline. For
+day-to-day work:
+
 ```bash
-# Run linter
-ruff check src/ tests/
-
-# Run formatter
-ruff format src/ tests/
-
-# Run type checker
-mypy src/aerovigil_pg_bnn/
-
-# Run tests
-pytest tests/ -v --cov=src/aerovigil_pg_bnn
+make lint          # ruff check
+make format        # ruff format (auto-fix in place)
+make format-check  # ruff format --check (no writes)
+make typecheck     # mypy on the packaged model
+make security      # bandit scan
+make test          # pytest
+make build         # sdist + wheel (+ twine check)
 ```
+
+### Running CI locally
+
+Run the entire pipeline — the same checks any hosted CI runs — with one
+command:
+
+```bash
+make ci            # if you have `make`
+bash scripts/ci.sh # portable, no dependencies
+```
+
+`scripts/ci.sh` is intentionally portable: invoke it from CircleCI, Jenkins,
+GitLab, Drone, or a GitHub-hosted runner to get identical checks everywhere.
 
 ## Commit Messages
 
