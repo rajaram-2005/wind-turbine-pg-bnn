@@ -260,7 +260,9 @@ def test_api_serves_model_when_configured(trained_bundle, monkeypatch):
     assert body["predicted_rul_days"] < 500.0  # model output, not the 3000-day sentinel
 
     # Same request WITHOUT the window → unchanged bnn_state fallback.
-    resp2 = client.post("/advisory", json={k: v for k, v in payload.items() if k != "telemetry_window"})
+    resp2 = client.post(
+        "/advisory", json={k: v for k, v in payload.items() if k != "telemetry_window"}
+    )
     assert resp2.status_code == 200
     assert resp2.json()["predicted_rul_days"] == pytest.approx(3000.0)
     del fastapi

@@ -3,18 +3,18 @@
 import numpy as np
 import pandas as pd
 
+from src.digital_twin.specs import SPECS_LIBRARY, get_spec, list_specs
 from src.eval.calibration import (
     early_warning_metrics,
     first_warning_lead_time_days,
 )
-from src.digital_twin.specs import SPECS_LIBRARY, get_spec, list_specs
 
 
 # --------------------------------------------------------------------------- #
 # early_warning_metrics                                                       #
 # --------------------------------------------------------------------------- #
 def test_early_warning_metrics_perfect_classification():
-    y_true = [300.0, 200.0, 100.0, 10.0, 30.0]   # last two fail within 45 d
+    y_true = [300.0, 200.0, 100.0, 10.0, 30.0]  # last two fail within 45 d
     y_pred = [280.0, 180.0, 120.0, 20.0, 40.0]
     m = early_warning_metrics(y_true, y_pred, warning_horizon_days=45.0)
     assert m["accuracy"] == 1.0

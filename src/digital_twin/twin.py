@@ -70,9 +70,7 @@ class WindTurbineDigitalTwin:
         bnn_state block drives the advisory (previous behavior). Both paths
         flow through run_advisory → enforce_safety_contract.
         """
-        payload = TurbinePayload(
-            asset_id=self.asset_id, telemetry=telemetry, bnn_state=bnn_state
-        )
+        payload = TurbinePayload(asset_id=self.asset_id, telemetry=telemetry, bnn_state=bnn_state)
         if self.serving_model is not None:
             df = pd.DataFrame(list(self._telemetry_buffer), columns=list(CHANNELS))
             return self.serving_model.advisory(payload, df), "model"
@@ -134,7 +132,7 @@ class WindTurbineDigitalTwin:
         wear_increment = base_wear_rate * vibration_stress * temp_stress * load_stress
         if violations:
             # Multiplier for active physical limits violation
-            wear_increment *= (1.5 + 0.5 * len(violations))
+            wear_increment *= 1.5 + 0.5 * len(violations)
 
         self.cumulative_wear = min(1.0, self.cumulative_wear + wear_increment)
         self.last_updated = timestamp

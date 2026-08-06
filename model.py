@@ -1,8 +1,9 @@
+import json
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import json
-from typing import Dict, Tuple
+
 
 class BayesianLinear(nn.Module):
     """Mean-field variational Bayesian linear layer."""
@@ -40,7 +41,7 @@ class PhysicsGuidedBNN(nn.Module):
     uncertainty-aware remaining useful life estimation.
     """
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: dict):
         super().__init__()
         self.config = config
 
@@ -67,7 +68,7 @@ class PhysicsGuidedBNN(nn.Module):
         self.physics_weight = config["physics"]["physics_loss_weight"]
         self.iso_281_enabled = config["physics"]["iso_281_constraint"]
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass returning RUL mean and log-variance.
 
@@ -83,7 +84,9 @@ class PhysicsGuidedBNN(nn.Module):
         rul_log_var = self.rul_log_var_head(features)
         return rul_mean, rul_log_var
 
-    def physics_constraint(self, rul_mean: torch.Tensor, operating_hours: torch.Tensor) -> torch.Tensor:
+    def physics_constraint(
+        self, rul_mean: torch.Tensor, operating_hours: torch.Tensor
+    ) -> torch.Tensor:
         """
         ISO 281 bearing life physics constraint.
 
@@ -98,8 +101,13 @@ class PhysicsGuidedBNN(nn.Module):
 
         return self.physics_weight * physics_loss
 
-    def elbo_loss(self, rul_pred: torch.Tensor, rul_log_var: torch.Tensor,
-                  rul_target: torch.Tensor, operating_hours: torch.Tensor) -> torch.Tensor:
+    def elbo_loss(
+        self,
+        rul_pred: torch.Tensor,
+        rul_log_var: torch.Tensor,
+        rul_target: torch.Tensor,
+        operating_hours: torch.Tensor,
+    ) -> torch.Tensor:
         """
         Evidence Lower Bound (ELBO) with physics constraint.
         """

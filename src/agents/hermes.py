@@ -34,14 +34,13 @@ from src.meta.reptile import ReptileConfig, few_shot_adapt
 from src.models.bnn import BayesianNeuralNetwork, predict
 from src.utils.safety import enforce_safety_contract
 
-
 RUL_CLIP_MAX_DAYS = 3650.0  # matches utils.schema.BNNState upper bound
 
 
 @dataclass
 class HermesConfig:
     adaptation: ReptileConfig = field(default_factory=ReptileConfig)
-    confidence_tau_days: float = 40.0   # pseudo-label only if epistemic σ ≤ τ (RUL days)
+    confidence_tau_days: float = 40.0  # pseudo-label only if epistemic σ ≤ τ (RUL days)
     max_rounds: int = 4
     max_pseudo_per_round: int = 32
     promotion_max_rmse_days: float = 120.0
@@ -61,7 +60,7 @@ class OnboardingReport:
     """
 
     asset_id: str
-    status: str                                # "promoted" | "shadow"
+    status: str  # "promoted" | "shadow"
     promoted: bool
     rounds_completed: int
     n_labeled_shots: int
@@ -85,7 +84,9 @@ class OnboardingReport:
             "n_pseudo_labels": int(self.n_pseudo_labels),
             "eval_rmse_days": None if self.eval_rmse_days is None else float(self.eval_rmse_days),
             "eval_early_warning_accuracy": (
-                None if self.eval_early_warning_accuracy is None else float(self.eval_early_warning_accuracy)
+                None
+                if self.eval_early_warning_accuracy is None
+                else float(self.eval_early_warning_accuracy)
             ),
             "promotion_thresholds": {k: float(v) for k, v in self.promotion_thresholds.items()},
             "rationale": self.rationale,
@@ -153,7 +154,9 @@ class HermesAgent:
         if unlabeled_x is not None:
             pool = np.asarray(unlabeled_x, dtype=np.float32)
             if pool.ndim != 2 or pool.shape[1] != feature_dim:
-                raise ValueError("unlabeled_x must be (n, d) with the same feature dim as support_x")
+                raise ValueError(
+                    "unlabeled_x must be (n, d) with the same feature dim as support_x"
+                )
 
         eval_available = False
         ex = ey = None
@@ -162,7 +165,9 @@ class HermesAgent:
             ex = np.asarray(eval_x, dtype=np.float32)
             ey = np.asarray(eval_y, dtype=np.float32).ravel()
             if ex.ndim != 2 or ex.shape[0] != ey.shape[0] or ex.shape[1] != feature_dim:
-                raise ValueError("eval_x/eval_y shapes must agree and match the support feature dim")
+                raise ValueError(
+                    "eval_x/eval_y shapes must agree and match the support feature dim"
+                )
             n_eval = int(ey.shape[0])
             eval_available = n_eval >= cfg.min_eval_shots
 
@@ -181,7 +186,9 @@ class HermesAgent:
                 idx = select_confident(pred, cfg.confidence_tau_days, cfg.max_pseudo_per_round)
                 if idx.size == 0:
                     break
-                pseudo_y = np.clip(pred["mean_pred"].numpy(), 0.0, cfg.rul_clip_days)[idx].astype(np.float32)
+                pseudo_y = np.clip(pred["mean_pred"].numpy(), 0.0, cfg.rul_clip_days)[idx].astype(
+                    np.float32
+                )
                 train_x = np.concatenate([train_x, pool[idx]], axis=0)
                 train_y = np.concatenate([train_y, pseudo_y], axis=0)
                 keep = np.ones(pool.shape[0], dtype=bool)
@@ -233,7 +240,9 @@ class HermesAgent:
             )
         else:
             rationale_parts.append(
-                "Promotion gate BLOCKED — asset remains in shadow mode: " + "; ".join(reasons) + ". "
+                "Promotion gate BLOCKED — asset remains in shadow mode: "
+                + "; ".join(reasons)
+                + ". "
                 "Collect more labeled inspection outcomes and re-run onboarding; advisories "
                 "from this asset require human review."
             )

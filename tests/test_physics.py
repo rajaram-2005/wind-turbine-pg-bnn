@@ -37,8 +37,8 @@ def test_physics_loss_monotonic_in_rul_when_limits_breached():
 def test_iso_281_reasonable_life():
     # Typical main/planetary bearing: C ~ 3000 kN, P ~ 200 kN @ 1500 RPM.
     # L10 should come out in the tens-to-hundreds-of-thousands of hours.
-    l10 = iso_281_l10_hours(C=3000.0, P=200.0, p=10.0/3.0, rpm=1500.0)
+    l10 = iso_281_l10_hours(C=3000.0, P=200.0, p=10.0 / 3.0, rpm=1500.0)
     assert 50_000 < l10 < 5_000_000
     # Higher load should shorten life
-    l10_heavy = iso_281_l10_hours(C=3000.0, P=400.0, p=10.0/3.0, rpm=1500.0)
+    l10_heavy = iso_281_l10_hours(C=3000.0, P=400.0, p=10.0 / 3.0, rpm=1500.0)
     assert l10_heavy < l10

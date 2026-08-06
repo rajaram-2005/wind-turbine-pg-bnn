@@ -24,21 +24,31 @@ import numpy as np
 
 @dataclass
 class AeroZipConfig:
-    channels: Sequence[str] = ("vibration_mms", "temperature_c", "rpm", "oil_viscosity_cst", "load_pct")
-    deadbands: dict[str, float] = field(default_factory=lambda: {
-        "vibration_mms": 0.02,
-        "temperature_c": 0.05,
-        "rpm": 1.0,
-        "oil_viscosity_cst": 0.1,
-        "load_pct": 0.2,
-    })
-    quanta: dict[str, float] = field(default_factory=lambda: {
-        "vibration_mms": 0.01,
-        "temperature_c": 0.01,
-        "rpm": 1.0,
-        "oil_viscosity_cst": 0.01,
-        "load_pct": 0.05,
-    })
+    channels: Sequence[str] = (
+        "vibration_mms",
+        "temperature_c",
+        "rpm",
+        "oil_viscosity_cst",
+        "load_pct",
+    )
+    deadbands: dict[str, float] = field(
+        default_factory=lambda: {
+            "vibration_mms": 0.02,
+            "temperature_c": 0.05,
+            "rpm": 1.0,
+            "oil_viscosity_cst": 0.1,
+            "load_pct": 0.2,
+        }
+    )
+    quanta: dict[str, float] = field(
+        default_factory=lambda: {
+            "vibration_mms": 0.01,
+            "temperature_c": 0.01,
+            "rpm": 1.0,
+            "oil_viscosity_cst": 0.01,
+            "load_pct": 0.05,
+        }
+    )
     anomaly_bypass_threshold: float = 0.75  # scores above this → raw payload
 
 
@@ -88,7 +98,7 @@ class AeroZipCompressor:
     def __init__(self, cfg: AeroZipConfig | None = None):
         self.cfg = cfg or AeroZipConfig()
         # Per-channel running previous quantized value
-        self._prev_q: dict[str, int] = {c: 0 for c in self.cfg.channels}
+        self._prev_q: dict[str, int] = dict.fromkeys(self.cfg.channels, 0)
 
     def compress(
         self,

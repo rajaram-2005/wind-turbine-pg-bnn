@@ -39,9 +39,7 @@ UTF8_PAYLOAD = {
 def utf8_payload_file(tmp_path):
     """A UTF-8-encoded JSON payload whose asset id is non-ASCII."""
     p = tmp_path / "payload_utf8.json"
-    p.write_text(
-        json.dumps(UTF8_PAYLOAD, ensure_ascii=False), encoding="utf-8"
-    )
+    p.write_text(json.dumps(UTF8_PAYLOAD, ensure_ascii=False), encoding="utf-8")
     return p
 
 
@@ -64,7 +62,7 @@ def test_read_text_uses_utf8(utf8_payload_file):
 def test_emit_writes_utf8_file(tmp_path):
     out = tmp_path / "report.md"
     _emit("⚠️ σ — em dash", str(out))
-    assert "⚠️".encode("utf-8") in out.read_bytes()
+    assert "⚠️".encode() in out.read_bytes()
     assert out.read_text(encoding="utf-8") == "⚠️ σ — em dash"
 
 
@@ -77,9 +75,7 @@ def test_advisory_round_trips_utf8_asset_id(utf8_payload_file, capsys):
     assert rec["asset_id"] == "WTG-Énergie-風"
 
 
-def test_report_stdout_handles_non_utf8_console(
-    utf8_payload_file, monkeypatch
-):
+def test_report_stdout_handles_non_utf8_console(utf8_payload_file, monkeypatch):
     """A non-UTF-8 console must not crash the report subcommand."""
     raw, stream = _ascii_stdout(monkeypatch)
     assert main(["report", "--payload", str(utf8_payload_file)]) == 0

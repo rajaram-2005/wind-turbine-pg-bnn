@@ -9,6 +9,7 @@ streams to UTF-8 explicitly.
 
 from __future__ import annotations
 
+import contextlib
 import sys
 
 
@@ -19,7 +20,5 @@ def configure_utf8_stdio() -> None:
     capture objects or non-``TextIOWrapper`` streams) are left untouched.
     """
     for stream in (sys.stdin, sys.stdout, sys.stderr):
-        try:
+        with contextlib.suppress(AttributeError, ValueError, OSError):
             stream.reconfigure(encoding="utf-8")
-        except (AttributeError, ValueError, OSError):
-            pass

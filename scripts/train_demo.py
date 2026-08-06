@@ -19,6 +19,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.utils.encoding import configure_utf8_stdio
+
 configure_utf8_stdio()
 
 import numpy as np  # noqa: E402
@@ -69,8 +70,9 @@ def main(argv: list[str] | None = None) -> int:
     _, ref_scaler = robust_normalize(ref_df[list(CHANNELS)])
 
     hidden = tuple(cfg.bnn.hidden)
-    model = BayesianNeuralNetwork(in_features=X.shape[1], hidden_sizes=hidden,
-                                  prior_sigma=cfg.bnn.prior_sigma).to(device)
+    model = BayesianNeuralNetwork(
+        in_features=X.shape[1], hidden_sizes=hidden, prior_sigma=cfg.bnn.prior_sigma
+    ).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=1e-3)
     tcfg = TrainConfig(num_epochs=100, num_samples=5, batch_size=256)
 
@@ -98,14 +100,17 @@ def main(argv: list[str] | None = None) -> int:
             opt.step()
             total_loss += loss.item() * len(xb)
         if (epoch + 1) % 20 == 0:
-            print(f"    epoch {epoch+1:3d}  loss={total_loss/len(ds):.3f}  "
-                  f"nll={bd['nll']:.3f} kl={bd['kl']:.3f}")
+            print(
+                f"    epoch {epoch + 1:3d}  loss={total_loss / len(ds):.3f}  "
+                f"nll={bd['nll']:.3f} kl={bd['kl']:.3f}"
+            )
 
     print("[3/5] Evaluating on test split ...")
     model.eval()
     with torch.no_grad():
-        out = predict(model, torch.tensor(Xte, dtype=torch.float32),
-                      mc_samples=cfg.bnn.predict_mc_samples)
+        out = predict(
+            model, torch.tensor(Xte, dtype=torch.float32), mc_samples=cfg.bnn.predict_mc_samples
+        )
     pred = out["mean_pred"].numpy()
     std = out["total_std"].numpy()
     rmse = float(np.sqrt(((pred - yte) ** 2).mean()))

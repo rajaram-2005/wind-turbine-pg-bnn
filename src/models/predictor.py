@@ -54,6 +54,7 @@ def run_advisory(
         x = torch.tensor(feature_vector, dtype=torch.float32, device=device).unsqueeze(0)
         model.eval()
         from src.models.bnn import predict
+
         out = predict(model, x, mc_samples=64)
         # Clamp the raw regression head into the same engineering range the
         # BNNState schema enforces (0..3650 days): a negative remaining-life

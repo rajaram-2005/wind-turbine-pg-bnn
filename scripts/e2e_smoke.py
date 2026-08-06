@@ -36,7 +36,7 @@ def _build_tiny_bundle(path: str) -> None:
     """Train a tiny PG-BNN (deterministic, ~seconds) and export a bundle."""
     import torch
 
-    from src.data.ingest import CHANNELS, robust_normalize, sliding_features, SlidingWindowConfig
+    from src.data.ingest import CHANNELS, SlidingWindowConfig, robust_normalize, sliding_features
     from src.data.synthetic import SyntheticConfig, generate
     from src.models.bnn import BayesianNeuralNetwork, TrainConfig, elbo_loss
     from src.utils.artifacts import FeatureConfig, save_model_bundle
@@ -67,7 +67,10 @@ def _build_tiny_bundle(path: str) -> None:
 
     _, scaler = robust_normalize(seqs[0][0][list(CHANNELS)])
     save_model_bundle(
-        model, path, scaler=scaler, features=FeatureConfig(window_size=40, stride=20),
+        model,
+        path,
+        scaler=scaler,
+        features=FeatureConfig(window_size=40, stride=20),
         metadata={"produced_by": "scripts/e2e_smoke.py"},
     )
     return scaler
@@ -181,7 +184,8 @@ def main() -> int:
         body = r.json()
         check(
             "POST /twin/simulate",
-            r.status_code == 200 and body["steps_executed"] == 2
+            r.status_code == 200
+            and body["steps_executed"] == 2
             and body["advisories_computed"] == 2,
         )
         check(
@@ -192,7 +196,8 @@ def main() -> int:
         body = r.json()
         check(
             "GET /twin/prompt",
-            r.status_code == 200 and "E2E-TWIN" in body["prompt"]
+            r.status_code == 200
+            and "E2E-TWIN" in body["prompt"]
             and "ADVISORY / DECISION-SUPPORT ONLY" in body["prompt"],
         )
 
@@ -223,8 +228,7 @@ def main() -> int:
         r = client.get("/fleet/report")
         check(
             "GET /fleet/report (markdown, twin-sourced)",
-            r.status_code == 200 and r.text.lstrip().startswith("#")
-            and "E2E-TWIN" in r.text,
+            r.status_code == 200 and r.text.lstrip().startswith("#") and "E2E-TWIN" in r.text,
             f"{len(r.text)} chars of markdown",
         )
 

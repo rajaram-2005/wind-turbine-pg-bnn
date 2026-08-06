@@ -209,7 +209,7 @@ class AppConfig(BaseModel):
     safety: SafetyConfig = Field(default_factory=SafetyConfig)
 
     @model_validator(mode="after")
-    def _enforce_advisory_only(self) -> "AppConfig":
+    def _enforce_advisory_only(self) -> AppConfig:
         """FAIL CLOSED: reject any configuration that is not advisory-only.
 
         This is a hard safety boundary, not a warning: a deployment config

@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.data.ingest import CHANNELS, SlidingWindowConfig, robust_normalize, sliding_features
+from src.data.ingest import SlidingWindowConfig, robust_normalize, sliding_features
 from src.models.predictor import run_advisory
 from src.utils.artifacts import ArtifactBundle, FeatureConfig, load_model_bundle
 from src.utils.schema import TurbinePayload
@@ -49,7 +49,7 @@ def _window_stats(win: np.ndarray, stats: tuple[str, ...]) -> np.ndarray:
         elif stat == "max":
             parts.append(win.max(axis=0))
         elif stat == "rms":
-            parts.append(np.sqrt((win ** 2).mean(axis=0)))
+            parts.append(np.sqrt((win**2).mean(axis=0)))
         else:
             raise ValueError(f"Unknown stat: {stat}")
     return np.concatenate(parts)

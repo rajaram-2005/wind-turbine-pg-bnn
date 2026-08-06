@@ -33,14 +33,14 @@ from src.models.bnn import BayesianNeuralNetwork, TrainConfig, elbo_loss, predic
 
 @dataclass
 class ReptileConfig:
-    inner_lr: float = 5e-3          # Adam lr inside the task loop
-    inner_steps: int = 5            # gradient steps per task support set
-    meta_lr: float = 0.4            # ε: interpolation toward adapted weights (1.0 = full)
-    tasks_per_iter: int = 4         # tasks sampled per meta-iteration
+    inner_lr: float = 5e-3  # Adam lr inside the task loop
+    inner_steps: int = 5  # gradient steps per task support set
+    meta_lr: float = 0.4  # ε: interpolation toward adapted weights (1.0 = full)
+    tasks_per_iter: int = 4  # tasks sampled per meta-iteration
     meta_iterations: int = 25
-    num_samples: int = 3            # MC samples per ELBO evaluation (inner loop)
+    num_samples: int = 3  # MC samples per ELBO evaluation (inner loop)
     kl_weight: float = 1e-3
-    eval_mc_samples: int = 16       # MC samples for query-set evaluation
+    eval_mc_samples: int = 16  # MC samples for query-set evaluation
     seed: int = 0
 
 
@@ -63,10 +63,14 @@ def _inner_train_cfg(cfg: ReptileConfig) -> TrainConfig:
     )
 
 
-def support_loss(model: BayesianNeuralNetwork, x: np.ndarray, y: np.ndarray, cfg: ReptileConfig) -> float:
+def support_loss(
+    model: BayesianNeuralNetwork, x: np.ndarray, y: np.ndarray, cfg: ReptileConfig
+) -> float:
     """Mean ELBO of `model` on (x, y) without updating it."""
     with torch.no_grad():
-        loss, _ = elbo_loss(model, _to_tensor(x), _to_tensor(y), telemetry=None, cfg=_inner_train_cfg(cfg))
+        loss, _ = elbo_loss(
+            model, _to_tensor(x), _to_tensor(y), telemetry=None, cfg=_inner_train_cfg(cfg)
+        )
     return float(loss.item())
 
 
@@ -158,7 +162,9 @@ def meta_train(
 
 
 @torch.no_grad()
-def _query_predictions(model: BayesianNeuralNetwork, query_x: np.ndarray, mc_samples: int) -> np.ndarray:
+def _query_predictions(
+    model: BayesianNeuralNetwork, query_x: np.ndarray, mc_samples: int
+) -> np.ndarray:
     return predict(model, _to_tensor(query_x), mc_samples=mc_samples)["mean_pred"].numpy()
 
 

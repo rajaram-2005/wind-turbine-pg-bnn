@@ -1,14 +1,13 @@
 from huggingface_hub import HfApi, login
-from pathlib import Path
 
 # ─── CONFIGURATION ─────────────────────────────────────────────
-ORG_NAME = "AerovigilAI"                        # Organization namespace
+ORG_NAME = "AerovigilAI"  # Organization namespace
 MODEL_NAME = "wind-turbine-pg-bnn"
-REPO_ID = f"{ORG_NAME}/{MODEL_NAME}"            # Full repo ID
+REPO_ID = f"{ORG_NAME}/{MODEL_NAME}"  # Full repo ID
 
-MODEL_PATH = "artifacts/bnn_demo.pt"            # Local model weights
-README_PATH = "README.md"                       # Model card
-CONFIG_PATH = "config.json"                     # Model configuration
+MODEL_PATH = "artifacts/bnn_demo.pt"  # Local model weights
+README_PATH = "README.md"  # Model card
+CONFIG_PATH = "config.json"  # Model configuration
 HF_TOKEN = None  # Set to your token string, or use `huggingface-cli login`
 # ───────────────────────────────────────────────────────────────
 
@@ -26,8 +25,8 @@ api = HfApi()
 api.create_repo(
     repo_id=REPO_ID,
     exist_ok=True,
-    private=False,           # Public repo
-    repo_type="model"
+    private=False,  # Public repo
+    repo_type="model",
 )
 
 # Upload all files

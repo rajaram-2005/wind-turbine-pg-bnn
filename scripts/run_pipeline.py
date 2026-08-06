@@ -16,7 +16,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 
@@ -51,7 +50,9 @@ def main(argv: list[str] | None = None) -> int:
 
     configure_utf8_stdio()
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--config", default=None, help="config YAML (default: configs/default.yaml)")
+    parser.add_argument(
+        "--config", default=None, help="config YAML (default: configs/default.yaml)"
+    )
     parser.add_argument("--turbines", type=int, default=8, help="synthetic fleet size")
     parser.add_argument("--seq-len", type=int, default=1200, help="samples per turbine")
     parser.add_argument("--epochs", type=int, default=40, help="training epochs")
@@ -65,15 +66,21 @@ def main(argv: list[str] | None = None) -> int:
     print("[1/6] Loading configuration ...")
     cfg = load_config(args.config)
     print(f"      safety.mode={cfg.safety.mode}  allow_actuation={cfg.safety.allow_actuation}")
-    print(f"      horizon={cfg.eval.early_warning_horizon_days}d  "
-          f"hidden={cfg.bnn.hidden}  window={cfg.telemetry.window_size_samples} samples")
+    print(
+        f"      horizon={cfg.eval.early_warning_horizon_days}d  "
+        f"hidden={cfg.bnn.hidden}  window={cfg.telemetry.window_size_samples} samples"
+    )
 
     # ------------------------------------------------------------------ #
-    print(f"[2/6] Generating synthetic fleet ({args.turbines} turbines x {args.seq_len} samples) ...")
+    print(
+        f"[2/6] Generating synthetic fleet ({args.turbines} turbines x {args.seq_len} samples) ..."
+    )
     syn_cfg = SyntheticConfig(n_turbines=args.turbines, seq_len=args.seq_len, seed=42)
     X, y = features_and_labels(syn_cfg)
-    print(f"      windows={len(X)}  feature_dim={X.shape[1]}  "
-          f"RUL range=[{y.min():.0f}, {y.max():.0f}] days")
+    print(
+        f"      windows={len(X)}  feature_dim={X.shape[1]}  "
+        f"RUL range=[{y.min():.0f}, {y.max():.0f}] days"
+    )
 
     # ------------------------------------------------------------------ #
     print(f"[3/6] Training PG-BNN ({args.epochs} epochs) ...")
@@ -95,7 +102,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     dl = DataLoader(
         TensorDataset(torch.tensor(Xtr), torch.tensor(ytr)),
-        batch_size=tcfg.batch_size, shuffle=True,
+        batch_size=tcfg.batch_size,
+        shuffle=True,
     )
     for epoch in range(args.epochs):
         model.train()
@@ -119,9 +127,11 @@ def main(argv: list[str] | None = None) -> int:
     ece = expected_calibration_error(yte, pred, out["total_std"].numpy(), n_bins=10)
     ew = early_warning_metrics(yte, pred, warning_horizon_days=EARLY_WARNING_HORIZON_DAYS)
     print(f"      RMSE={rmse:.2f} d  ECE={ece:.3f}")
-    print(f"      early-warning @ {EARLY_WARNING_HORIZON_DAYS:.0f}d: "
-          f"accuracy={ew['accuracy']:.3f} recall={ew['recall']:.3f} "
-          f"false-alarm={ew['false_alarm_rate']:.3f}")
+    print(
+        f"      early-warning @ {EARLY_WARNING_HORIZON_DAYS:.0f}d: "
+        f"accuracy={ew['accuracy']:.3f} recall={ew['recall']:.3f} "
+        f"false-alarm={ew['false_alarm_rate']:.3f}"
+    )
 
     # ------------------------------------------------------------------ #
     print(f"[5/6] Exporting serving bundle to {args.out_dir} ...")
@@ -153,10 +163,14 @@ def main(argv: list[str] | None = None) -> int:
         telemetry=Telemetry(**{c: float(np.clip(snap[c], 1e-3, None)) for c in CHANNELS}),
     )
     advisory = serving.advisory(payload, ref_df[list(CHANNELS)])
-    print(f"      advisory RUL={advisory['predicted_rul_days']:.1f} d "
-          f"(epistemic σ={advisory['epistemic_std']:.3f}, aleatoric σ={advisory['aleatoric_std']:.3f})")
-    print(f"      advisory_only={advisory['advisory_only']}  "
-          f"early_warning={advisory['early_warning_triggered']}")
+    print(
+        f"      advisory RUL={advisory['predicted_rul_days']:.1f} d "
+        f"(epistemic σ={advisory['epistemic_std']:.3f}, aleatoric σ={advisory['aleatoric_std']:.3f})"
+    )
+    print(
+        f"      advisory_only={advisory['advisory_only']}  "
+        f"early_warning={advisory['early_warning_triggered']}"
+    )
 
     # ------------------------------------------------------------------ #
     report_md = f"""# AeroVigil end-to-end pipeline report
@@ -185,9 +199,9 @@ def main(argv: list[str] | None = None) -> int:
 | --- | ---: |
 | RMSE | {rmse:.2f} days |
 | ECE (10 bins) | {ece:.3f} |
-| Early-warning accuracy @ {EARLY_WARNING_HORIZON_DAYS:.0f} d | {ew['accuracy']:.3f} |
-| Early-warning recall | {ew['recall']:.3f} |
-| False-alarm rate | {ew['false_alarm_rate']:.3f} |
+| Early-warning accuracy @ {EARLY_WARNING_HORIZON_DAYS:.0f} d | {ew["accuracy"]:.3f} |
+| Early-warning recall | {ew["recall"]:.3f} |
+| False-alarm rate | {ew["false_alarm_rate"]:.3f} |
 
 ## Exported artifacts
 

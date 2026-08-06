@@ -47,6 +47,7 @@ def load_optional_telemetry(payload_path: str | None) -> tuple[Telemetry | None,
 # CLI Entrypoints                                                             #
 # --------------------------------------------------------------------------- #
 
+
 def status_main(argv: Sequence[str] | None = None) -> int:
     """Entrypoint for `twin-status` CLI."""
     parser = argparse.ArgumentParser(
@@ -124,25 +125,41 @@ def status_main(argv: Sequence[str] | None = None) -> int:
         print(f"Rated Power: {spec.rated_power_mw} MW")
         print(f"Gearbox Ratio: 1:{spec.gearbox_ratio}")
         print("------------------------------------------------------------")
-        print(f"Vibration Level: {last_rec['telemetry']['vibration_mms']:.2f} mm/s (Limit: {spec.vibration_limit_mms} mm/s)")
-        print(f"Oil Temperature: {last_rec['telemetry']['temperature_c']:.1f} °C (Limit: {spec.temperature_limit_c} °C)")
-        print(f"HSS Shaft Speed: {last_rec['telemetry']['rpm']:.1f} RPM (Limit: {spec.rpm_limit_hss} RPM)")
+        print(
+            f"Vibration Level: {last_rec['telemetry']['vibration_mms']:.2f} mm/s (Limit: {spec.vibration_limit_mms} mm/s)"
+        )
+        print(
+            f"Oil Temperature: {last_rec['telemetry']['temperature_c']:.1f} °C (Limit: {spec.temperature_limit_c} °C)"
+        )
+        print(
+            f"HSS Shaft Speed: {last_rec['telemetry']['rpm']:.1f} RPM (Limit: {spec.rpm_limit_hss} RPM)"
+        )
         print("------------------------------------------------------------")
         print(f"Calculated ISO 281 Bearing L10 Life: {last_rec['bearing_l10_hours']:.1f} hours")
         print(f"Cumulative Physical Wear Index: {last_rec['cumulative_wear']:.5f}")
-        print(f"Active Physical Violations: {', '.join(last_rec['physics_violations']) if last_rec['physics_violations'] else 'None'}")
+        print(
+            f"Active Physical Violations: {', '.join(last_rec['physics_violations']) if last_rec['physics_violations'] else 'None'}"
+        )
         if last_rec["bnn_state"]:
-            print(f"Probabilistic predicted RUL: {last_rec['bnn_state']['predicted_rul_days']:.1f} days")
+            print(
+                f"Probabilistic predicted RUL: {last_rec['bnn_state']['predicted_rul_days']:.1f} days"
+            )
         if args.advisory:
             adv = last_rec.get("advisory")
             print("------------------------------------------------------------")
             if adv:
                 print(f"Advisory (source: {last_rec.get('advisory_source')}):")
-                print(f"  Predicted RUL: {adv['predicted_rul_days']:.1f} days "
-                      f"(epistemic σ={adv['epistemic_std']:.3f}, aleatoric σ={adv['aleatoric_std']:.3f})")
-                print(f"  Suggested inspection window: {adv['suggested_inspection_window_days']:.1f} days")
-                print("  Early warning (45d): "
-                      f"{'TRIGGERED' if adv['early_warning_triggered'] else 'not triggered'}")
+                print(
+                    f"  Predicted RUL: {adv['predicted_rul_days']:.1f} days "
+                    f"(epistemic σ={adv['epistemic_std']:.3f}, aleatoric σ={adv['aleatoric_std']:.3f})"
+                )
+                print(
+                    f"  Suggested inspection window: {adv['suggested_inspection_window_days']:.1f} days"
+                )
+                print(
+                    "  Early warning (45d): "
+                    f"{'TRIGGERED' if adv['early_warning_triggered'] else 'not triggered'}"
+                )
             else:
                 print("Advisory: none available (no serving model attached and no bnn_state)")
         print("============================================================")
@@ -193,7 +210,9 @@ def simulate_main(argv: Sequence[str] | None = None) -> int:
     else:
         # Print summary table of last few steps
         print("\nLast 5 simulation steps:")
-        print(f"{'Timestamp':<25} | {'Vib (mm/s)':<10} | {'Temp (°C)':<10} | {'Wear Index':<12} | {'Violations':<15}")
+        print(
+            f"{'Timestamp':<25} | {'Vib (mm/s)':<10} | {'Temp (°C)':<10} | {'Wear Index':<12} | {'Violations':<15}"
+        )
         print("-" * 85)
         for r in records[-5:]:
             v_str = ", ".join(r["physics_violations"]) if r["physics_violations"] else "None"

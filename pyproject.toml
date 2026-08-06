@@ -97,8 +97,29 @@ target-version = ["py39", "py310", "py311", "py312"]
 
 [tool.ruff]
 line-length = 100
+# Match the ruff-pre-commit `ruff-format` hook, which only targets
+# .py/.pyi/.ipynb — leave Python snippets in Markdown docs/model-cards alone.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
-ignore = ["E501"]
+ignore = [
+  "E501", # line length is enforced by the formatter
+  # Scientific-computing naming conventions used throughout the codebase:
+  "N803", # uppercase argument names (e.g. bearing capacity `C`, load `P`)
+  "N806", # uppercase locals (e.g. feature matrices `X`, `Xtr`)
+  "N812", # idiomatic `import torch.nn.functional as F`
+]
+
+# ---------------------------------------------------------------------------
+# Security scanning (bandit) configuration.
+# These checks are intentional/accepted for this project and excluded from CI:
+#   B104  Binding to 0.0.0.0 is required for containers (Docker/k8s).
+#   B615  Hugging Face Hub downloads are pinned to our own org repo at runtime;
+#         revision pinning is handled by the serving layer, not the model code.
+# ---------------------------------------------------------------------------
+[tool.bandit]
+skips = ["B104", "B615"]
 
 [tool.mypy]
 python_version = "3.9"

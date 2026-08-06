@@ -18,7 +18,7 @@ from src.data.ingest import CHANNELS
 @dataclass
 class SyntheticConfig:
     n_turbines: int = 50
-    seq_len: int = 2000           # samples per turbine
+    seq_len: int = 2000  # samples per turbine
     sample_interval_s: int = 600  # 10-min SCADA
     seed: int = 42
 
