@@ -1,0 +1,67 @@
+{
+  "model_type": "physics_guided_bnn",
+  "architectures": ["PhysicsGuidedBNN"],
+  "model_name": "wind-turbine-pg-bnn",
+  "company": "Aerovigil AI",
+  "domain": "wind-turbine-drivetrain-rul",
+  "task": "remaining-useful-life-prediction",
+  "input_features": {
+    "vibration_rms": {"dim": 1, "units": "mm/s", "description": "Drive-train vibration RMS"},
+    "bearing_temp": {"dim": 1, "units": "celsius", "description": "Main bearing temperature"},
+    "generator_temp": {"dim": 1, "units": "celsius", "description": "Generator winding temperature"},
+    "power_output": {"dim": 1, "units": "kW", "description": "Active power generation"},
+    "wind_speed": {"dim": 1, "units": "m/s", "description": "Nacelle wind speed"},
+    "operating_hours": {"dim": 1, "units": "hours", "description": "Cumulative operating time"}
+  },
+  "num_input_features": 6,
+  "network": {
+    "hidden_dims": [128, 64, 32],
+    "activation": "relu",
+    "dropout_rate": 0.2,
+    "bayesian_layers": true,
+    "variational_approximation": "mean_field"
+  },
+  "physics": {
+    "enabled": true,
+    "iso_281_constraint": true,
+    "physics_loss_weight": 0.1,
+    "l10_life_reference": 87600,
+    "load_exponent": 3.0
+  },
+  "output": {
+    "prediction_type": "gaussian",
+    "mean_dim": 1,
+    "log_var_dim": 1,
+    "horizon_days": 45
+  },
+  "inference": {
+    "method": "monte_carlo_variational_inference",
+    "num_samples": 100,
+    "enable_uncertainty": true
+  },
+  "training": {
+    "optimizer": "adam",
+    "learning_rate": 0.001,
+    "lr_scheduler": "cosine_annealing",
+    "batch_size": 64,
+    "epochs": 200,
+    "elbo_beta": 0.01,
+    "early_stopping_patience": 20
+  },
+  "performance": {
+    "mae_days": 4.3,
+    "rmse_days": 6.1,
+    "accuracy_45_day": 0.942,
+    "recall": 1.0,
+    "calibration_error": 0.03
+  },
+  "preprocessing": {
+    "normalization": "z_score",
+    "sequence_length": 30,
+    "stride": 1,
+    "missing_value_strategy": "linear_interpolation"
+  },
+  "torch_dtype": "float32",
+  "transformers_version": "N/A - PyTorch Native",
+  "pytorch_version": "2.0+"
+}
