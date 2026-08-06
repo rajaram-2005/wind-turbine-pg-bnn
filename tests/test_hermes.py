@@ -31,31 +31,50 @@ def _task_data(n_support=8, n_pool=24, n_eval=12, dim=DIM, seed=0):
     x = rng.normal(0.0, 1.0, size=(n, dim)).astype(np.float32)
     y = (50.0 + 20.0 * x[:, 0] - 10.0 * x[:, 1]).astype(np.float32)
     return (
-        x[:n_support], y[:n_support],
-        x[n_support:n_support + n_pool],
-        x[n_support + n_pool:], y[n_support + n_pool:],
+        x[:n_support],
+        y[:n_support],
+        x[n_support : n_support + n_pool],
+        x[n_support + n_pool :],
+        y[n_support + n_pool :],
     )
 
 
 def _fast_cfg(**kw):
     adapt = ReptileConfig(
-        inner_lr=1e-2, inner_steps=10, meta_lr=0.5, tasks_per_iter=2,
-        meta_iterations=5, num_samples=2, eval_mc_samples=8, seed=0,
+        inner_lr=1e-2,
+        inner_steps=10,
+        meta_lr=0.5,
+        tasks_per_iter=2,
+        meta_iterations=5,
+        num_samples=2,
+        eval_mc_samples=8,
+        seed=0,
     )
-    defaults = dict(
-        adaptation=adapt, confidence_tau_days=1e9,  # accept everything unless overridden
-        max_rounds=3, max_pseudo_per_round=4,
-        promotion_max_rmse_days=1e9, promotion_min_accuracy=0.0,
-        min_eval_shots=4, eval_mc_samples=8, seed=0,
-    )
+    defaults = {
+        "adaptation": adapt,
+        "confidence_tau_days": 1e9,  # accept everything unless overridden
+        "max_rounds": 3,
+        "max_pseudo_per_round": 4,
+        "promotion_max_rmse_days": 1e9,
+        "promotion_min_accuracy": 0.0,
+        "min_eval_shots": 4,
+        "eval_mc_samples": 8,
+        "seed": 0,
+    }
     defaults.update(kw)
     return HermesConfig(**defaults)
 
 
 def _run_agent(agent, **kw):
     sx, sy, pool, ex, ey = _task_data()
-    args = dict(asset_id="t-001", support_x=sx, support_y=sy,
-                unlabeled_x=pool, eval_x=ex, eval_y=ey)
+    args = {
+        "asset_id": "t-001",
+        "support_x": sx,
+        "support_y": sy,
+        "unlabeled_x": pool,
+        "eval_x": ex,
+        "eval_y": ey,
+    }
     args.update(kw)
     return agent.onboard(**args)
 
@@ -69,11 +88,11 @@ def test_select_confident_filters_by_tau_and_orders_by_confidence():
         "mean_pred": torch.tensor([1.0, 2.0, 3.0, 4.0]),
     }
     idx = select_confident(pred, tau_days=0.3, k=4)
-    assert list(idx) == [1, 3]            # most-confident first, 5.0 excluded
+    assert list(idx) == [1, 3]  # most-confident first, 5.0 excluded
     idx = select_confident(pred, tau_days=1.0, k=2)
-    assert list(idx) == [1, 3]            # capped at k
+    assert list(idx) == [1, 3]  # capped at k
     idx = select_confident(pred, tau_days=0.05, k=4)
-    assert idx.size == 0                  # nothing clears tau
+    assert idx.size == 0  # nothing clears tau
 
 
 # ---------------------------------------------------------------------------
@@ -108,7 +127,7 @@ def test_self_training_exhausts_pool_and_stops_early():
     agent = HermesAgent(_mk_model(), cfg)
     sx, sy, pool, ex, ey = _task_data(n_pool=10)
     _, report = agent.onboard("t", sx, sy, unlabeled_x=pool, eval_x=ex, eval_y=ey)
-    assert report.rounds_completed == 1   # pool emptied in a single round
+    assert report.rounds_completed == 1  # pool emptied in a single round
     assert report.n_pseudo_labels == 10
 
 
@@ -218,6 +237,7 @@ def test_end_to_end_meta_trained_model_promotes_on_easy_task():
     w[0], w[1] = 20.0, -10.0
     tasks = []
     from src.meta.tasks import split_task
+
     for t in range(6):
         b = rng.uniform(40.0, 60.0)
         xs = rng.normal(0, 1, size=(32, DIM)).astype(np.float32)
@@ -232,9 +252,16 @@ def test_end_to_end_meta_trained_model_promotes_on_easy_task():
 
 def test_report_frozen_dataclass_fields():
     report = OnboardingReport(
-        asset_id="a", status="shadow", promoted=False, rounds_completed=0,
-        n_labeled_shots=1, n_pseudo_labels=0, eval_rmse_days=None,
-        eval_early_warning_accuracy=None, promotion_thresholds={}, rationale="r",
+        asset_id="a",
+        status="shadow",
+        promoted=False,
+        rounds_completed=0,
+        n_labeled_shots=1,
+        n_pseudo_labels=0,
+        eval_rmse_days=None,
+        eval_early_warning_accuracy=None,
+        promotion_thresholds={},
+        rationale="r",
     )
-    with pytest.raises(Exception):  # frozen dataclass: no attribute assignment
+    with pytest.raises(AttributeError):  # frozen dataclass: no attribute assignment
         report.promoted = True

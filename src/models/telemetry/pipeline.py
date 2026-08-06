@@ -66,7 +66,7 @@ class CompressedWindow:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "CompressedWindow":
+    def from_dict(cls, d: dict) -> CompressedWindow:
         try:
             return cls(
                 codec=str(d.get("codec", CODEC)),
@@ -94,12 +94,16 @@ class RestoredWindow:
     def max_abs_error(self, original: dict[str, np.ndarray]) -> dict[str, float]:
         """Per-channel max |restored - original| (useful for lossiness tests)."""
         return {
-            ch: float(np.max(np.abs(self.channels[ch] - np.asarray(original[ch], dtype=np.float64))))
+            ch: float(
+                np.max(np.abs(self.channels[ch] - np.asarray(original[ch], dtype=np.float64)))
+            )
             for ch in self.channels
         }
 
 
-def _as_channel_dict(window: dict[str, np.ndarray], channels: tuple[str, ...]) -> dict[str, np.ndarray]:
+def _as_channel_dict(
+    window: dict[str, np.ndarray], channels: tuple[str, ...]
+) -> dict[str, np.ndarray]:
     missing = [c for c in channels if c not in window]
     if missing:
         raise ValueError(f"window is missing channels: {missing}")

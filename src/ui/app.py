@@ -18,12 +18,12 @@ import pandas as pd
 import streamlit as st
 
 from src.models.predictor import run_advisory
-from src.ui.defaults import default_snapshot
 from src.reporting.reports import (
     advisories_from_dataframe,
     build_fleet_report,
     format_advisory_markdown,
 )
+from src.ui.defaults import default_snapshot
 from src.utils.safety import enforce_safety_contract
 from src.utils.schema import BNNState, Telemetry, TurbinePayload
 
@@ -125,12 +125,15 @@ with tab_single:
             help="Window used to build model features. If omitted, the "
             "single snapshot above is used as a degenerate one-sample window.",
         )
-        rul = st.number_input("Predicted RUL (days)", 0.0, 3650.0, 120.0, step=1.0,
-                              disabled=use_trained)
-        epi = st.number_input("Epistemic uncertainty σ", 0.0, 100.0, 0.05, step=0.01,
-                              disabled=use_trained)
-        ale = st.number_input("Aleatoric uncertainty σ", 0.0, 100.0, 0.10, step=0.01,
-                              disabled=use_trained)
+        rul = st.number_input(
+            "Predicted RUL (days)", 0.0, 3650.0, 120.0, step=1.0, disabled=use_trained
+        )
+        epi = st.number_input(
+            "Epistemic uncertainty σ", 0.0, 100.0, 0.05, step=0.01, disabled=use_trained
+        )
+        ale = st.number_input(
+            "Aleatoric uncertainty σ", 0.0, 100.0, 0.10, step=0.01, disabled=use_trained
+        )
 
         compute = st.button("Compute advisory", type="primary")
 
@@ -157,7 +160,9 @@ with tab_single:
                 st.success("Advisory computed.")
                 m1, m2, m3 = st.columns(3)
                 m1.metric("Predicted RUL", f"{rec['predicted_rul_days']:.1f} days")
-                m2.metric("Inspection window", f"{rec['suggested_inspection_window_days']:.1f} days")
+                m2.metric(
+                    "Inspection window", f"{rec['suggested_inspection_window_days']:.1f} days"
+                )
                 m3.metric("Physics violations", len(rec["physics_violations"]))
                 st.markdown(format_advisory_markdown(rec))
         else:
@@ -189,16 +194,16 @@ with tab_fleet:
                         "predicted_rul_days": round(r["predicted_rul_days"], 2),
                         "epistemic_std": round(r["epistemic_std"], 4),
                         "aleatoric_std": round(r["aleatoric_std"], 4),
-                        "inspection_window_days": round(
-                            r["suggested_inspection_window_days"], 2
-                        ),
+                        "inspection_window_days": round(r["suggested_inspection_window_days"], 2),
                         "violations": len(r["physics_violations"]),
                     }
                     for r in records
                 ]
             )
             mean_rul = summary_df["predicted_rul_days"].mean()
-            at_risk = int((summary_df["predicted_rul_days"] < 104.0).sum())  # 90d horizon + 14d buffer
+            at_risk = int(
+                (summary_df["predicted_rul_days"] < 104.0).sum()
+            )  # 90d horizon + 14d buffer
 
             k1, k2, k3 = st.columns(3)
             k1.metric("Assets assessed", len(records))
@@ -353,9 +358,11 @@ with tab_telemetry:
     if aero_df is not None:
         from src.models.telemetry.pipeline import compress_window, restore_window
 
-        channels = [c for c in (
-            "vibration_mms", "temperature_c", "rpm", "oil_viscosity_cst", "load_pct"
-        ) if c in aero_df.columns]
+        channels = [
+            c
+            for c in ("vibration_mms", "temperature_c", "rpm", "oil_viscosity_cst", "load_pct")
+            if c in aero_df.columns
+        ]
         if len(channels) != 5:
             st.error("CSV must contain the 5 canonical channels.")
         else:
@@ -367,8 +374,11 @@ with tab_telemetry:
             a1.metric("Compressed size", f"{comp.compressed_bytes} B")
             a2.metric("Raw size", f"{comp.raw_bytes} B")
             a3.metric("Ratio", f"{comp.ratio:.3f}")
-            a4.metric("Anomaly score", f"{comp.anomaly_score:.3f}",
-                      help="Above the bypass threshold the window ships lossless raw float64.")
+            a4.metric(
+                "Anomaly score",
+                f"{comp.anomaly_score:.3f}",
+                help="Above the bypass threshold the window ships lossless raw float64.",
+            )
             st.write(f"Anomaly bypass (lossless): **{'yes' if comp.bypass else 'no'}**")
 
             errs = rest.max_abs_error(window)

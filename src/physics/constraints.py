@@ -20,16 +20,16 @@ import torch
 # Generic research defaults. Documented in docs/SAFETY.md as non-OEM values.
 @dataclass(frozen=True)
 class GearboxPhysicsConstraints:
-    vibration_limit_mms: float = 4.5          # mm/s RMS (ISO 10816-3 zone boundary)
-    temperature_limit_c: float = 80.0         # °C continuous oil
-    rpm_limit_hss: float = 1800.0             # high-speed shaft RPM
+    vibration_limit_mms: float = 4.5  # mm/s RMS (ISO 10816-3 zone boundary)
+    temperature_limit_c: float = 80.0  # °C continuous oil
+    rpm_limit_hss: float = 1800.0  # high-speed shaft RPM
     viscosity_min_cst: float = 10.0
     viscosity_max_cst: float = 50.0
 
 
 @dataclass(frozen=True)
 class GeneratorPhysicsConstraints:
-    temperature_limit_c: float = 120.0        # °C winding, conservative
+    temperature_limit_c: float = 120.0  # °C winding, conservative
     rpm_limit: float = 1800.0
 
 
@@ -80,9 +80,7 @@ def check_violations(
             f"{gb.temperature_limit_c:.1f} °C"
         )
     if telemetry["rpm"] > gb.rpm_limit_hss:
-        v.append(
-            f"RPM {telemetry['rpm']:.0f} exceeds limit {gb.rpm_limit_hss:.0f}"
-        )
+        v.append(f"RPM {telemetry['rpm']:.0f} exceeds limit {gb.rpm_limit_hss:.0f}")
     if not (gb.viscosity_min_cst <= telemetry["oil_viscosity_cst"] <= gb.viscosity_max_cst):
         v.append(
             f"Oil viscosity {telemetry['oil_viscosity_cst']:.1f} cSt outside "
@@ -96,7 +94,7 @@ def _soft_relu_penalty(x: torch.Tensor, limit: torch.Tensor, beta: float = 10.0)
     beta controls steepness; smooths the kink for gradient flow."""
     excess = x - limit
     # Softplus-like smooth ramp to avoid hard kink at limit
-    return torch.nn.functional.softplus(beta * excess) ** 2 / (beta ** 2)
+    return torch.nn.functional.softplus(beta * excess) ** 2 / (beta**2)
 
 
 def physics_loss(

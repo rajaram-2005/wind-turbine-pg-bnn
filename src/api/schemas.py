@@ -56,7 +56,7 @@ class TelemetryWindow(BaseModel):
     load_pct: list[float] = Field(..., min_length=1, max_length=10_000)
 
     @model_validator(mode="after")
-    def _equal_lengths(self) -> "TelemetryWindow":
+    def _equal_lengths(self) -> TelemetryWindow:
         lengths = {
             len(self.vibration_mms),
             len(self.temperature_c),

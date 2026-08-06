@@ -38,12 +38,16 @@ def onboarded(tmp_path_factory):
         for i, (df, rul) in enumerate(seqs[:3])
     ]
     rcfg = ReptileConfig(
-        inner_lr=5e-3, inner_steps=3, meta_lr=0.4, tasks_per_iter=2,
-        meta_iterations=3, num_samples=2, eval_mc_samples=4, seed=1,
+        inner_lr=5e-3,
+        inner_steps=3,
+        meta_lr=0.4,
+        tasks_per_iter=2,
+        meta_iterations=3,
+        num_samples=2,
+        eval_mc_samples=4,
+        seed=1,
     )
-    meta_model = BayesianNeuralNetwork(
-        in_features=meta_tasks[0].feature_dim, hidden_sizes=(16, 8)
-    )
+    meta_model = BayesianNeuralNetwork(in_features=meta_tasks[0].feature_dim, hidden_sizes=(16, 8))
     meta_model, _ = meta_train(meta_model, meta_tasks, rcfg)
 
     new_df, new_rul = seqs[3]
@@ -125,7 +129,9 @@ def test_meta_checkpoint_loads_through_serving(onboarded, tmp_path):
 
     ckpt = tmp_path / "meta.pt"
     save_model_bundle(
-        onboarded["meta_model"], ckpt, features=FeatureConfig(),
+        onboarded["meta_model"],
+        ckpt,
+        features=FeatureConfig(),
         metadata={"kind": "reptile-meta"},
     )
     serving = load_serving_model(ckpt)

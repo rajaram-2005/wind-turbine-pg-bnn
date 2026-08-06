@@ -18,8 +18,8 @@ from src.physics.constraints import (
 )
 from src.ui.defaults import default_snapshot
 from src.utils.config import (
-    AppConfig,
     DEFAULT_CONFIG_PATH,
+    AppConfig,
     gearbox_constraints_from_config,
     hermes_config_from_config,
     load_config,
@@ -33,8 +33,13 @@ def test_default_config_loads_and_matches_yaml():
     cfg = load_config()
     raw = yaml.safe_load(DEFAULT_CONFIG_PATH.read_text(encoding="utf-8"))
 
-    assert cfg.physics.gearbox.vibration_limit_mms == raw["physics"]["gearbox"]["vibration_limit_mms"]
-    assert cfg.physics.generator.temperature_limit_c == raw["physics"]["generator"]["temperature_limit_c"]
+    assert (
+        cfg.physics.gearbox.vibration_limit_mms == raw["physics"]["gearbox"]["vibration_limit_mms"]
+    )
+    assert (
+        cfg.physics.generator.temperature_limit_c
+        == raw["physics"]["generator"]["temperature_limit_c"]
+    )
     assert cfg.bnn.hidden == raw["bnn"]["hidden"]
     assert cfg.bnn.train.num_epochs == raw["bnn"]["train"]["num_epochs"]
     assert cfg.telemetry.window_s == raw["telemetry"]["window_s"]
@@ -122,7 +127,7 @@ def test_check_violations_behavior_unchanged():
     from src.physics.constraints import check_violations
 
     tel = {
-        "vibration_mms": 4.8,   # > 4.5
+        "vibration_mms": 4.8,  # > 4.5
         "temperature_c": 82.0,  # > 80
         "rpm": 1780.0,
         "oil_viscosity_cst": 12.0,

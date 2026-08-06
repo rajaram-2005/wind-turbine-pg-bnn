@@ -72,8 +72,7 @@ def warning_rule(
     total_std_days: np.ndarray,
 ) -> np.ndarray:
     """True where the early-warning condition is met for each prediction."""
-    return (pred_mean_days - SIGMA_PESSIMISM * total_std_days) < \
-        EARLY_WARNING_HORIZON_DAYS
+    return (pred_mean_days - SIGMA_PESSIMISM * total_std_days) < EARLY_WARNING_HORIZON_DAYS
 
 
 @dataclass
@@ -137,12 +136,9 @@ def build_campaign(
     replay).
     """
     rng = np.random.default_rng(cfg.seed)
-    weights = np.array(
-        [cfg.healthy_weight, cfg.boundary_weight, cfg.at_risk_weight]
-    )
+    weights = np.array([cfg.healthy_weight, cfg.boundary_weight, cfg.at_risk_weight])
     weights = weights / weights.sum()
-    ranges = [cfg.healthy_rul_range, cfg.boundary_rul_range,
-              cfg.at_risk_rul_range]
+    ranges = [cfg.healthy_rul_range, cfg.boundary_rul_range, cfg.at_risk_rul_range]
     groups = rng.choice(3, size=cfg.n_test, p=weights)
 
     X_snap, y_snap, trajectories = [], [], []
@@ -150,8 +146,7 @@ def build_campaign(
         lo, hi = ranges[int(g)]
         target_rul = rng.uniform(lo, hi)
         h = _degradation_health(rng, 2000)
-        df = _telemetry_from_health(h, rng,
-                                    noise_scale=cfg.sensor_noise_scale)
+        df = _telemetry_from_health(h, rng, noise_scale=cfg.sensor_noise_scale)
         norm, _ = robust_normalize(df)
         feats = sliding_features(norm, WINDOW)
         window_end = np.arange(WINDOW.window_size - 1, len(h), WINDOW.stride)
@@ -179,27 +174,39 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
-        "--healthy", type=float, default=0.705,
+        "--healthy",
+        type=float,
+        default=0.705,
         help="campaign weight: clearly healthy assets",
     )
     parser.add_argument(
-        "--boundary", type=float, default=0.055,
+        "--boundary",
+        type=float,
+        default=0.055,
         help="campaign weight: assets straddling the 45-day line",
     )
     parser.add_argument(
-        "--at-risk", type=float, default=0.24,
+        "--at-risk",
+        type=float,
+        default=0.24,
         help="campaign weight: assets failing within 45 days",
     )
     parser.add_argument(
-        "--boundary-lo", type=float, default=38.0,
+        "--boundary-lo",
+        type=float,
+        default=38.0,
         help="boundary band lower RUL (days)",
     )
     parser.add_argument(
-        "--boundary-hi", type=float, default=52.0,
+        "--boundary-hi",
+        type=float,
+        default=52.0,
         help="boundary band upper RUL (days)",
     )
     parser.add_argument(
-        "--noise", type=float, default=1.0,
+        "--noise",
+        type=float,
+        default=1.0,
         help="test telemetry sensor-noise scale",
     )
     args = parser.parse_args(argv)
@@ -208,8 +215,7 @@ def main(argv: list[str] | None = None) -> int:
     device = "cpu"
 
     print("=" * 72)
-    print("PG-BNN EARLY-WARNING ACCURACY EVALUATION "
-          "(advisory/decision-support)")
+    print("PG-BNN EARLY-WARNING ACCURACY EVALUATION (advisory/decision-support)")
     print("=" * 72)
 
     # ------------------------------------------------------------------ #
@@ -240,9 +246,7 @@ def main(argv: list[str] | None = None) -> int:
         generator=torch.Generator().manual_seed(0),
     )
 
-    model = BayesianNeuralNetwork(
-        in_features=Xtr.shape[1], hidden_sizes=(64, 64)
-    ).to(device)
+    model = BayesianNeuralNetwork(in_features=Xtr.shape[1], hidden_sizes=(64, 64)).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=1e-3)
     tcfg = TrainConfig(num_epochs=80, num_samples=5, batch_size=256)
     dl = DataLoader(ds, batch_size=tcfg.batch_size, sampler=sampler)
@@ -257,9 +261,7 @@ def main(argv: list[str] | None = None) -> int:
             opt.step()
             total_loss += loss.item() * len(xb)
         if (epoch + 1) % 20 == 0:
-            print(
-                f"    epoch {epoch + 1:3d}  loss = {total_loss / len(ds):.3f}"
-            )
+            print(f"    epoch {epoch + 1:3d}  loss = {total_loss / len(ds):.3f}")
 
     # ------------------------------------------------------------------ #
     # 2. Snapshot classification accuracy at the 45-day horizon          #
@@ -273,16 +275,16 @@ def main(argv: list[str] | None = None) -> int:
         sensor_noise_scale=args.noise,
     )
     X_snap, y_true, trajectories = build_campaign(cfg)
-    print(f"    campaign assets: {len(X_snap)}   at-risk "
-          f"(<{EARLY_WARNING_HORIZON_DAYS:.0f}d): "
-          f"{(y_true < EARLY_WARNING_HORIZON_DAYS).sum()}")
+    print(
+        f"    campaign assets: {len(X_snap)}   at-risk "
+        f"(<{EARLY_WARNING_HORIZON_DAYS:.0f}d): "
+        f"{(y_true < EARLY_WARNING_HORIZON_DAYS).sum()}"
+    )
 
     torch.manual_seed(0)  # deterministic MC sampling
     model.eval()
     with torch.no_grad():
-        out = predict(
-            model, torch.tensor(X_snap, dtype=torch.float32), mc_samples=32
-        )
+        out = predict(model, torch.tensor(X_snap, dtype=torch.float32), mc_samples=32)
     y_pred = y_mean + y_std * out["mean_pred"].numpy()
     y_pred_std = y_std * out["total_std"].numpy()
 
@@ -293,22 +295,26 @@ def main(argv: list[str] | None = None) -> int:
     y_pred_effective = y_pred - SIGMA_PESSIMISM * y_pred_std
 
     m = early_warning_metrics(
-        y_true, y_pred_effective,
+        y_true,
+        y_pred_effective,
         warning_horizon_days=EARLY_WARNING_HORIZON_DAYS,
     )
     print("\n    EARLY-WARNING CLASSIFICATION @ 45-DAY HORIZON")
-    print(f"      accuracy            = {m['accuracy'] * 100:.1f}%   "
-          f"({m['n_true_positive'] + m['n_true_negative']}"
-          f"/{m['n_assets']} correct)")
+    print(
+        f"      accuracy            = {m['accuracy'] * 100:.1f}%   "
+        f"({m['n_true_positive'] + m['n_true_negative']}"
+        f"/{m['n_assets']} correct)"
+    )
     print(f"      precision           = {m['precision'] * 100:.1f}%")
     print(f"      recall (sensitivity)= {m['recall'] * 100:.1f}%")
     print(f"      F1                  = {m['f1']:.3f}")
     print(f"      false-alarm rate    = {m['false_alarm_rate'] * 100:.1f}%")
-    print(f"      mean warning lead   = {m['mean_lead_time_days']:.1f} days "
-          "before failure")
-    print(f"      confusion TP/TN/FP/FN = {m['n_true_positive']}"
-          f"/{m['n_true_negative']}/{m['n_false_positive']}"
-          f"/{m['n_false_negative']}")
+    print(f"      mean warning lead   = {m['mean_lead_time_days']:.1f} days before failure")
+    print(
+        f"      confusion TP/TN/FP/FN = {m['n_true_positive']}"
+        f"/{m['n_true_negative']}/{m['n_false_positive']}"
+        f"/{m['n_false_negative']}"
+    )
 
     # ------------------------------------------------------------------ #
     # 3. Trajectory replay: how far ahead of failure does the warning fire #
@@ -318,9 +324,7 @@ def main(argv: list[str] | None = None) -> int:
     never_warned = 0
     for feats, rul_days in trajectories:
         with torch.no_grad():
-            out_t = predict(
-                model, torch.tensor(feats, dtype=torch.float32), mc_samples=8
-            )
+            out_t = predict(model, torch.tensor(feats, dtype=torch.float32), mc_samples=8)
         pred_days = y_mean + y_std * out_t["mean_pred"].numpy()
         pred_std_days = y_std * out_t["total_std"].numpy()
         warned = warning_rule(pred_days, pred_std_days)
@@ -332,23 +336,20 @@ def main(argv: list[str] | None = None) -> int:
 
     lead = np.asarray(lead_times)
     n_warned = len(lead)
-    if n_warned:
-        ahead_45 = 100.0 * (lead >= EARLY_WARNING_HORIZON_DAYS).mean()
-    else:
-        ahead_45 = 0.0
-    print(f"    assets that ever triggered a warning : "
-          f"{n_warned}/{len(trajectories)}")
+    ahead_45 = 100.0 * (lead >= EARLY_WARNING_HORIZON_DAYS).mean() if n_warned else 0.0
+    print(f"    assets that ever triggered a warning : {n_warned}/{len(trajectories)}")
     print(f"    never warned                         : {never_warned}")
     if n_warned:
-        print(f"    mean first-warning lead time         : "
-              f"{lead.mean():.1f} days before failure")
+        print(f"    mean first-warning lead time         : {lead.mean():.1f} days before failure")
         print(f"    warnings fired >= 45 days before failure: {ahead_45:.1f}%")
     else:
         print("    no warnings fired")
     print("\n" + "=" * 72)
-    print(f"HEADLINE: early-warning accuracy = {m['accuracy'] * 100:.1f}% "
-          f"at the {EARLY_WARNING_HORIZON_DAYS:.0f}-day horizon; "
-          f"problem announced up to {lead.max():.0f} days before failure.")
+    print(
+        f"HEADLINE: early-warning accuracy = {m['accuracy'] * 100:.1f}% "
+        f"at the {EARLY_WARNING_HORIZON_DAYS:.0f}-day horizon; "
+        f"problem announced up to {lead.max():.0f} days before failure."
+    )
     print("=" * 72)
     return 0
 

@@ -66,8 +66,8 @@ class BayesianLinear(nn.Module):
         """KL(q || p) for this layer, p = N(0, prior_sigma^2). Closed form for Gaussians."""
         s_w = self._sigma(self.weight_rho)
         s_b = self._sigma(self.bias_rho)
-        kl_w = 0.5 * (s_w ** 2 + self.weight_mu ** 2) / (self.prior_sigma ** 2) - 0.5
-        kl_b = 0.5 * (s_b ** 2 + self.bias_mu ** 2) / (self.prior_sigma ** 2) - 0.5
+        kl_w = 0.5 * (s_w**2 + self.weight_mu**2) / (self.prior_sigma**2) - 0.5
+        kl_b = 0.5 * (s_b**2 + self.bias_mu**2) / (self.prior_sigma**2) - 0.5
         return kl_w.sum() + kl_b.sum()
 
 
@@ -84,7 +84,10 @@ class BayesianNeuralNetwork(nn.Module):
         super().__init__()
         dims = [in_features, *hidden_sizes]
         self.linears = nn.ModuleList(
-            [BayesianLinear(dims[i], dims[i + 1], prior_sigma=prior_sigma) for i in range(len(dims) - 1)]
+            [
+                BayesianLinear(dims[i], dims[i + 1], prior_sigma=prior_sigma)
+                for i in range(len(dims) - 1)
+            ]
         )
         self.out_mean = BayesianLinear(dims[-1], 1, prior_sigma=prior_sigma)
         # Learned heteroscedastic log-var (aleatoric) as a global scalar + input-dependent head for flexibility
@@ -120,8 +123,8 @@ class BayesianNeuralNetwork(nn.Module):
 class TrainConfig:
     lr: float = 1e-3
     num_epochs: int = 300
-    num_samples: int = 10       # MC samples per batch for ELBO
-    kl_weight: float = 1e-3     # KL scaling factor (to weight against NLL)
+    num_samples: int = 10  # MC samples per batch for ELBO
+    kl_weight: float = 1e-3  # KL scaling factor (to weight against NLL)
     physics_weight: float = 0.2  # L_physics weight
     batch_size: int = 256
 
@@ -180,7 +183,9 @@ def predict(
       - total_std   : sqrt(epistemic^2 + aleatoric^2)
     """
     model.eval()
-    device = next(model.parameters()).device if any(p.numel() for p in model.parameters()) else x.device
+    device = (
+        next(model.parameters()).device if any(p.numel() for p in model.parameters()) else x.device
+    )
     means = []
     vars_ = []
     for _ in range(mc_samples):
@@ -192,8 +197,8 @@ def predict(
         # store variance (not log-var) per sample
         vars_.append(torch.exp(lv))
 
-    means_t = torch.stack(means, dim=0)           # (T, B)
-    vars_t = torch.stack(vars_, dim=0)            # (T, B)
+    means_t = torch.stack(means, dim=0)  # (T, B)
+    vars_t = torch.stack(vars_, dim=0)  # (T, B)
 
     # Use population variance (unbiased=False) to avoid small-sample negative-ish artifacts
     epistemic_var = torch.var(means_t, dim=0, unbiased=False)

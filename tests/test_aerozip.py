@@ -38,7 +38,7 @@ def test_anomaly_bypass_sets_flag():
 def test_anomaly_score_high_on_spike():
     w = _window(50)
     baseline_mean = {k: float(v.mean()) for k, v in w.items()}
-    baseline_std = {k: 1.0 for k in w}
+    baseline_std = dict.fromkeys(w, 1.0)
     s_normal = anomaly_score(w, baseline_mean, baseline_std)
     w["vibration_mms"][25] = 50.0
     s_spike = anomaly_score(w, baseline_mean, baseline_std)

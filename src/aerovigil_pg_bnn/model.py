@@ -5,11 +5,12 @@ This module contains the PhysicsGuidedBNN architecture that integrates
 ISO 281 bearing physics with Bayesian deep learning.
 """
 
+import json
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import json
-from typing import Dict, Tuple
 
 
 class BayesianLinear(nn.Module):
@@ -52,7 +53,7 @@ class PhysicsGuidedBNN(nn.Module):
                 physics parameters, and training settings.
     """
 
-    def __init__(self, config: Dict):
+    def __init__(self, config: dict):
         super().__init__()
         self.config = config
 
@@ -62,7 +63,7 @@ class PhysicsGuidedBNN(nn.Module):
         hidden_dims = network_cfg["hidden_dims"]
 
         # Build Bayesian layers
-        layers = []
+        layers: list[nn.Module] = []
         prev_dim = input_dim
         for hidden_dim in hidden_dims:
             layers.append(BayesianLinear(prev_dim, hidden_dim))
@@ -75,11 +76,11 @@ class PhysicsGuidedBNN(nn.Module):
         self.rul_mean_head = BayesianLinear(prev_dim, 1)
         self.rul_log_var_head = BayesianLinear(prev_dim, 1)
 
-        # Physics parameters
-        self.physics_weight = config["physics"]["physics_loss_weight"]
-        self.iso_281_enabled = config["physics"]["iso_281_constraint"]
+        # Physics parameters (coerced to concrete types from the JSON config)
+        self.physics_weight = float(config["physics"]["physics_loss_weight"])
+        self.iso_281_enabled = bool(config["physics"]["iso_281_constraint"])
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass returning RUL mean and log-variance.
 
@@ -95,8 +96,9 @@ class PhysicsGuidedBNN(nn.Module):
         rul_log_var = self.rul_log_var_head(features)
         return rul_mean, rul_log_var
 
-    def physics_constraint(self, rul_mean: torch.Tensor,
-                           operating_hours: torch.Tensor) -> torch.Tensor:
+    def physics_constraint(
+        self, rul_mean: torch.Tensor, operating_hours: torch.Tensor
+    ) -> torch.Tensor:
         """
         ISO 281 bearing life physics constraint.
 
@@ -113,14 +115,19 @@ class PhysicsGuidedBNN(nn.Module):
             return torch.tensor(0.0, device=rul_mean.device)
 
         # Simplified ISO 281 constraint: RUL should decrease with operating hours
-        expected_rul = self.config["physics"]["l10_life_reference"] - operating_hours
+        l10_ref = float(self.config["physics"]["l10_life_reference"])
+        expected_rul = l10_ref - operating_hours
         physics_loss = F.mse_loss(rul_mean.squeeze(), expected_rul.clamp(min=0))
 
         return self.physics_weight * physics_loss
 
-    def elbo_loss(self, rul_pred: torch.Tensor, rul_log_var: torch.Tensor,
-                  rul_target: torch.Tensor,
-                  operating_hours: torch.Tensor) -> torch.Tensor:
+    def elbo_loss(
+        self,
+        rul_pred: torch.Tensor,
+        rul_log_var: torch.Tensor,
+        rul_target: torch.Tensor,
+        operating_hours: torch.Tensor,
+    ) -> torch.Tensor:
         """
         Evidence Lower Bound (ELBO) with physics constraint.
 
@@ -144,25 +151,23 @@ class PhysicsGuidedBNN(nn.Module):
         physics_loss = self.physics_constraint(rul_pred, operating_hours)
 
         # Total ELBO
-        beta = self.config["training"]["elbo_beta"]
+        beta = float(self.config["training"]["elbo_beta"])
         elbo = nll + beta * kl_divergence + physics_loss
 
         return elbo
 
     @classmethod
-    def from_pretrained(cls, repo_id: str, cache_dir: str = None):
+    def from_pretrained(cls, repo_id: str, cache_dir: Optional[str] = None) -> "PhysicsGuidedBNN":
         """Load model from Hugging Face Hub."""
         from huggingface_hub import hf_hub_download
 
-        config_path = hf_hub_download(repo_id=repo_id, filename="config.json",
-                                       cache_dir=cache_dir)
-        model_path = hf_hub_download(repo_id=repo_id, filename="bnn_demo.pt",
-                                      cache_dir=cache_dir)
+        config_path = hf_hub_download(repo_id=repo_id, filename="config.json", cache_dir=cache_dir)
+        model_path = hf_hub_download(repo_id=repo_id, filename="bnn_demo.pt", cache_dir=cache_dir)
 
         with open(config_path) as f:
             config = json.load(f)
 
         model = cls(config)
-        model.load_state_dict(torch.load(model_path, map_location="cpu"))
+        model.load_state_dict(torch.load(model_path, map_location="cpu", weights_only=True))
 
         return model

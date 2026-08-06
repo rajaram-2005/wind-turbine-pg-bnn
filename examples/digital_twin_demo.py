@@ -33,7 +33,9 @@ def main():
     print("Step 1: Loading Turbine Specification from Library...")
     spec = get_spec("Vestas-V90")
     print(f"Loaded: {spec.model_name} (Rotor: {spec.rotor_diameter_m}m, Hub: {spec.hub_height_m}m)")
-    print(f"Gearbox Temp Limit: {spec.temperature_limit_c}°C, Vibration Limit: {spec.vibration_limit_mms}mm/s")
+    print(
+        f"Gearbox Temp Limit: {spec.temperature_limit_c}°C, Vibration Limit: {spec.vibration_limit_mms}mm/s"
+    )
 
     print("\n=====================================================================")
     # 2. Initialize the Digital Twin
@@ -78,7 +80,9 @@ def main():
     state_rec_anom = twin.update_state(anomalous_tel, bnn)
     print("Anomalous State Updated:")
     print(f" - Active Violations: {state_rec_anom['physics_violations']}")
-    print(f" - Bearing L10 rated life: {state_rec_anom['bearing_l10_hours']:.1f} hours (accelerated damage)")
+    print(
+        f" - Bearing L10 rated life: {state_rec_anom['bearing_l10_hours']:.1f} hours (accelerated damage)"
+    )
     print(f" - Cumulative wear index: {state_rec_anom['cumulative_wear']:.5f} (increased rate)")
 
     print("\n=====================================================================")

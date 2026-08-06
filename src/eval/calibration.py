@@ -178,7 +178,9 @@ def classify_failure_mode(
     load = telemetry["load_pct"]
 
     if v > gb.vibration_limit_mms and t > gb.temperature_limit_c:
-        flags.append("Suspected bearing or gear-mesh damage (high vibration + elevated temperature)")
+        flags.append(
+            "Suspected bearing or gear-mesh damage (high vibration + elevated temperature)"
+        )
     elif v > gb.vibration_limit_mms:
         flags.append("Elevated vibration: inspect main bearing / gear teeth / alignment")
     if t > gb.temperature_limit_c and visc < gb.viscosity_min_cst:
@@ -186,7 +188,9 @@ def classify_failure_mode(
     if visc < gb.viscosity_min_cst:
         flags.append("Low oil viscosity: risk of film breakdown at HSS contacts")
     if load > 100.0 and rpm > gb.rpm_limit_hss * 0.95:
-        flags.append("Operation near rated speed at >100% load — derate advised for inspection window")
+        flags.append(
+            "Operation near rated speed at >100% load — derate advised for inspection window"
+        )
     if not flags:
         flags.append("All physics limits within nominal range; continue condition monitoring")
     return flags

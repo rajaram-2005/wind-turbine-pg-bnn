@@ -17,14 +17,24 @@ class TurbineSpec(BaseModel):
 
     # Physical limits for the digital twin's gearbox & generator
     vibration_limit_mms: float = Field(4.5, ge=0.0, description="Vibration limit in mm/s RMS")
-    temperature_limit_c: float = Field(80.0, ge=0.0, description="Gearbox oil temperature limit in °C")
+    temperature_limit_c: float = Field(
+        80.0, ge=0.0, description="Gearbox oil temperature limit in °C"
+    )
     rpm_limit_hss: float = Field(1800.0, ge=0.0, description="High-speed shaft RPM limit")
-    viscosity_min_cst: float = Field(10.0, ge=0.0, description="Minimum allowed oil viscosity in cSt")
-    viscosity_max_cst: float = Field(50.0, ge=0.0, description="Maximum allowed oil viscosity in cSt")
+    viscosity_min_cst: float = Field(
+        10.0, ge=0.0, description="Minimum allowed oil viscosity in cSt"
+    )
+    viscosity_max_cst: float = Field(
+        50.0, ge=0.0, description="Maximum allowed oil viscosity in cSt"
+    )
 
     # Bearing mechanical specifications for ISO 281 life calculations
-    bearing_dynamic_load_c_kn: float = Field(1200.0, ge=1.0, description="Basic dynamic load rating C in kN")
-    bearing_equivalent_load_p_kn: float = Field(180.0, ge=1.0, description="Reference equivalent load P in kN")
+    bearing_dynamic_load_c_kn: float = Field(
+        1200.0, ge=1.0, description="Basic dynamic load rating C in kN"
+    )
+    bearing_equivalent_load_p_kn: float = Field(
+        180.0, ge=1.0, description="Reference equivalent load P in kN"
+    )
 
 
 # Predefined specs library of standard commercial and reference wind turbines
@@ -161,7 +171,9 @@ def get_spec(model_key: str) -> TurbineSpec:
     for k, spec in SPECS_LIBRARY.items():
         if k.lower() == cleaned_key.lower() or spec.model_name.lower() == model_key.lower():
             return spec
-    raise KeyError(f"Turbine model '{model_key}' not found in specifications library. Available models: {list(SPECS_LIBRARY.keys())}")
+    raise KeyError(
+        f"Turbine model '{model_key}' not found in specifications library. Available models: {list(SPECS_LIBRARY.keys())}"
+    )
 
 
 def list_specs() -> dict[str, dict[str, str | float]]:

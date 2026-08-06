@@ -1,0 +1,9 @@
+# hadolint configuration — https://github.com/hadolint/hadolint
+#
+# Only fail CI on error-severity Dockerfile findings. Warning-level checks are
+# advisory for this Python application image:
+#   * DL3008  OS package versions are not pinned (app image, not base).
+#   * DL3013  pip versions are not pinned — wheels are built fresh in the
+#             builder stage and torch is pinned via a build arg.
+#   * DL3042  pip cache is disabled image-wide via PIP_NO_CACHE_DIR=1.
+failure-threshold: error

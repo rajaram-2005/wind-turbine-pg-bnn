@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 import torch
 
+from src.data.synthetic import SyntheticConfig
 from src.meta.reptile import (
     ReptileConfig,
     clone_model,
@@ -15,7 +16,6 @@ from src.meta.reptile import (
     support_loss,
 )
 from src.meta.tasks import AdaptationTask, split_task, tasks_from_synthetic_fleet
-from src.data.synthetic import SyntheticConfig
 from src.models.bnn import BayesianNeuralNetwork
 
 FEATURE_DIM = 10
@@ -42,11 +42,17 @@ def _linear_tasks(n_tasks=6, n_support=8, n_query=24, dim=FEATURE_DIM, seed=0):
 
 
 def _fast_cfg(**kw):
-    defaults = dict(
-        inner_lr=1e-2, inner_steps=10, meta_lr=0.5, tasks_per_iter=3,
-        meta_iterations=15, num_samples=2, kl_weight=1e-3,
-        eval_mc_samples=8, seed=0,
-    )
+    defaults = {
+        "inner_lr": 1e-2,
+        "inner_steps": 10,
+        "meta_lr": 0.5,
+        "tasks_per_iter": 3,
+        "meta_iterations": 15,
+        "num_samples": 2,
+        "kl_weight": 1e-3,
+        "eval_mc_samples": 8,
+        "seed": 0,
+    }
     defaults.update(kw)
     return ReptileConfig(**defaults)
 
@@ -141,11 +147,19 @@ def test_inner_adapt_reduces_support_loss():
 def test_inner_adapt_rejects_bad_input():
     model = _mk_model()
     with pytest.raises(ValueError):
-        inner_adapt(model, np.zeros((0, FEATURE_DIM), dtype=np.float32),
-                    np.zeros(0, dtype=np.float32), _fast_cfg())
+        inner_adapt(
+            model,
+            np.zeros((0, FEATURE_DIM), dtype=np.float32),
+            np.zeros(0, dtype=np.float32),
+            _fast_cfg(),
+        )
     with pytest.raises(ValueError):
-        inner_adapt(model, np.zeros((5, FEATURE_DIM), dtype=np.float32),
-                    np.zeros(4, dtype=np.float32), _fast_cfg())
+        inner_adapt(
+            model,
+            np.zeros((5, FEATURE_DIM), dtype=np.float32),
+            np.zeros(4, dtype=np.float32),
+            _fast_cfg(),
+        )
 
 
 def test_few_shot_adapt_alias_matches_inner_adapt():
@@ -212,8 +226,13 @@ def test_evaluate_few_shot_returns_expected_report():
     tasks = _linear_tasks(n_tasks=3)
     cfg = _fast_cfg()
     out = evaluate_few_shot(_mk_model(), tasks, cfg)
-    for key in ("mean_query_rmse_days", "per_task_rmse_days",
-                "mean_early_warning_accuracy", "naive_mean_rmse_days", "n_tasks"):
+    for key in (
+        "mean_query_rmse_days",
+        "per_task_rmse_days",
+        "mean_early_warning_accuracy",
+        "naive_mean_rmse_days",
+        "n_tasks",
+    ):
         assert key in out
     assert out["n_tasks"] == 3
     assert len(out["per_task_rmse_days"]) == 3

@@ -85,7 +85,7 @@ def _advisory_or_422(payload: TurbinePayload, serving=None, window_df=None) -> d
             return serving.advisory(payload, window_df)
         return run_advisory(payload)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def create_app() -> FastAPI:
@@ -172,9 +172,7 @@ def create_app() -> FastAPI:
         records = [_advisory_or_422(p) for p in req.assets]
         for r in records:
             enforce_safety_contract(r)
-        util = expected_asset_utilization(
-            [r["predicted_rul_days"] for r in records]
-        )
+        util = expected_asset_utilization([r["predicted_rul_days"] for r in records])
         summary = FleetSummary(
             n_assets=len(records),
             mean_utilization=util["mean_utilization"],
@@ -202,7 +200,7 @@ def create_app() -> FastAPI:
                 baseline_std=req.baseline_std,
             )
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc))
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         body = comp.to_dict()
         enforce_safety_contract(body)
         return TelemetryCompressResponse(**body)
@@ -232,7 +230,7 @@ def create_app() -> FastAPI:
                 )
             )
         except Exception as exc:  # decode failures are client errors (bad base64/zlib/format)
-            raise HTTPException(status_code=422, detail=f"could not decode payload: {exc}")
+            raise HTTPException(status_code=422, detail=f"could not decode payload: {exc}") from exc
         body = {
             "channels": {c: rest.channels[c].tolist() for c in channels},
             "n_samples": rest.n_samples,
@@ -260,7 +258,7 @@ def create_app() -> FastAPI:
             try:
                 spec = get_spec(model_key)
             except KeyError as exc:
-                raise HTTPException(status_code=404, detail=str(exc))
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
             twin = WindTurbineDigitalTwin(asset_id, spec, serving_model=app.state.serving)
             # Seed with the spec's nominal operating point so status/prompt
             # are meaningful from the first call.
@@ -311,7 +309,7 @@ def create_app() -> FastAPI:
         try:
             records = twin.simulate_scenario(profile=req.profile, hours=req.hours)
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc))
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         advisories = [r["advisory"] for r in records if r.get("advisory")]
         body = {
             "asset_id": twin.asset_id,

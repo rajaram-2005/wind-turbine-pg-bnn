@@ -10,17 +10,13 @@ from .model import PhysicsGuidedBNN
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Aerovigil PG-BNN: Wind Turbine RUL Prediction"
+    parser = argparse.ArgumentParser(description="Aerovigil PG-BNN: Wind Turbine RUL Prediction")
+    parser.add_argument(
+        "--repo-id", default="AerovigilAI/wind-turbine-pg-bnn", help="Hugging Face model repo ID"
     )
-    parser.add_argument("--repo-id", default="AerovigilAI/wind-turbine-pg-bnn",
-                        help="Hugging Face model repo ID")
-    parser.add_argument("--input", "-i", required=True,
-                        help="Path to input telemetry JSON file")
-    parser.add_argument("--samples", "-n", type=int, default=100,
-                        help="Number of MCVI samples")
-    parser.add_argument("--output", "-o", default="-",
-                        help="Output file (default: stdout)")
+    parser.add_argument("--input", "-i", required=True, help="Path to input telemetry JSON file")
+    parser.add_argument("--samples", "-n", type=int, default=100, help="Number of MCVI samples")
+    parser.add_argument("--output", "-o", default="-", help="Output file (default: stdout)")
 
     args = parser.parse_args()
 
@@ -33,16 +29,19 @@ def main() -> int:
     with open(args.input) as f:
         data = json.load(f)
 
-    features = torch.tensor([
+    features = torch.tensor(
         [
-            data["vibration_rms"],
-            data["bearing_temp"],
-            data["generator_temp"],
-            data["power_output"],
-            data["wind_speed"],
-            data["operating_hours"],
-        ]
-    ], dtype=torch.float32)
+            [
+                data["vibration_rms"],
+                data["bearing_temp"],
+                data["generator_temp"],
+                data["power_output"],
+                data["wind_speed"],
+                data["operating_hours"],
+            ]
+        ],
+        dtype=torch.float32,
+    )
 
     # Inference
     predictions = []

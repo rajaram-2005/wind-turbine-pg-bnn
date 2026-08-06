@@ -84,7 +84,7 @@ def test_attach_serving_model_rejects_feature_mismatch(serving_bundle, tmp_path)
     from src.models.serving import ServingModel, load_serving_model
     from src.utils.artifacts import load_model_bundle
 
-    serving = load_serving_model(serving_bundle.checkpoint_path)
+    load_serving_model(serving_bundle.checkpoint_path)
     bundle = load_model_bundle(serving_bundle.checkpoint_path)
     corrupt = bundle.__class__(
         model=bundle.model,

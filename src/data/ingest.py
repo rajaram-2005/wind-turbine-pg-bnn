@@ -13,8 +13,8 @@ CHANNELS = ("vibration_mms", "temperature_c", "rpm", "oil_viscosity_cst", "load_
 
 @dataclass
 class SlidingWindowConfig:
-    window_size: int = 60       # samples
-    stride: int = 10            # samples
+    window_size: int = 60  # samples
+    stride: int = 10  # samples
     stats: Sequence[str] = ("mean", "std", "min", "max", "rms")
 
 
@@ -56,7 +56,7 @@ def sliding_features(
     starts = list(range(0, n - w + 1, s))
     feats: list[np.ndarray] = []
     for st in starts:
-        win = data[st: st + w]
+        win = data[st : st + w]
         vec = []
         for stat in cfg.stats:
             if stat == "mean":
@@ -68,7 +68,7 @@ def sliding_features(
             elif stat == "max":
                 vec.append(win.max(axis=0))
             elif stat == "rms":
-                vec.append(np.sqrt((win ** 2).mean(axis=0)))
+                vec.append(np.sqrt((win**2).mean(axis=0)))
             else:
                 raise ValueError(f"Unknown stat: {stat}")
         feats.append(np.concatenate(vec))
@@ -117,7 +117,7 @@ def write_aerozip_csv(
     time_index = pd.to_datetime(df.index) if isinstance(df.index, pd.DatetimeIndex) else None
     rows: list[dict] = []
     for start in range(0, len(df), window_samples):
-        block = df.iloc[start: start + window_samples]
+        block = df.iloc[start : start + window_samples]
         comp = compress_window(
             {c: block[c].to_numpy(dtype=np.float64) for c in CHANNELS},
             baseline_mean=baseline_mean,

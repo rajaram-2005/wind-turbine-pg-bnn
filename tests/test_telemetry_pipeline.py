@@ -31,7 +31,7 @@ def _window(n: int = 120, seed: int = 3) -> dict[str, np.ndarray]:
 def test_round_trip_quantization_bound():
     """With deadband = 0, reconstruction error is pure quantization:
     |restored - original| <= quantum per channel (fresh single window)."""
-    cfg = AeroZipConfig(deadbands={c: 0.0 for c in CHANNELS})
+    cfg = AeroZipConfig(deadbands=dict.fromkeys(CHANNELS, 0.0))
     win = _window()
     comp = compress_window(win, cfg=cfg)
     assert comp.bypass is False
@@ -69,8 +69,8 @@ def test_round_trip_via_dict_form():
 def test_anomaly_bypass_is_lossless_and_surfaces_score():
     win = _window(n=60)
     # Flat baseline far below the window values → high anomaly score.
-    base_mean = {c: 0.0 for c in CHANNELS}
-    base_std = {c: 0.01 for c in CHANNELS}
+    base_mean = dict.fromkeys(CHANNELS, 0.0)
+    base_std = dict.fromkeys(CHANNELS, 0.01)
     comp = compress_window(win, baseline_mean=base_mean, baseline_std=base_std)
     assert comp.anomaly_score > 0.75
     assert comp.bypass is True
@@ -120,7 +120,13 @@ def test_aerozip_csv_round_trip(tmp_path):
 
     raw = pd.read_csv(path)
     assert len(raw) == 4  # 200 samples / 60 per window
-    assert set(raw.columns) == {"timestamp", "sample_interval_s", "anomaly_score", "bypass", "payload_b64"}
+    assert set(raw.columns) == {
+        "timestamp",
+        "sample_interval_s",
+        "anomaly_score",
+        "bypass",
+        "payload_b64",
+    }
 
     restored = load_aerozip_csv(str(path))
     assert len(restored) == n
@@ -191,8 +197,8 @@ def test_api_telemetry_compress_bypass(api_client):
         "/telemetry/compress",
         json={
             "channels": {c: win[c].tolist() for c in CHANNELS},
-            "baseline_mean": {c: 0.0 for c in CHANNELS},
-            "baseline_std": {c: 0.01 for c in CHANNELS},
+            "baseline_mean": dict.fromkeys(CHANNELS, 0.0),
+            "baseline_std": dict.fromkeys(CHANNELS, 0.01),
         },
     )
     assert resp.json()["bypass"] is True

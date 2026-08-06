@@ -3,7 +3,7 @@ Monte Carlo Variational Inference utilities for uncertainty quantification.
 """
 
 import torch
-from typing import Tuple, List
+
 from .model import PhysicsGuidedBNN
 
 
@@ -23,7 +23,7 @@ class MonteCarloVI:
         self.model = model
         self.num_samples = num_samples
 
-    def predict(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def predict(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Run MCVI inference to get mean prediction and uncertainty.
 
@@ -37,21 +37,20 @@ class MonteCarloVI:
         """
         self.model.train()  # Enable dropout for MCVI
 
-        predictions = []
+        pred_list: list[torch.Tensor] = []
         with torch.no_grad():
             for _ in range(self.num_samples):
                 rul_mean, _ = self.model(x)
-                predictions.append(rul_mean)
+                pred_list.append(rul_mean)
 
-        predictions = torch.stack(predictions, dim=0)
+        predictions = torch.stack(pred_list, dim=0)
 
         mean_prediction = predictions.mean(dim=0)
         uncertainty = predictions.std(dim=0)
 
         return mean_prediction, uncertainty
 
-    def predict_with_confidence(self, x: torch.Tensor,
-                                  confidence: float = 0.95) -> dict:
+    def predict_with_confidence(self, x: torch.Tensor, confidence: float = 0.95) -> dict:
         """
         Run MCVI inference with confidence intervals.
 
@@ -64,13 +63,13 @@ class MonteCarloVI:
         """
         self.model.train()
 
-        predictions = []
+        pred_list: list[torch.Tensor] = []
         with torch.no_grad():
             for _ in range(self.num_samples):
                 rul_mean, _ = self.model(x)
-                predictions.append(rul_mean)
+                pred_list.append(rul_mean)
 
-        predictions = torch.stack(predictions, dim=0)
+        predictions = torch.stack(pred_list, dim=0)
 
         alpha = (1 - confidence) / 2
         lower_percentile = alpha * 100
@@ -84,7 +83,7 @@ class MonteCarloVI:
             "samples": predictions,
         }
 
-    def predict_single(self, telemetry: List[float]) -> dict:
+    def predict_single(self, telemetry: list[float]) -> dict:
         """
         Predict RUL for a single telemetry reading.
 

@@ -71,7 +71,7 @@ class ModelArchitecture:
         }
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "ModelArchitecture":
+    def from_dict(cls, d: dict[str, Any]) -> ModelArchitecture:
         return cls(
             in_features=int(d["in_features"]),
             hidden_sizes=tuple(int(h) for h in d.get("hidden_sizes", (64, 64))),
@@ -103,7 +103,7 @@ class FeatureConfig:
         }
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any] | None) -> "FeatureConfig":
+    def from_dict(cls, d: dict[str, Any] | None) -> FeatureConfig:
         if not d:
             return cls()
         return cls(
@@ -296,9 +296,7 @@ def load_model_bundle(
 
     scaler_raw = payload.get("scaler")
     scaler = (
-        {str(k): (float(v[0]), float(v[1])) for k, v in scaler_raw.items()}
-        if scaler_raw
-        else None
+        {str(k): (float(v[0]), float(v[1])) for k, v in scaler_raw.items()} if scaler_raw else None
     )
     metadata = dict(payload.get("metadata") or {})
 
@@ -307,9 +305,7 @@ def load_model_bundle(
     if side.is_file():
         sidecar = json.loads(side.read_text(encoding="utf-8"))
         if sidecar.get("architecture") != arch.to_dict():
-            raise ValueError(
-                f"Sidecar {side} disagrees with the checkpoint architecture in {ckpt}"
-            )
+            raise ValueError(f"Sidecar {side} disagrees with the checkpoint architecture in {ckpt}")
 
     return ArtifactBundle(
         model=model,
