@@ -1,24 +1,28 @@
-# AeroVigil social & release graphics
+# Demo-day graphics pack
 
-Brand assets for announcements, posts, and the repository social preview. All
-share the deep-navy / teal palette and the "advisory only" positioning.
+Files in this folder are meant for launch, PR, and presentation use.
 
-| File | Intended use | Format |
-| --- | --- | --- |
-| `social-card.png` | **GitHub social preview** (repo Settings → Social preview) and Open-Graph/Twitter link cards | 2:1 landscape |
-| `release-banner.png` | **GitHub Release notes header** and blog/announcement hero for v1.0.0 | ~21:9 ultra-wide |
-| `social-square.png` | **LinkedIn / X post image** highlighting the 45-day early-warning capability | 1:1 square |
+## Included assets
 
-## Usage notes
+- `social-card.png` — upload this in the GitHub repo settings as the social preview image
+- `release-banner.png` — use in release notes, PR descriptions, demo splash slides, or a project homepage hero
+- `social-square.png` — sized for LinkedIn / X / Instagram style posts
+- `demo.gif` — lightweight README motion preview
+- `aerovigil-demo.mp4` — narrated demo video
+- `audio/scene*.wav` — source voiceover clips used to build the demo video
 
-- Upload `social-card.png` under
-  [repo Settings → Social preview](https://github.com/rajaram-2005/wind-turbine-pg-bnn/settings)
-  so shared links render the card.
-- Embed `release-banner.png` at the top of release notes:
+## Suggested usage
 
-  ```markdown
-  ![AeroVigil v1.0.0](docs/assets/release-banner.png)
-  ```
+### GitHub social preview
+Use `social-card.png` as the repository social preview so shared links show a polished visual.
 
-- Keep the "advisory only" caption visible when cropping `social-square.png` —
-  it is part of the safety positioning, not decoration.
+### Release notes / changelog
+Use `release-banner.png` at the top of release notes or PR summaries to frame the release as a product milestone.
+
+### Social post
+Use `social-square.png` for a single-image announcement post with a short caption like:
+
+> AeroVigil — a physics-guided Bayesian AI for 45-day wind turbine early warning. Advisory only, uncertainty shown, offline demo included.
+
+### README motion preview
+Embed `demo.gif` near the top of the README and link it to `aerovigil-demo.mp4` for the full narrated version.

@@ -23,6 +23,50 @@ pipeline_tag: other
 [![Hugging Face Model](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-ffd21e.svg)](https://huggingface.co/AerovigilAI/wind-turbine-pg-bnn)
 [![Live Demo](https://img.shields.io/badge/demo-live-22c55e.svg)](https://aerovigil.abacusai.app)
 
+![AeroVigil social card](https://raw.githubusercontent.com/rajaram-2005/wind-turbine-pg-bnn/arena%2F019fd767-wind-turbine-pg-bnn/docs/assets/social-card.png)
+
+## What is this? (60 seconds, plain language)
+
+A wind turbine's main bearing can spin **around one billion times** over its life.
+When it fails with no warning, the operator is suddenly paying for a crane, a
+specialist crew, lost generation, and an emergency repair that can cost roughly
+**$150k–$300k per event**.
+
+**AeroVigil is the check-engine light for that problem — about 45 days early.**
+It turns ordinary turbine telemetry into a plain-language maintenance advisory:
+*how much healthy life is left, how certain the model is, and whether you still
+have time to schedule the repair instead of reacting to a surprise failure.*
+
+| Why AeroVigil is different | Why it matters in the real world |
+|---|---|
+| **Physics-guided (ISO 281 inspired)** | The model is anchored to bearing-life intuition, not just pattern-matching |
+| **Honest uncertainty** | It shows a distribution, not one overconfident number |
+| **Advisory-only** | It helps humans plan maintenance; it never controls the turbine |
+
+### Start in the lane that fits you
+
+- **New to the topic?** Read the zero-jargon [explainer](docs/EXPLAINER.md)
+- **Pitching / evaluating the venture?** Open the [investor one-pager](docs/PITCH.md)
+- **Want to run it now?** Jump to [Quick Start](#quick-start)
+
+## See it running
+
+[![AeroVigil demo GIF](https://raw.githubusercontent.com/rajaram-2005/wind-turbine-pg-bnn/arena%2F019fd767-wind-turbine-pg-bnn/docs/assets/demo.gif)](docs/assets/aerovigil-demo.mp4)
+
+- Full narrated demo video: [`docs/assets/aerovigil-demo.mp4`](docs/assets/aerovigil-demo.mp4)
+- Five-minute stage script + fallback plan: [`docs/DEMO_RUNBOOK.md`](docs/DEMO_RUNBOOK.md)
+- Narration and shot list: [`docs/DEMO_VIDEO_SCRIPT.md`](docs/DEMO_VIDEO_SCRIPT.md)
+
+### Offline demo in 2 commands
+
+```bash
+python scripts/train_pg_demo.py
+python gradio_app/app.py
+```
+
+The app prefers local weights from `artifacts/pg_bnn_demo/`, so the live demo
+still works with **no internet**.
+
 **Aerovigil AI** presents a Physics-Guided Bayesian Neural Network (PG-BNN) for
 **Remaining Useful Life (RUL) prediction and diagnostic advisory** of wind
 turbine drivetrain components. The model combines ISO 281 bearing-life physics
