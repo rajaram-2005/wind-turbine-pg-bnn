@@ -6,6 +6,9 @@ This document maps every module in `wind-turbine-pg-bnn` and the data flow that
 connects them: *config → data → physics → model/serving → predictor → safety →
 reporting → api/ui/cli*, plus the digital-twin and meta/hermes paths.
 
+Rendered Mermaid versions of these diagrams — including the inference pipeline
+sequence — live in [`DIAGRAMS.md`](DIAGRAMS.md).
+
 ---
 
 ## Connection diagram
