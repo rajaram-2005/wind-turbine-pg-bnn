@@ -23,7 +23,7 @@ pipeline_tag: other
 
 | Attribute | Value |
 |-----------|-------|
-| **Developer** | Aerovigil AI |
+| **Developer** | [Aerovigil AI](https://huggingface.co/AerovigilAI) |
 | **Model Name** | `wind-turbine-pg-bnn` |
 | **Domain** | Wind Turbine Predictive Maintenance |
 | **Task** | Remaining Useful Life (RUL) Prediction & Diagnostic Advisory |
@@ -85,16 +85,28 @@ pip install torch huggingface_hub
 
 ```python
 import torch
+import json
 from huggingface_hub import hf_hub_download
 
-# Download model weights from Hugging Face Hub
+# Download model weights and config
 model_path = hf_hub_download(
-    repo_id="rajaram-2005/wind-turbine-pg-bnn",
+    repo_id="AerovigilAI/wind-turbine-pg-bnn",
     filename="bnn_demo.pt"
 )
+config_path = hf_hub_download(
+    repo_id="AerovigilAI/wind-turbine-pg-bnn",
+    filename="config.json"
+)
 
-# Load into your PyTorch model architecture
-model = YourBNNArchitecture()  # Replace with your model class
+# Load configuration
+with open(config_path) as f:
+    config = json.load(f)
+
+# Load weights into your model architecture
+# NOTE: Replace PhysicsGuidedBNN with your actual model class
+from your_module import PhysicsGuidedBNN  # Import your architecture
+
+model = PhysicsGuidedBNN(config)
 model.load_state_dict(torch.load(model_path, map_location="cpu"))
 model.eval()
 ```
@@ -108,7 +120,7 @@ import torch
 model.train()  # Keep dropout active for MCVI
 
 # Run multiple forward passes for probabilistic prediction
-n_mcmc_samples = 100
+n_mcmc_samples = config["inference"]["num_samples"]
 predictions = []
 
 with torch.no_grad():
@@ -225,7 +237,7 @@ If you use this model in your research, please cite:
   author = {Aerovigil AI},
   title = {Physics-Guided Bayesian Neural Network for Wind Turbine RUL Prediction},
   year = {2024},
-  url = {https://huggingface.co/rajaram-2005/wind-turbine-pg-bnn}
+  url = {https://huggingface.co/AerovigilAI/wind-turbine-pg-bnn}
 }
 ```
 
@@ -233,9 +245,9 @@ If you use this model in your research, please cite:
 
 ## Model Card Contact
 
-- **Organization**: [Aerovigil AI](https://aerovigil.abacusai.app)
+- **Organization**: [Aerovigil AI](https://huggingface.co/AerovigilAI)
 - **Repository Issues**: [github.com/rajaram-2005/wind-turbine-pg-bnn/issues](https://github.com/rajaram-2005/wind-turbine-pg-bnn/issues)
-- **Hugging Face Hub**: [huggingface.co/rajaram-2005/wind-turbine-pg-bnn](https://huggingface.co/rajaram-2005/wind-turbine-pg-bnn)
+- **Hugging Face Hub**: [huggingface.co/AerovigilAI/wind-turbine-pg-bnn](https://huggingface.co/AerovigilAI/wind-turbine-pg-bnn)
 
 ---
 

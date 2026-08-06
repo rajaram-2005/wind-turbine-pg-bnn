@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aerovigil
+  labels:
+    app.kubernetes.io/name: aerovigil-pg-bnn
+    app.kubernetes.io/version: "0.1.0"

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aerovigil-config
+  namespace: aerovigil
+data:
+  SERVICE_MODE: "api"
+  PORT: "8000"
+  LOG_LEVEL: "info"
+  MAX_WORKERS: "4"

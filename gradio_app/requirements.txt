@@ -1,0 +1,15 @@
+# Aerovigil PG-BNN Demo Dependencies
+# Installs from PyPI or local source
+
+torch>=2.0.0
+numpy>=1.24.0
+plotly>=5.15.0
+gradio>=4.0.0
+huggingface-hub>=0.20.0
+
+# Install the model package itself
+# For HF Space: use pip install from PyPI or GitHub
+# aerovigil-pg-bnn>=0.1.0
+
+# For development, install from source:
+# -e git+https://github.com/rajaram-2005/wind-turbine-pg-bnn.git#egg=aerovigil-pg-bnn

@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: aerovigil
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - hpa.yaml
+  - servicemonitor.yaml
+
+images:
+  - name: aerovigilai/wind-turbine-pg-bnn
+    newTag: latest
+
+commonLabels:
+  app.kubernetes.io/name: aerovigil-pg-bnn
+  app.kubernetes.io/managed-by: kustomize
