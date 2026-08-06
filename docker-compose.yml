@@ -1,0 +1,86 @@
+version: "3.9"
+
+services:
+  # ─── CPU Inference API ─────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: aerovigilai/wind-turbine-pg-bnn:latest
+    container_name: aerovigil-api
+    ports:
+      - "8000:8000"
+    environment:
+      - SERVICE_MODE=api
+      - PORT=8000
+      - LOG_LEVEL=info
+    volumes:
+      - ./artifacts:/app/models:ro
+      - ./config.json:/app/config.json:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── Gradio Demo ───────────────────────────────────────────
+  gradio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: aerovigilai/wind-turbine-pg-bnn:latest
+    container_name: aerovigil-gradio
+    ports:
+      - "7860:7860"
+    environment:
+      - SERVICE_MODE=gradio
+    volumes:
+      - ./artifacts:/app/models:ro
+      - ./config.json:/app/config.json:ro
+      - ./gradio_app:/app/gradio_app:ro
+    restart: unless-stopped
+
+  # ─── Development Shell ─────────────────────────────────────
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: aerovigilai/wind-turbine-pg-bnn:latest
+    container_name: aerovigil-dev
+    stdin_open: true
+    tty: true
+    environment:
+      - SERVICE_MODE=cli
+    volumes:
+      - .:/app
+      - ./artifacts:/app/models:ro
+    command: bash
+
+  # ─── GPU Inference (if CUDA available) ────────────────────
+  api-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: gpu
+    image: aerovigilai/wind-turbine-pg-bnn:gpu
+    container_name: aerovigil-api-gpu
+    ports:
+      - "8000:8000"
+    environment:
+      - SERVICE_MODE=api
+      - PORT=8000
+    volumes:
+      - ./artifacts:/app/models:ro
+      - ./config.json:/app/config.json:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped

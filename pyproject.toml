@@ -1,51 +1,114 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.18.0"]
+build-backend = "hatchling.build"
 
 [project]
-name = "wind-turbine-pg-bnn"
-version = "1.0.0"
-description = "AeroVigil — Physics-Guided Bayesian Neural Network for wind-turbine drivetrain remaining-useful-life prediction (advisory/decision-support only)."
+name = "aerovigil-pg-bnn"
+version = "0.1.0"
+description = "Physics-Guided Bayesian Neural Network for Wind Turbine RUL Prediction"
 readme = "README.md"
-requires-python = ">=3.10"
-license = "MIT"
-authors = [{ name = "OMNI-PREDICT research scaffold" }]
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Aerovigil AI", email = "contact@aerovigil.ai"},
+    {name = "Rajaram", email = "rajaram@aerovigil.ai"}
+]
+maintainers = [
+    {name = "Aerovigil AI", email = "contact@aerovigil.ai"}
+]
+keywords = [
+    "predictive-maintenance",
+    "wind-energy",
+    "bayesian-neural-network",
+    "rul-prediction",
+    "physics-informed",
+    "scada-telemetry",
+    "remaining-useful-life",
+    "aerovigil"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Manufacturing",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
 dependencies = [
-    "torch>=2.1",
-    "numpy>=1.24",
-    "scipy>=1.11",
-    "pandas>=2.0",
-    "scikit-learn>=1.3",
-    "pydantic>=2.5",
+    "torch>=2.0.0",
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "pandas>=2.0.0",
+    "huggingface-hub>=0.20.0",
+    "tqdm>=4.65.0",
     "pyyaml>=6.0",
-    "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.7.0",
+    "ruff>=0.0.285",
+    "mypy>=1.5.0",
+    "pre-commit>=3.3.0",
+]
+demo = [
+    "gradio>=4.0.0",
+    "plotly>=5.15.0",
+]
+all = [
+    "aerovigil-pg-bnn[dev,demo]",
 ]
 
 [project.urls]
 Homepage = "https://aerovigil.abacusai.app"
-Documentation = "https://aerovigil.abacusai.app"
+Documentation = "https://huggingface.co/AerovigilAI/wind-turbine-pg-bnn"
 Repository = "https://github.com/rajaram-2005/wind-turbine-pg-bnn"
-
-[project.optional-dependencies]
-api = ["fastapi>=0.110", "uvicorn>=0.29"]
-ui = ["streamlit>=1.32"]
-dev = [
-    "pytest>=7.4",
-    "pytest-cov>=4.1",
-    "httpx>=0.27",
-    "flake8>=7.0",
-]
+Issues = "https://github.com/rajaram-2005/wind-turbine-pg-bnn/issues"
+"Live Demo" = "https://aerovigil.abacusai.app"
+"Hugging Face" = "https://huggingface.co/AerovigilAI/wind-turbine-pg-bnn"
 
 [project.scripts]
-wind-turbine-bnn = "src.cli:main"
-twin-status = "src.cli_twin:status_main"
-twin-simulate = "src.cli_twin:simulate_main"
-twin-prompt = "src.cli_twin:prompt_main"
+aerovigil-infer = "aerovigil_pg_bnn.cli:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["src*"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/aerovigil_pg_bnn"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/README.md",
+    "/LICENSE",
+    "/config.json",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "--cov=src/aerovigil_pg_bnn --cov-report=term-missing"
