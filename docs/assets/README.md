@@ -9,7 +9,11 @@ Files in this folder are meant for launch, PR, and presentation use.
 - `social-square.png` — sized for LinkedIn / X / Instagram style posts
 - `demo.gif` — lightweight README motion preview
 - `aerovigil-demo.mp4` — narrated demo video
+- `aerovigil-live-dashboard-60s.mp4` — 60-second live-dashboard walkthrough
+  (rebuilt via `scripts/build_live_dashboard_video.py`)
 - `audio/scene*.wav` — source voiceover clips used to build the demo video
+- `audio/live_intro.wav`, `audio/live_outro.wav` — narration for the
+  60-second live-dashboard video
 
 ## Suggested usage
 

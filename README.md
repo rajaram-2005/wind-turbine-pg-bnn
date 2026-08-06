@@ -72,6 +72,8 @@ The app prefers local weights from `artifacts/pg_bnn_demo/`, so the demo still
 works with **no internet** after the training step.
 
 - Full narrated demo video: [`docs/assets/aerovigil-demo.mp4`](docs/assets/aerovigil-demo.mp4)
+- 60-second live-dashboard walkthrough: [`docs/assets/aerovigil-live-dashboard-60s.mp4`](docs/assets/aerovigil-live-dashboard-60s.mp4)
+  (rebuild with `python scripts/build_live_dashboard_video.py`)
 - Demo script and fallback plan: [`docs/DEMO_RUNBOOK.md`](docs/DEMO_RUNBOOK.md)
 
 ## Quick start (for developers)
