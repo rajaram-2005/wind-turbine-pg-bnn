@@ -336,7 +336,7 @@ python scripts/eval_accuracy.py
 | [`src/agents/hermes.py`](src/agents/hermes.py) | Few-shot onboarding and promotion gating |
 | [`scripts/`](scripts) | Training, evaluation, pipeline, and smoke-test scripts |
 | [`tests/`](tests) | Unit and integration tests |
-| [`docs/`](docs) | Architecture, proposal, and safety documentation |
+| [`docs/`](docs) | Architecture, [diagrams](docs/DIAGRAMS.md), proposal, and safety documentation |
 
 ---
 
