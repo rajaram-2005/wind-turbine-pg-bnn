@@ -1,8 +1,10 @@
-# AeroVigil — wind-turbine-pg-bnn
+# Aerovigil AI — Physics-Guided Bayesian Neural Network (`wind-turbine-pg-bnn`)
 
-**AeroVigil v1.0.0** · [https://aerovigil.abacusai.app](https://aerovigil.abacusai.app)
+**Aerovigil AI v1.0.0** · [Official Website](https://aerovigil.abacusai.app) · [Documentation](docs/ARCHITECTURE.md)
 
-**Physics-Guided Bayesian Neural Network for wind-turbine drivetrain Remaining Useful Life (RUL) prediction.**
+**A open-source Physics-Guided Bayesian Neural Network (PG-BNN) developed by Aerovigil AI for wind-turbine drivetrain Remaining Useful Life (RUL) prediction.**
+
+
 
 > ⚠️ **SAFETY NOTICE — ADVISORY / DECISION-SUPPORT ONLY**
 > This software produces *engineering recommendations* for reliability and maintenance
@@ -224,6 +226,14 @@ download a markdown report). The UI deliberately exposes no actuation controls.
 `examples/fleet.csv` is the canonical format for the fleet CLI and UI (20 assets
 included: healthy, at-risk, and critical):
 
+
+## About Aerovigil AI
+
+**Aerovigil AI** develops open-source, physics-guided artificial intelligence solutions for renewable energy systems, industrial automation, and predictive maintenance.
+
+* **Website:** [aerovigil.abacusai.app](https://aerovigil.abacusai.app)
+* **Domain:** Wind Energy, Gearbox & Generator Reliability, SCADA Compression (AeroZip)
+* **License:** MIT License — Open for research and industrial benchmarking.
 ```
 asset_id,vibration_mms,temperature_c,rpm,oil_viscosity_cst,load_pct,predicted_rul_days,epistemic_uncertainty,aleatoric_uncertainty
 ```
