@@ -28,6 +28,11 @@ import plotly.graph_objects as go
 import torch
 from huggingface_hub import hf_hub_download
 
+if __package__:
+    from .colors import hex_to_rgba
+else:
+    from colors import hex_to_rgba
+
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
@@ -65,16 +70,6 @@ RISK_LABELS = {
     "HIGH": "HIGH RISK · Intervention needed soon",
     "CRITICAL": "CRITICAL RISK · Immediate action required",
 }
-
-
-def _hex_to_rgba(hex_color: str, alpha: float) -> str:
-    """Convert #RRGGBB hex to rgba(r,g,b,alpha) for Plotly compatibility.
-    Plotly does not support 8-char hex #RRGGBBAA, so use rgba format."""
-    hex_color = hex_color.lstrip("#")
-    r = int(hex_color[0:2], 16)
-    g = int(hex_color[2:4], 16)
-    b = int(hex_color[4:6], 16)
-    return f"rgba({r},{g},{b},{alpha})"
 
 
 CPU_THREADS = max(1, min(os.cpu_count() or 1, 4))
@@ -415,7 +410,7 @@ def create_risk_badge(risk: str) -> str:
     return f"""
     <div style="display:inline-flex;align-items:center;gap:12px;padding:12px 20px;
                 border-radius:16px;font-size:15px;font-weight:800;
-                letter-spacing:0.04em;border:2px solid {colors["primary"]}44;
+                letter-spacing:0.04em;border:2px solid {hex_to_rgba(colors["primary"], 0.27)};
                 background:{colors["glow"]};color:{colors["primary"]};
                 box-shadow:0 0 20px {colors["glow"]};{pulse}
                 backdrop-filter:blur(10px);">
@@ -441,8 +436,8 @@ def create_recommendation_card(risk: str, title: str, body: str) -> str:
     return f"""
     <div style="padding:20px 24px;border-radius:20px;
                 background:linear-gradient(135deg,rgba(10,22,40,0.95),rgba(16,35,63,0.9));
-                border:1px solid {colors["primary"]}33;
-                box-shadow:inset 0 0 0 1px {colors["primary"]}11, 0 8px 32px rgba(0,0,0,0.3);
+                border:1px solid {hex_to_rgba(colors["primary"], 0.2)};
+                box-shadow:inset 0 0 0 1px {hex_to_rgba(colors["primary"], 0.07)}, 0 8px 32px rgba(0,0,0,0.3);
                 backdrop-filter:blur(10px);margin-top:8px;">
       <div style="font-size:18px;font-weight:800;color:{colors["primary"]};margin-bottom:8px;">
         {title}
@@ -459,7 +454,7 @@ def create_fleet_card(t: dict) -> str:
     return f"""
     <div style="padding:16px;border-radius:18px;
                 background:linear-gradient(135deg,rgba(10,22,40,0.92),rgba(16,35,63,0.88));
-                border:1px solid {colors["primary"]}22;
+                border:1px solid {hex_to_rgba(colors["primary"], 0.13)};
                 box-shadow:0 4px 20px rgba(0,0,0,0.2);min-width:200px;
                 transition:transform 0.3s,box-shadow 0.3s;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
@@ -631,7 +626,7 @@ def make_radar_chart(vibration, bearing_temp, gen_temp, power, wind_speed, hours
                 "Vibration",
             ],
             fill="toself",
-            fillcolor="rgba(0,229,160,0.13)",
+            fillcolor=hex_to_rgba(colors["primary"], 0.13),
             line={"color": colors["primary"], "width": 2},
             marker={"size": 6, "color": colors["primary"]},
         )
@@ -710,7 +705,7 @@ def make_trend_chart(hours_val, risk):
             mode="lines",
             line={"color": colors["primary"], "width": 0},
             fill="tozeroy",
-            fillcolor=_hex_to_rgba(colors["primary"], 0.07),
+            fillcolor=hex_to_rgba(colors["primary"], 0.07),
             showlegend=False,
             hoverinfo="skip",
         )
@@ -801,7 +796,11 @@ def make_power_curve(wind_speed, power_output, risk):
             x=[wind_speed],
             y=[power_output],
             mode="markers",
-            marker={"size": 30, "color": f"{colors['primary']}33", "symbol": "circle"},
+            marker={
+                "size": 30,
+                "color": hex_to_rgba(colors["primary"], 0.15),
+                "symbol": "circle",
+            },
             showlegend=False,
             hoverinfo="skip",
         )
@@ -1387,7 +1386,7 @@ def run_twin_simulation(scenario_name, extra_hours, vib, btemp, gtemp, power, wi
             line={"color": colors["primary"], "width": 3},
             name="Projected RUL",
             fill="tozeroy",
-            fillcolor=_hex_to_rgba(colors["primary"], 0.08),
+            fillcolor=hex_to_rgba(colors["primary"], 0.08),
         )
     )
     fig.add_hline(
@@ -1418,7 +1417,7 @@ def run_twin_simulation(scenario_name, extra_hours, vib, btemp, gtemp, power, wi
     info = f"""
     <div style="padding:20px;border-radius:18px;
                 background:linear-gradient(135deg,rgba(10,22,40,0.92),rgba(16,35,63,0.88));
-                border:1px solid {status_color}33;">
+                border:1px solid {hex_to_rgba(status_color, 0.2)};">
       <h4 style="color:{status_color};margin:0 0 12px;">🔬 Simulation Result</h4>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px;">
         <div><span style="color:rgba(160,180,200,0.6);">Scenario:</span> <b style="color:#edf6ff;">{scenario_name}</b></div>
