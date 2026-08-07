@@ -883,6 +883,41 @@ guide and the [development](#development) section above.
 | **6–12 months** | Multi-component coverage, cross-site benchmarking, OEM partnerships |
 | **12+ months** | Federated learning across fleets, offshore-specific models, API marketplace |
 
+## 👤 About the Founder
+
+**Rajaram** is an Electrical & Electronics Engineering student, deep-tech
+researcher, and founder building AeroVigil at the intersection of physical
+infrastructure and trustworthy AI. His connection to the problem is practical:
+through his family’s work in **Dynamic Wind Spares and Services**, he grew up
+around the gearboxes, generators, gear oil, SCADA alarms, and field-maintenance
+realities behind wind-turbine availability.
+
+That background informs a simple product principle: a maintenance prediction is
+only useful when the engineer who receives it can understand its confidence,
+trust its physical basis, and act on it safely. Rajaram’s work combines
+physics-guided Bayesian neural networks, SCADA telemetry, and Industrial IoT to
+make developing drivetrain failures visible early enough for planned
+intervention—not emergency response.
+
+**Current focus**
+
+- Building uncertainty-aware predictive maintenance for wind-turbine gearboxes,
+  bearings, and generators.
+- Publishing reproducible research on physics-guided ML for clean-energy
+  infrastructure.
+- Developing practical edge-to-cloud telemetry prototypes with ESP32 and
+  SCADA-style data flows.
+- Exploring pilot, research, and market-development opportunities across global
+  wind hubs, including Australia’s growing renewable-energy sector.
+
+> **Collaboration welcome:** Rajaram is keen to connect with wind-farm
+> operators, O&M leaders, ClimateTech investors, reliability researchers, and
+> industrial-IoT collaborators working to make renewable infrastructure more
+> resilient.
+
+Read the full [Rajaram LinkedIn profile copy](docs/LINKEDIN_PROFILE.md) for
+headlines, project entries, and skills.
+
 ## 📖 The origin story
 
 > *It started with a YouTube video. A comment from a wind farm technician
@@ -909,6 +944,7 @@ dashboards, digital twins, and a 28,400-sample EPIC model trained across
 | Document | What it covers |
 |----------|----------------|
 | [`docs/STORY.md`](docs/STORY.md) | 🎬 The origin story — from idea to product |
+| [`docs/LINKEDIN_PROFILE.md`](docs/LINKEDIN_PROFILE.md) | 👤 Founder profile, project entries, and professional skills |
 | [`docs/EXPLAINER.md`](docs/EXPLAINER.md) | The idea with zero jargon |
 | [`docs/PITCH.md`](docs/PITCH.md) | Investor one-pager |
 | [`docs/SAFETY.md`](docs/SAFETY.md) | Advisory-only safety contract |
