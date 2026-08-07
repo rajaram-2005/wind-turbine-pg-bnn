@@ -140,3 +140,65 @@ def test_twin_prompt_writes_utf8_file(utf8_payload_file, tmp_path):
     args = ["--payload", str(utf8_payload_file), "-o", str(out)]
     assert prompt_main(args) == 0
     assert "°C" in out.read_text(encoding="utf-8")
+
+
+# --------------------------------------------------------------------------- #
+# Unified `wind-turbine-bnn twin ...` group                                   #
+# --------------------------------------------------------------------------- #
+def test_unified_cli_twin_status(utf8_payload_file, capsys):
+    assert (
+        main(
+            ["twin", "status", "--asset-id", "WTG-Énergie-風", "--payload", str(utf8_payload_file)]
+        )
+        == 0
+    )
+    out = capsys.readouterr().out
+    assert "WTG-Énergie-風" in out
+    assert "°C" in out
+
+
+def test_unified_cli_twin_status_json(capsys):
+    rc = main(["twin", "status", "--asset-id", "WTG-UNI-JSON", "--format", "json"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["asset_id"] == "WTG-UNI-JSON"
+    assert out["health_state"]["advisory"]["advisory_only"] is True
+
+
+def test_unified_cli_twin_simulate_writes_utf8_json(tmp_path):
+    out = tmp_path / "uni_sim.json"
+    assert (
+        main(["twin", "simulate", "--asset-id", "WTG-UNI-SIM", "--hours", "2", "-o", str(out)]) == 0
+    )
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert len(data) == 2
+    assert data[-1]["advisory"] is not None
+
+
+def test_unified_cli_twin_simulate_rejects_bad_hours(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["twin", "simulate", "--hours", "0"])
+    assert exc.value.code == 1
+    assert "Error:" in capsys.readouterr().err
+
+
+def test_unified_cli_twin_prompt_writes_utf8_file(utf8_payload_file, tmp_path):
+    out = tmp_path / "uni_prompt.txt"
+    args = [
+        "twin",
+        "prompt",
+        "--asset-id",
+        "WTG-Énergie-風",
+        "--payload",
+        str(utf8_payload_file),
+        "-o",
+        str(out),
+    ]
+    assert main(args) == 0
+    assert "°C" in out.read_text(encoding="utf-8")
+    assert "WTG-Énergie-風" in out.read_text(encoding="utf-8")
+
+
+def test_unified_cli_twin_unknown_command_fails():
+    with pytest.raises(SystemExit):
+        main(["twin", "teleport"])

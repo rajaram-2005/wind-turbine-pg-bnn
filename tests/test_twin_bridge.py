@@ -100,6 +100,40 @@ def test_attach_serving_model_rejects_feature_mismatch(serving_bundle, tmp_path)
         twin.attach_serving_model(ServingModel(bundle=corrupt))
 
 
+class _BrokenServingModel:
+    """Minimal serving-model stand-in whose advisory() always raises."""
+
+    features_config = FeatureConfig()
+    expected_feature_dim = FeatureConfig().feature_dim
+
+    def advisory(self, payload, window_df):
+        raise RuntimeError("model exploded")
+
+
+def test_serving_model_failure_falls_back_to_bnn_state():
+    twin = WindTurbineDigitalTwin("WTG-FB", get_spec("GE-1.5"), serving_model=_BrokenServingModel())
+    rec = twin.update_state(
+        _healthy_telemetry(),
+        BNNState(predicted_rul_days=33.0, epistemic_uncertainty=0.05, aleatoric_uncertainty=0.1),
+    )
+    # The update survives the model failure and serves the bnn_state path.
+    assert rec["advisory_source"] == "bnn_state"
+    assert rec["advisory"]["predicted_rul_days"] == pytest.approx(33.0)
+    assert "serving model advisory failed" in rec["advisory_error"]
+    enforce_safety_contract(rec)
+
+
+def test_serving_model_failure_without_bnn_state_records_error():
+    twin = WindTurbineDigitalTwin(
+        "WTG-FB2", get_spec("GE-1.5"), serving_model=_BrokenServingModel()
+    )
+    rec = twin.update_state(_healthy_telemetry(), None)
+    assert rec["advisory"] is None
+    assert rec["advisory_source"] == "model"
+    assert "serving model advisory failed" in rec["advisory_error"]
+    enforce_safety_contract(rec)
+
+
 def test_simulate_scenario_records_advisories():
     twin = WindTurbineDigitalTwin("WTG-S", get_spec("GE-1.5"))
     records = twin.simulate_scenario(profile="nominal", hours=6)
@@ -152,6 +186,38 @@ def test_api_twin_status_creates_and_reports(api_client):
 def test_api_twin_status_unknown_model_404(api_client):
     resp = api_client.get("/twin/status", params={"asset_id": "WTG-A2", "model": "NOPE-9000"})
     assert resp.status_code == 404
+
+
+def test_api_twin_status_reports_runtime_limits(api_client):
+    resp = api_client.get("/twin/status", params={"asset_id": "WTG-LIM", "model": "GE-1.5"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["history_limit"] >= 1
+    assert "serving_model_loaded" in body
+    assert body["advisory_source"] is None  # seeded twin has no bnn_state / model
+    # Record schema carries the runtime failover field (None when healthy).
+    assert body["last_state"]["advisory_error"] is None
+
+
+def test_api_twin_registry_is_lru_bounded(monkeypatch):
+    """AV_TWIN_MAX_ASSETS caps the twin registry; evicting LRU assets."""
+    monkeypatch.setenv("AV_TWIN_MAX_ASSETS", "2")
+
+    from fastapi.testclient import TestClient
+
+    from src.api.app import create_app
+
+    client = TestClient(create_app())
+    for i in range(3):
+        resp = client.get("/twin/status", params={"asset_id": f"WTG-EV{i}", "model": "GE-1.5"})
+        assert resp.status_code == 200
+
+    # WTG-EV0 was evicted, so re-fetching it creates a fresh (seeded) twin.
+    recreated = client.get("/twin/status", params={"asset_id": "WTG-EV0"}).json()
+    assert recreated["n_state_records"] == 1
+    # Registry never exceeds the configured cap.
+    assert len(client.app.state.twins) == 2
+    assert client.app.state.twin_max_assets == 2
 
 
 def test_api_twin_simulate(api_client):

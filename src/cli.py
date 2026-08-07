@@ -1,12 +1,17 @@
-"""Command-line interface for wind-turbine-pg-bnn.
+"""Unified command-line interface for the wind-turbine-pg-bnn application.
 
 Subcommands
 -----------
 ``advisory``   Compute an advisory for a single turbine payload (JSON).
 ``fleet``      Compute advisories for a fleet CSV and emit a report.
 ``report``     Render a markdown report from a single payload or a fleet CSV.
+``twin``       Digital twin operations: ``status``, ``simulate``, ``prompt``.
 
 All output is ADVISORY-ONLY.
+
+The twin commands are shared with the standalone ``twin-status`` /
+``twin-simulate`` / ``twin-prompt`` entrypoints (``src/cli_twin.py``) — one
+parser builder, two surfaces.
 
 Examples
 --------
@@ -14,6 +19,9 @@ Examples
     wind-turbine-bnn fleet examples/fleet.csv -o fleet_report.md
     wind-turbine-bnn report --fleet examples/fleet.csv --title "Q3 review"
     cat examples/payload.json | wind-turbine-bnn advisory -
+    wind-turbine-bnn twin status --asset-id WTG-042 --model Vestas-V90
+    wind-turbine-bnn twin simulate --profile overload --hours 12 -o sim.json
+    wind-turbine-bnn twin prompt --asset-id WTG-042 > prompt.txt
 """
 
 from __future__ import annotations
@@ -23,6 +31,14 @@ import json
 import sys
 from pathlib import Path
 
+from src.cli_twin import (
+    build_prompt_parser,
+    build_simulate_parser,
+    build_status_parser,
+    run_prompt,
+    run_simulate,
+    run_status,
+)
 from src.models.predictor import run_advisory
 from src.reporting.reports import (
     advisories_from_csv,
@@ -93,6 +109,57 @@ def cmd_report(args: argparse.Namespace) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Digital twin subcommands                                                     #
+# --------------------------------------------------------------------------- #
+def cmd_twin(args: argparse.Namespace) -> None:
+    """Dispatch to the digital-twin command selected by the twin subparser."""
+    if args.twin_command == "status":
+        rc = run_status(args)
+    elif args.twin_command == "simulate":
+        rc = run_simulate(args)
+    elif args.twin_command == "prompt":
+        rc = run_prompt(args)
+    else:  # pragma: no cover - argparse `choices` prevents this
+        raise SystemExit(f"unknown twin command: {args.twin_command}")
+    if rc != 0:
+        raise SystemExit(rc)
+
+
+def _add_twin_subparsers(parent: argparse.ArgumentParser) -> None:
+    """Register the `twin` group (status|simulate|prompt) on ``parent``.
+
+    Shared with ``src.cli_twin``: each subcommand uses the same parser
+    builder as its standalone ``twin-*`` entrypoint, so flags and behavior
+    are identical across surfaces.
+    """
+    twin = parent.add_subparsers(dest="twin_command", required=True, metavar="COMMAND")
+
+    status = twin.add_parser(
+        "status",
+        parents=[build_status_parser(prog="wind-turbine-bnn twin status", add_help=False)],
+        prog="wind-turbine-bnn twin status",
+        help="Print twin status / wear state.",
+    )
+    status.set_defaults(func=cmd_twin)
+
+    simulate = twin.add_parser(
+        "simulate",
+        parents=[build_simulate_parser(prog="wind-turbine-bnn twin simulate", add_help=False)],
+        prog="wind-turbine-bnn twin simulate",
+        help="Run an operating-profile simulation.",
+    )
+    simulate.set_defaults(func=cmd_twin)
+
+    prompt = twin.add_parser(
+        "prompt",
+        parents=[build_prompt_parser(prog="wind-turbine-bnn twin prompt", add_help=False)],
+        prog="wind-turbine-bnn twin prompt",
+        help="Generate the reliability-copilot prompt.",
+    )
+    prompt.set_defaults(func=cmd_twin)
+
+
+# --------------------------------------------------------------------------- #
 # Parser                                                                      #
 # --------------------------------------------------------------------------- #
 def build_parser() -> argparse.ArgumentParser:
@@ -141,6 +208,17 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("-o", "--output", default=None, help="Write to file (default: stdout).")
     pr.add_argument("--title", default="Fleet RUL advisory report")
     pr.set_defaults(func=cmd_report)
+
+    pt = sub.add_parser(
+        "twin",
+        help="Digital twin operations (status, simulate, prompt).",
+        description=(
+            "Wind turbine digital twin operations: print asset status, run "
+            "operating-profile simulations, and generate reliability-copilot prompts."
+        ),
+    )
+    _add_twin_subparsers(pt)
+    pt.set_defaults(func=cmd_twin)
 
     return p
 

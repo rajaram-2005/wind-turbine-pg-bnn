@@ -24,6 +24,7 @@ without a trained feature-extraction pipeline).
 from __future__ import annotations
 
 import os
+from collections import OrderedDict
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException
@@ -46,18 +47,14 @@ from src.eval.calibration import expected_asset_utilization
 from src.models.predictor import run_advisory
 from src.utils.safety import enforce_safety_contract
 from src.utils.schema import TurbinePayload
+from src.version import APP_VERSION as VERSION
+from src.version import PRODUCT, SAFETY_BANNER, WEBSITE
 
-VERSION = "1.0.0"
-PRODUCT = "AeroVigil"
-WEBSITE = "https://aerovigil.abacusai.app"
 ENV_MODEL_PATH = "AV_MODEL_PATH"
-SAFETY_BANNER = (
-    "AeroVigil v1.0.0 (wind-turbine-pg-bnn advisory service) — "
-    "DECISION-SUPPORT ONLY. https://aerovigil.abacusai.app. "
-    "Outputs are not actuation commands; review by a qualified operator "
-    "and an OEM documentation cross-check are required before any "
-    "maintenance action. See docs/SAFETY.md."
-)
+# Memory bound for the in-memory twin registry (LRU-evicted). Overridable per
+# deployment; the default comfortably covers fleet-scale demos.
+ENV_TWIN_MAX_ASSETS = "AV_TWIN_MAX_ASSETS"
+DEFAULT_TWIN_MAX_ASSETS = 1024
 
 
 def _serving_model_path() -> str | None:
@@ -112,7 +109,15 @@ def create_app() -> FastAPI:
             ) from exc
 
     # In-memory digital-twin registry (Phase 4): per-process, advisory-only.
-    app.state.twins = {}
+    # LRU-bounded so a long-running deployment cannot leak memory on unbounded
+    # asset ids. `AV_TWIN_MAX_ASSETS` overrides the default cap.
+    app.state.twins: OrderedDict = OrderedDict()
+    try:
+        app.state.twin_max_assets = max(
+            1, int(os.environ.get(ENV_TWIN_MAX_ASSETS, DEFAULT_TWIN_MAX_ASSETS))
+        )
+    except ValueError:
+        app.state.twin_max_assets = DEFAULT_TWIN_MAX_ASSETS
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -249,35 +254,49 @@ def create_app() -> FastAPI:
         When the service has a serving model loaded it is attached so every
         twin update computes its advisory from the trained PG-BNN; otherwise
         the bnn_state path applies (unchanged engine semantics).
+
+        The registry is LRU-bounded: when the cap is reached the least
+        recently used twin is evicted before a new asset is admitted.
         """
         from src.digital_twin.specs import get_spec
         from src.digital_twin.twin import WindTurbineDigitalTwin
 
         twin = app.state.twins.get(asset_id)
         if twin is None:
+            if len(app.state.twins) >= app.state.twin_max_assets:
+                # Evict the least recently used twin to honor the registry cap.
+                app.state.twins.popitem(last=False)
             try:
                 spec = get_spec(model_key)
             except KeyError as exc:
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
             twin = WindTurbineDigitalTwin(asset_id, spec, serving_model=app.state.serving)
             # Seed with the spec's nominal operating point so status/prompt
-            # are meaningful from the first call.
+            # are meaningful from the first call. A bad seed must not leave a
+            # half-initialized twin in the registry.
             from src.utils.schema import Telemetry as _Tel
 
             vib = spec.vibration_limit_mms * 0.6
-            twin.update_state(
-                _Tel(
-                    vibration_mms=vib,
-                    temperature_c=spec.temperature_limit_c * 0.75,
-                    rpm=spec.rpm_limit_hss * 0.85,
-                    oil_viscosity_cst=(spec.viscosity_min_cst + spec.viscosity_max_cst) / 2.0,
-                    load_pct=75.0,
-                ),
-                None,
-            )
+            try:
+                twin.update_state(
+                    _Tel(
+                        vibration_mms=vib,
+                        temperature_c=spec.temperature_limit_c * 0.75,
+                        rpm=spec.rpm_limit_hss * 0.85,
+                        oil_viscosity_cst=(spec.viscosity_min_cst + spec.viscosity_max_cst) / 2.0,
+                        load_pct=75.0,
+                    ),
+                    None,
+                )
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=422, detail=f"cannot seed twin {asset_id}: {exc}"
+                ) from exc
             app.state.twins[asset_id] = twin
-        elif app.state.serving is not None and twin.serving_model is None:
-            twin.attach_serving_model(app.state.serving)
+        else:
+            app.state.twins.move_to_end(asset_id)  # LRU touch
+            if app.state.serving is not None and twin.serving_model is None:
+                twin.attach_serving_model(app.state.serving)
         return twin
 
     def _twin_status_payload(twin) -> dict:
@@ -290,6 +309,9 @@ def create_app() -> FastAPI:
             "cumulative_wear": twin.cumulative_wear,
             "last_updated": twin.last_updated.isoformat(),
             "n_state_records": len(twin.state_history),
+            "history_limit": twin.max_history,
+            "serving_model_loaded": app.state.serving is not None,
+            "advisory_source": (last or {}).get("advisory_source"),
             "last_state": last,
             "advisory_only": True,
         }

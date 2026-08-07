@@ -1,8 +1,30 @@
-"""Wind Turbine Digital Twin class."""
+"""Wind Turbine Digital Twin class.
+
+Runtime hardening notes
+-----------------------
+* **Deterministic simulation** — scenario fluctuations come from a
+  per-asset seeded RNG (CRC32 of the asset id), never from Python's
+  process-randomized ``hash()``, so the same twin + profile + duration
+  always reproduces the same trajectory.
+* **Bounded memory** — retained state history is capped at
+  ``max_history`` records and the advisory feature buffer at
+  ``_ADVISORY_BUFFER_MAX`` snapshots, so a long-running twin cannot grow
+  without bound.
+* **Input validation** — non-finite telemetry/BNN values and invalid
+  simulation durations are rejected with a clear ``ValueError`` instead of
+  silently corrupting wear physics.
+* **Advisory failover** — if the attached serving model raises during an
+  update, the twin falls back to the ``bnn_state`` path (or records the
+  error) instead of failing the whole state ingestion.
+"""
 
 from __future__ import annotations
 
 import datetime
+import logging
+import math
+import random
+import zlib
 from collections import deque
 from typing import Any
 
@@ -17,8 +39,14 @@ from src.physics.constraints import (
 )
 from src.utils.schema import BNNState, Telemetry, TurbinePayload
 
+logger = logging.getLogger(__name__)
+
 # Rolling telemetry buffer size used to build model features for advisories.
 _ADVISORY_BUFFER_MAX = 512
+# Default cap on retained state records per twin (memory bound).
+DEFAULT_MAX_HISTORY = 10_000
+# Longest scenario simulation allowed, in hours (one year of hourly steps).
+MAX_SIMULATION_HOURS = 24.0 * 365.0
 
 
 class WindTurbineDigitalTwin:
@@ -30,10 +58,20 @@ class WindTurbineDigitalTwin:
     models cumulative wear, and supports operator scenario simulation.
     """
 
-    def __init__(self, asset_id: str, spec: TurbineSpec, serving_model=None):
+    def __init__(
+        self,
+        asset_id: str,
+        spec: TurbineSpec,
+        serving_model=None,
+        *,
+        max_history: int = DEFAULT_MAX_HISTORY,
+    ):
+        if max_history < 1:
+            raise ValueError(f"max_history must be >= 1, got {max_history}")
         self.asset_id = asset_id
         self.spec = spec
         self.state_history: list[dict[str, Any]] = []
+        self.max_history: int = max_history
         self.cumulative_wear: float = 0.0  # Normalized wear index (0.0 = brand new, 1.0 = failure)
         self.last_updated: datetime.datetime = datetime.datetime.now(datetime.timezone.utc)
         # Raw snapshot buffer feeding the advisory feature pipeline.
@@ -60,25 +98,55 @@ class WindTurbineDigitalTwin:
             )
         self.serving_model = serving_model
 
+    @staticmethod
+    def _reject_non_finite(values: dict[str, Any], what: str) -> None:
+        """Fail fast on NaN/inf values that would silently poison physics
+        calculations (wear, ISO 281 life) or feature extraction."""
+        for key, value in values.items():
+            if isinstance(value, float) and not math.isfinite(value):
+                raise ValueError(
+                    f"non-finite {what} value for '{key}': {value!r}. "
+                    "Rejecting the snapshot to protect the twin runtime."
+                )
+
     def _compute_advisory(
         self, telemetry: Telemetry, bnn_state: BNNState | None
-    ) -> tuple[dict[str, Any] | None, str | None]:
+    ) -> tuple[dict[str, Any] | None, str | None, str | None]:
         """Compute the advisory for this snapshot.
 
         Model path (when a serving model is attached) uses the rolling
         telemetry buffer to build window features; otherwise the incoming
         bnn_state block drives the advisory (previous behavior). Both paths
         flow through run_advisory → enforce_safety_contract.
+
+        Returns ``(advisory, source, error)``. A serving-model failure does
+        NOT fail the update: the twin falls back to the ``bnn_state`` path
+        and records ``error`` for the caller to surface.
         """
         payload = TurbinePayload(asset_id=self.asset_id, telemetry=telemetry, bnn_state=bnn_state)
         if self.serving_model is not None:
-            df = pd.DataFrame(list(self._telemetry_buffer), columns=list(CHANNELS))
-            return self.serving_model.advisory(payload, df), "model"
-        if bnn_state is not None:
-            from src.models.predictor import run_advisory
+            try:
+                df = pd.DataFrame(list(self._telemetry_buffer), columns=list(CHANNELS))
+                return self.serving_model.advisory(payload, df), "model", None
+            except Exception as exc:  # model hiccups must not kill state ingestion
+                error = f"serving model advisory failed, fell back to bnn_state path: {exc}"
+                logger.warning("%s: %s", self.asset_id, error)
+                if bnn_state is None:
+                    return None, "model", error
+                try:
+                    from src.models.predictor import run_advisory
 
-            return run_advisory(payload), "bnn_state"
-        return None, None
+                    return run_advisory(payload), "bnn_state", error
+                except Exception as exc2:  # pragma: no cover - defensive
+                    return None, "bnn_state", f"{error}; bnn_state fallback failed: {exc2}"
+        if bnn_state is not None:
+            try:
+                from src.models.predictor import run_advisory
+
+                return run_advisory(payload), "bnn_state", None
+            except Exception as exc:  # pragma: no cover - defensive
+                return None, "bnn_state", f"bnn_state advisory failed: {exc}"
+        return None, None, None
 
     def update_state(
         self,
@@ -94,6 +162,13 @@ class WindTurbineDigitalTwin:
         if timestamp is None:
             timestamp = datetime.datetime.now(datetime.timezone.utc)
 
+        # Fail fast on non-finite sensor values (defense in depth — the
+        # pydantic schema already bounds every field).
+        telemetry_dict = telemetry.model_dump()
+        self._reject_non_finite(telemetry_dict, "telemetry")
+        if bnn_state is not None:
+            self._reject_non_finite(bnn_state.model_dump(), "bnn_state")
+
         # Map our TurbineSpec constraints to a GearboxPhysicsConstraints object
         gb_constraints = GearboxPhysicsConstraints(
             vibration_limit_mms=self.spec.vibration_limit_mms,
@@ -104,7 +179,6 @@ class WindTurbineDigitalTwin:
         )
 
         # Check physical violations using spec-specific constraints
-        telemetry_dict = telemetry.model_dump()
         violations = check_violations(telemetry_dict, gb_constraints)
 
         # Calculate bearing L10 hours under current conditions
@@ -140,7 +214,7 @@ class WindTurbineDigitalTwin:
 
         # Bridge to the advisory engine: model path when a serving model is
         # attached, else the incoming bnn_state block (previous behavior).
-        advisory, advisory_source = self._compute_advisory(telemetry, bnn_state)
+        advisory, advisory_source, advisory_error = self._compute_advisory(telemetry, bnn_state)
 
         state_record = {
             "timestamp": timestamp.isoformat(),
@@ -151,8 +225,12 @@ class WindTurbineDigitalTwin:
             "cumulative_wear": self.cumulative_wear,
             "advisory": advisory,
             "advisory_source": advisory_source,
+            "advisory_error": advisory_error,
         }
         self.state_history.append(state_record)
+        if len(self.state_history) > self.max_history:
+            # Memory bound: keep only the most recent records.
+            del self.state_history[: len(self.state_history) - self.max_history]
         return state_record
 
     def simulate_scenario(
@@ -170,10 +248,27 @@ class WindTurbineDigitalTwin:
           - "derated": Defensive mode, lower RPM, load, and temperature. Minimizes wear.
           - "viscosity_loss": Loss of oil viscosity scenario.
 
+        ``hours`` must be a positive finite number no larger than
+        :data:`MAX_SIMULATION_HOURS` (one year); anything else is rejected
+        with :class:`ValueError`. The trajectory is deterministic for a
+        given asset id (seeded RNG), regardless of process.
+
         Returns a list of simulated state records.
         """
+        if not math.isfinite(hours) or hours <= 0:
+            raise ValueError(f"hours must be a positive finite number of hours, got {hours!r}")
+        if hours > MAX_SIMULATION_HOURS:
+            raise ValueError(
+                f"hours ({hours}) exceeds the maximum simulation horizon "
+                f"of {MAX_SIMULATION_HOURS:.0f} hours (1 year)"
+            )
+
         simulated_records = []
         current_time = self.last_updated
+
+        # Deterministic per-asset fluctuation RNG (stable across processes,
+        # unlike Python's salted hash()).
+        rng = random.Random(zlib.crc32(self.asset_id.encode("utf-8")))
 
         # Define profile telemetry characteristics
         if profile == "nominal":
@@ -203,13 +298,13 @@ class WindTurbineDigitalTwin:
         else:
             raise ValueError(f"Unknown simulation profile: {profile}")
 
-        # Simulate step-by-step
+        # Simulate step-by-step (fractional hours round up to whole hourly steps)
         step_hours = 1.0
-        steps = int(hours)
-        for i in range(steps):
+        steps = max(1, int(math.ceil(hours)))
+        for _ in range(steps):
             current_time += datetime.timedelta(hours=step_hours)
             # Add small fluctuations to make it realistic
-            factor = 1.0 + (0.05 * (hash(f"{self.asset_id}-{i}") % 100 - 50) / 100.0)
+            factor = 1.0 + (0.05 * (rng.randrange(100) - 50) / 100.0)
 
             tel = Telemetry(
                 vibration_mms=min(50.0, max(0.0, vib * factor)),

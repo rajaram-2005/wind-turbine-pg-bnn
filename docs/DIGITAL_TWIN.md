@@ -30,31 +30,64 @@ All operations and recommendations are strictly aligned with the advisory-only e
 
 ## Command Line Interface (CLI)
 
-The package installs three commands under your environment:
+The twin commands live in the **unified application CLI** under the `twin`
+group, and remain available as standalone commands for backwards
+compatibility:
 
-### 1. `twin-status`
-Display the current status, specifications, and physical wear index of a turbine twin:
 ```bash
-twin-status --asset-id WTG-042 --model Vestas-V90
-```
-To update the twin with an actual telemetry payload:
-```bash
-twin-status --asset-id WTG-042 --model Vestas-V90 --payload examples/payload.json
+# Unified application CLI (one tool for the whole application surface)
+python -m src twin status    --asset-id WTG-042 --model Vestas-V90
+python -m src twin simulate  --asset-id WTG-SIM-01 --model NREL-5MW --profile overload --hours 12
+python -m src twin prompt    --asset-id WTG-099 --model GE-1.5
+
+# Standalone entrypoints (same parsers, same flags)
+twin-status    --asset-id WTG-042 --model Vestas-V90 --payload examples/payload.json
+twin-simulate  --asset-id WTG-SIM-01 --model NREL-5MW --profile overload --hours 12 -o sim.json
+twin-prompt    --asset-id WTG-099 --model GE-1.5
 ```
 
-### 2. `twin-simulate`
-Run physical state progression simulations over time under hypothetical scenario profiles:
-```bash
-# Simulate overload operations on NREL 5MW for 12 hours
-twin-simulate --asset-id WTG-SIM-01 --model NREL-5MW --profile overload --hours 12
-```
-Options: `--profile {nominal,overload,derated,viscosity_loss}`, `--hours <hours>`, and `-o <output.json>` to save history.
+### `twin status`
+Display the current status, specifications, and physical wear index of a turbine twin.
+`--payload` ingests a telemetry snapshot first; `--advisory` prints the advisory
+engine output (trained-model path with `--model-path`, else the `bnn_state` block).
+`--format json` emits machine-readable output.
 
-### 3. `twin-prompt`
-Compile and generate a safety-bounded context block and instruction prompt for LLMs or copilot integrations:
-```bash
-twin-prompt --asset-id WTG-099 --model GE-1.5
-```
+### `twin simulate`
+Run physical state progression simulations over time under hypothetical scenario
+profiles: `--profile {nominal,overload,derated,viscosity_loss}`, `--hours <hours>`,
+and `-o <output.json>` to save history. Durations must be positive finite numbers
+no larger than one year (8760 h); fractional hours round up to whole hourly steps.
+
+### `twin prompt`
+Compile and generate a safety-bounded context block and instruction prompt for
+LLMs or copilot integrations.
+
+---
+
+## Runtime hardening
+
+The twin runtime is hardened for long-running, unattended operation:
+
+- **Deterministic simulation.** Scenario fluctuations use a per-asset seeded
+  RNG (CRC32 of the asset id), so the same twin + profile + duration always
+  reproduces the same trajectory — across processes and Python hash-seed
+  settings. (Previously Python's process-randomized `hash()` made every run
+  slightly different.)
+- **Bounded memory.** Each twin retains at most `max_history` state records
+  (default 10 000) and a 512-snapshot advisory feature buffer. The FastAPI
+  twin registry is LRU-bounded too — `AV_TWIN_MAX_ASSETS` (default 1024)
+  caps concurrent in-memory twins, evicting the least recently used asset
+  first. `/health` on the unified app reports `assets_tracked` / `max_assets`.
+- **Input validation.** Non-finite telemetry or BNN values (NaN/Inf) are
+  rejected with a clear error instead of silently corrupting wear physics,
+  and invalid simulation durations are refused.
+- **Advisory failover.** If the attached serving model raises during a state
+  update, the twin falls back to the `bnn_state` path and records
+  `advisory_error` on the state record — state ingestion never dies with the
+  model.
+- **Safe seeding.** API twin creation seeds from the spec's nominal operating
+  point; a failed seed returns 422 and never leaves a half-initialized twin
+  in the registry.
 
 ---
 

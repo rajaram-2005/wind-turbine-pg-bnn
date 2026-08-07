@@ -77,6 +77,93 @@ def test_digital_twin_simulation():
     assert records[-1]["telemetry"]["load_pct"] > 100.0
 
 
+def test_simulation_is_deterministic():
+    """The same asset + profile + duration must reproduce the same trajectory,
+    regardless of the interpreter's hash seed (PYTHONHASHSEED)."""
+    spec = get_spec("GE-1.5")
+    first = WindTurbineDigitalTwin("WTG-DET", spec).simulate_scenario("overload", 6)
+    second = WindTurbineDigitalTwin("WTG-DET", spec).simulate_scenario("overload", 6)
+
+    def normalized(records):
+        out = []
+        for rec in records:
+            rec = dict(rec)
+            rec.pop("timestamp", None)  # wall-clock at twin construction
+            if rec.get("advisory"):
+                rec["advisory"] = {k: v for k, v in rec["advisory"].items() if k != "generated_at"}
+            out.append(rec)
+        return out
+
+    assert normalized(first) == normalized(second)
+
+
+def test_simulate_rejects_invalid_hours():
+    spec = get_spec("GE-1.5")
+    twin = WindTurbineDigitalTwin("WTG-HRS", spec)
+    for bad in (0, -5, float("nan"), float("inf"), 1e9):
+        with pytest.raises(ValueError):
+            twin.simulate_scenario(hours=bad)
+    # Fractional durations round up to whole hourly steps.
+    assert len(twin.simulate_scenario(hours=2.5)) == 3
+
+
+def test_state_history_is_bounded():
+    spec = get_spec("GE-1.5")
+    twin = WindTurbineDigitalTwin("WTG-HIST", spec, max_history=3)
+    for i in range(10):
+        twin.update_state(
+            Telemetry(
+                vibration_mms=1.0 + 0.01 * i,
+                temperature_c=50.0,
+                rpm=1500.0,
+                oil_viscosity_cst=32.0,
+                load_pct=70.0,
+            )
+        )
+    assert len(twin.state_history) == 3
+    # Oldest retained record is the 8th ingest (index 7), not the first.
+    assert twin.state_history[0]["telemetry"]["vibration_mms"] == pytest.approx(1.07)
+
+
+def test_max_history_rejects_invalid_values():
+    with pytest.raises(ValueError):
+        WindTurbineDigitalTwin("WTG-BADHIST", get_spec("GE-1.5"), max_history=0)
+
+
+def test_update_state_rejects_non_finite_telemetry():
+    twin = WindTurbineDigitalTwin("WTG-NAN", get_spec("GE-1.5"))
+    # model_construct bypasses pydantic bounds to prove the runtime guard.
+    nan_tel = Telemetry.model_construct(
+        vibration_mms=float("nan"),
+        temperature_c=50.0,
+        rpm=1500.0,
+        oil_viscosity_cst=32.0,
+        load_pct=70.0,
+    )
+    with pytest.raises(ValueError, match="non-finite telemetry value"):
+        twin.update_state(nan_tel)
+
+
+def test_update_state_rejects_non_finite_bnn_state():
+    twin = WindTurbineDigitalTwin("WTG-NANBNN", get_spec("GE-1.5"))
+    nan_bnn = BNNState.model_construct(
+        predicted_rul_days=float("inf"),
+        epistemic_uncertainty=0.05,
+        aleatoric_uncertainty=0.1,
+    )
+    with pytest.raises(ValueError, match="non-finite bnn_state value"):
+        twin.update_state(
+            Telemetry(
+                vibration_mms=2.0,
+                temperature_c=60.0,
+                rpm=1400.0,
+                oil_viscosity_cst=30.0,
+                load_pct=70.0,
+            ),
+            nan_bnn,
+        )
+
+
 def test_engineering_prompt_generation():
     spec = get_spec("NREL-5MW")
     twin = WindTurbineDigitalTwin(asset_id="WTG-TEST-03", spec=spec)

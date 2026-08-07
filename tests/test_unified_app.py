@@ -27,6 +27,20 @@ def test_operations_api_is_connected_under_one_boundary():
         assert response.json()["advisory_only"] is True
 
 
+def test_unified_health_reports_digital_twin_registry():
+    with TestClient(create_app(include_dashboard=False)) as client:
+        body = client.get("/health").json()
+        assert body["product"] == "AeroVigil"
+        assert body["version"] == "1.0.0"
+        twin = body["digital_twin"]
+        assert twin["assets_tracked"] == 0
+        assert twin["max_assets"] >= 1
+        # Registry stats reflect live twin traffic through the mounted API.
+        client.get("/api/twin/status", params={"asset_id": "WTG-UH", "model": "GE-1.5"})
+        after = client.get("/health").json()
+        assert after["digital_twin"]["assets_tracked"] == 1
+
+
 def test_model_api_is_connected_and_initialized():
     with TestClient(create_app(include_dashboard=False)) as client:
         response = client.get("/model-api/health")
