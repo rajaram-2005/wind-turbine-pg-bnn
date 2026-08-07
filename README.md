@@ -185,6 +185,17 @@ Or run the complete container with `docker compose up aerovigil`; dashboard and
 APIs are all exposed on port 8000. The old standalone launch commands remain
 available only for backwards compatibility.
 
+The command line is unified the same way — one tool for every operator task,
+including the digital twin:
+
+```bash
+python -m src advisory examples/payload.json
+python -m src fleet examples/fleet.csv -o fleet_report.md
+python -m src twin status  --asset-id WTG-042 --model Vestas-V90
+python -m src twin simulate --profile overload --hours 12 -o sim.json
+python -m src twin prompt  --asset-id WTG-042
+```
+
 ## Try it right now — offline demo in 2 commands
 
 [![AeroVigil demo GIF](https://raw.githubusercontent.com/rajaram-2005/wind-turbine-pg-bnn/arena%2F019fd767-wind-turbine-pg-bnn/docs/assets/demo.gif)](docs/assets/aerovigil-demo.mp4)

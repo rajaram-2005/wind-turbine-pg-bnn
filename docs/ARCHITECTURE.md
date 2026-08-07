@@ -60,9 +60,9 @@ src/utils/safety.py  enforce_safety_contract  ── screens EVERY outgoing payl
       │
       ├───────────────┬──────────────────┬───────────────────────────────┐
       ▼               ▼                  ▼                               ▼
- src/reporting/   src/api/app.py      src/cli.py / cli_twin.py       src/ui/app.py
- reports.py       FastAPI service      CLIs                          Streamlit UI
- (markdown/JSON)      │                                             (no actuation controls)
+ src/reporting/   src/api/app.py      src/cli.py (+cli_twin.py)      src/ui/app.py
+ reports.py       FastAPI service     unified CLI: advisory / fleet / Streamlit UI
+ (markdown/JSON)      │               report / twin status|simulate|prompt
                       ▼
    /health /advisory /advisory/fleet /twin/* /telemetry/* /fleet/report
 ```
@@ -79,9 +79,13 @@ src/digital_twin/twin.py  WindTurbineDigitalTwin
         │             ├── serving model attached?  rolling buffer → features → model RUL
         │             └── else bnn_state block (previous behavior)
         ├── simulate_scenario(profile) ──► update_state per step
+        │        (seeded RNG per asset → deterministic; hours validated ≤ 1 year)
+        ├── runtime guards ── non-finite values rejected · history capped
+        │        (max_history) · advisory failover bnn_state on model errors
         └── src/digital_twin/prompts.py generate_engineering_prompt (advisory-aware)
         │
-   Consumers: API /twin/status · /twin/simulate · /twin/prompt, twin-* CLIs, UI Digital Twin tab
+   Consumers: API /twin/status · /twin/simulate · /twin/prompt (LRU-bounded
+              registry, AV_TWIN_MAX_ASSETS), unified CLI `twin` group, UI tab
 ```
 
 ### Meta-learning / Hermes onboarding path
@@ -128,9 +132,9 @@ src/models/telemetry/pipeline.py  compress_window / restore_window (surfaces ano
 | `src/agents/hermes.py` | self-training onboarding agent → `OnboardingReport` (safety-screened) | onboard demo, artifacts export |
 | `src/utils/safety.py` | `enforce_safety_contract` — fail-closed key scanner on every boundary | predictor, API, CLI, UI, artifacts |
 | `src/reporting/reports.py` | advisory records → markdown/JSON, `build_fleet_report` | CLI, UI, API `/fleet/report` |
-| `src/digital_twin/` | spec library, twin with advisory bridge, scenario sim, copilot prompts | API `/twin/*`, `twin-*` CLIs, UI |
-| `src/api/` | FastAPI surface (payload-based and model-serving advisory, twin, telemetry, reporting) | deployment |
-| `src/cli.py`, `src/cli_twin.py` | `wind-turbine-bnn`, `twin-status|-simulate|-prompt` | operators |
+| `src/digital_twin/` | spec library, hardened twin runtime (bounded history, deterministic sim, advisory failover), copilot prompts | API `/twin/*`, `twin` CLI group |
+| `src/api/` | FastAPI surface (payload-based and model-serving advisory, twin, telemetry, reporting); LRU-bounded twin registry | deployment |
+| `src/cli.py` + `src/cli_twin.py` | unified `wind-turbine-bnn` CLI with `twin status|simulate|prompt` group (standalone `twin-*` kept for compat) | operators |
 | `src/ui/` | Streamlit advisory UI (single, fleet, digital twin, AeroZip) | operators |
 | `scripts/run_pipeline.py` | config→data→train→eval→export→advisory smoke→`artifacts/pipeline_report.md` | release verification |
 | `scripts/e2e_smoke.py` | in-process FastAPI e2e over every endpoint; non-zero exit on failure | release verification |

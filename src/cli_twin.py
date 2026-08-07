@@ -1,4 +1,17 @@
-"""CLI commands for wind turbine Digital Twin operations (twin-*)."""
+"""CLI commands for wind turbine Digital Twin operations (twin-*).
+
+The three commands (``status``, ``simulate``, ``prompt``) are exposed in two
+equivalent ways:
+
+* standalone entry points ``twin-status`` / ``twin-simulate`` / ``twin-prompt``
+  (backwards compatible), and
+* the ``twin`` subcommand group of the unified application CLI
+  (``wind-turbine-bnn twin status|simulate|prompt``) built by
+  ``src.cli.build_parser``.
+
+Each command builds its own :mod:`argparse` parser, so both surfaces share
+identical flags, help text, and runtime behavior.
+"""
 
 from __future__ import annotations
 
@@ -44,14 +57,15 @@ def load_optional_telemetry(payload_path: str | None) -> tuple[Telemetry | None,
 
 
 # --------------------------------------------------------------------------- #
-# CLI Entrypoints                                                             #
+# Parser builders (shared by the standalone twin-* CLIs and the unified CLI)  #
 # --------------------------------------------------------------------------- #
-
-
-def status_main(argv: Sequence[str] | None = None) -> int:
-    """Entrypoint for `twin-status` CLI."""
+def build_status_parser(
+    prog: str = "twin-status", *, add_help: bool = True
+) -> argparse.ArgumentParser:
+    """Parser for `twin-status` / `wind-turbine-bnn twin status`."""
     parser = argparse.ArgumentParser(
-        prog="twin-status",
+        prog=prog,
+        add_help=add_help,
         description="Fetch or print the current status of a Wind Turbine Digital Twin.",
     )
     parser.add_argument("--asset-id", default="WTG-001", help="Turbine Asset identifier.")
@@ -71,9 +85,52 @@ def status_main(argv: Sequence[str] | None = None) -> int:
         help="Optional trained PG-BNN bundle to attach to the twin "
         "(advisories then come from the model, not bnn_state).",
     )
+    return parser
 
-    args = parser.parse_args(argv)
 
+def build_simulate_parser(
+    prog: str = "twin-simulate", *, add_help: bool = True
+) -> argparse.ArgumentParser:
+    """Parser for `twin-simulate` / `wind-turbine-bnn twin simulate`."""
+    parser = argparse.ArgumentParser(
+        prog=prog,
+        add_help=add_help,
+        description="Simulate wind turbine operations and wear profile progression.",
+    )
+    parser.add_argument("--asset-id", default="WTG-SIM", help="Turbine Asset identifier.")
+    parser.add_argument("--model", default="GE-1.5", help="Turbine model from specs library.")
+    parser.add_argument(
+        "--profile",
+        choices=["nominal", "overload", "derated", "viscosity_loss"],
+        default="nominal",
+        help="Operating profile to simulate.",
+    )
+    parser.add_argument("--hours", type=float, default=24.0, help="Simulation duration in hours.")
+    parser.add_argument("-o", "--output", help="Path to save simulation history JSON.")
+    return parser
+
+
+def build_prompt_parser(
+    prog: str = "twin-prompt", *, add_help: bool = True
+) -> argparse.ArgumentParser:
+    """Parser for `twin-prompt` / `wind-turbine-bnn twin prompt`."""
+    parser = argparse.ArgumentParser(
+        prog=prog,
+        add_help=add_help,
+        description="Generate contextual AI/LLM reliability advisor prompts from Digital Twin state.",
+    )
+    parser.add_argument("--asset-id", default="WTG-001", help="Turbine Asset identifier.")
+    parser.add_argument("--model", default="GE-1.5", help="Turbine model from specs library.")
+    parser.add_argument("--payload", help="Path to optional telemetry payload JSON.")
+    parser.add_argument("-o", "--output", help="Path to write prompt text (default: stdout).")
+    return parser
+
+
+# --------------------------------------------------------------------------- #
+# Command runners                                                              #
+# --------------------------------------------------------------------------- #
+def run_status(args: argparse.Namespace) -> int:
+    """Body of `twin-status`; shared with the unified CLI."""
     configure_utf8_stdio()
 
     try:
@@ -167,25 +224,8 @@ def status_main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-def simulate_main(argv: Sequence[str] | None = None) -> int:
-    """Entrypoint for `twin-simulate` CLI."""
-    parser = argparse.ArgumentParser(
-        prog="twin-simulate",
-        description="Simulate wind turbine operations and wear profile progression.",
-    )
-    parser.add_argument("--asset-id", default="WTG-SIM", help="Turbine Asset identifier.")
-    parser.add_argument("--model", default="GE-1.5", help="Turbine model from specs library.")
-    parser.add_argument(
-        "--profile",
-        choices=["nominal", "overload", "derated", "viscosity_loss"],
-        default="nominal",
-        help="Operating profile to simulate.",
-    )
-    parser.add_argument("--hours", type=float, default=24.0, help="Simulation duration in hours.")
-    parser.add_argument("-o", "--output", help="Path to save simulation history JSON.")
-
-    args = parser.parse_args(argv)
-
+def run_simulate(args: argparse.Namespace) -> int:
+    """Body of `twin-simulate`; shared with the unified CLI."""
     configure_utf8_stdio()
 
     try:
@@ -199,7 +239,11 @@ def simulate_main(argv: Sequence[str] | None = None) -> int:
     print(f"Starting simulation for {args.asset_id} [{spec.model_name}]...")
     print(f"Profile: '{args.profile}', Duration: {args.hours} hours...")
 
-    records = twin.simulate_scenario(profile=args.profile, hours=args.hours)
+    try:
+        records = twin.simulate_scenario(profile=args.profile, hours=args.hours)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
 
     print(f"Simulation completed. Cumulative wear index: {twin.cumulative_wear:.5f}")
     print(f"Final simulated state bearing L10 life: {records[-1]['bearing_l10_hours']:.1f} hours")
@@ -227,19 +271,8 @@ def simulate_main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-def prompt_main(argv: Sequence[str] | None = None) -> int:
-    """Entrypoint for `twin-prompt` CLI."""
-    parser = argparse.ArgumentParser(
-        prog="twin-prompt",
-        description="Generate contextual AI/LLM reliability advisor prompts from Digital Twin state.",
-    )
-    parser.add_argument("--asset-id", default="WTG-001", help="Turbine Asset identifier.")
-    parser.add_argument("--model", default="GE-1.5", help="Turbine model from specs library.")
-    parser.add_argument("--payload", help="Path to optional telemetry payload JSON.")
-    parser.add_argument("-o", "--output", help="Path to write prompt text (default: stdout).")
-
-    args = parser.parse_args(argv)
-
+def run_prompt(args: argparse.Namespace) -> int:
+    """Body of `twin-prompt`; shared with the unified CLI."""
     configure_utf8_stdio()
 
     try:
@@ -278,3 +311,24 @@ def prompt_main(argv: Sequence[str] | None = None) -> int:
         sys.stdout.write(prompt if prompt.endswith("\n") else prompt + "\n")
 
     return 0
+
+
+# --------------------------------------------------------------------------- #
+# Standalone entrypoints                                                       #
+# --------------------------------------------------------------------------- #
+def status_main(argv: Sequence[str] | None = None) -> int:
+    """Entrypoint for `twin-status` CLI."""
+    args = build_status_parser().parse_args(argv)
+    return run_status(args)
+
+
+def simulate_main(argv: Sequence[str] | None = None) -> int:
+    """Entrypoint for `twin-simulate` CLI."""
+    args = build_simulate_parser().parse_args(argv)
+    return run_simulate(args)
+
+
+def prompt_main(argv: Sequence[str] | None = None) -> int:
+    """Entrypoint for `twin-prompt` CLI."""
+    args = build_prompt_parser().parse_args(argv)
+    return run_prompt(args)

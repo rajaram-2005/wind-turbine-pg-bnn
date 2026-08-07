@@ -39,7 +39,7 @@ flowchart TD
 
     subgraph OUT["Delivery boundaries"]
         API["src/api/app.py<br/>/health /advisory /advisory/fleet<br/>/twin/* /telemetry/* /fleet/report"]
-        CLI["src/cli.py · src/cli_twin.py<br/>wind-turbine-bnn · twin-*"]
+        CLI["src/cli.py · src/cli_twin.py<br/>wind-turbine-bnn · twin status|simulate|prompt"]
         UI["src/ui/app.py<br/>Streamlit advisory UI<br/>(no actuation controls)"]
         RPT["src/reporting/reports.py<br/>markdown / JSON fleet reports"]
     end

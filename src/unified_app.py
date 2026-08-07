@@ -24,15 +24,15 @@ multiple servers or ports.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 
 from src.aerovigil_pg_bnn.api import app as model_api
 from src.api.app import create_app as create_operations_api
-
-VERSION = "1.0.0"
+from src.version import APP_VERSION as VERSION
+from src.version import PRODUCT
 
 
 def create_app(*, include_dashboard: bool = True) -> FastAPI:
@@ -51,9 +51,7 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
         # identical to running either API on its own.
         async with AsyncExitStack() as stack:
             await stack.enter_async_context(model_api.router.lifespan_context(model_api))
-            await stack.enter_async_context(
-                operations_api.router.lifespan_context(operations_api)
-            )
+            await stack.enter_async_context(operations_api.router.lifespan_context(operations_api))
             yield
 
     application = FastAPI(
@@ -71,7 +69,7 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
     def health() -> dict:
         return {
             "status": "ok",
-            "product": "AeroVigil",
+            "product": PRODUCT,
             "version": VERSION,
             "advisory_only": True,
             "services": {
@@ -80,6 +78,10 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
                 "operations_docs": "/api/docs",
                 "model_api": "/model-api",
                 "model_docs": "/model-api/docs",
+            },
+            "digital_twin": {
+                "assets_tracked": len(operations_api.state.twins),
+                "max_assets": operations_api.state.twin_max_assets,
             },
         }
 
@@ -90,6 +92,7 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
     if include_dashboard:
         try:
             import gradio as gr
+
             from gradio_app.app import build_interface
         except ImportError as exc:  # clear install guidance instead of a partial app
             raise RuntimeError(
