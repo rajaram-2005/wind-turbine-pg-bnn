@@ -91,6 +91,18 @@ ADVISORY ENGINE OUTPUT (source: {current_state.get("advisory_source", "unknown")
 - Suggested inspection window: {advisory["suggested_inspection_window_days"]:.1f} days
 - Early warning (45-day horizon): {"TRIGGERED" if advisory["early_warning_triggered"] else "not triggered"}
 """
+        agent_team = current_state.get("agent_team")
+        if agent_team:
+            mika = agent_team["agents"]["mika"]
+            kai = agent_team["agents"]["kai"]
+            prompt += f"""
+CYBER PRIME DUAL-AGENT ASSESSMENT:
+- Team agreement indicator: {agent_team["agreement_score_pct"]:.1f}%
+- MIKA / Maintenance Strategist: {mika["finding"]}
+- KAI / Physics Constraint Sentinel: {kai["finding"]}
+- Shared summary: {agent_team["shared_summary"]}
+- Evidence connections: {", ".join(agent_team["connected_sources"])}
+"""
     else:
         prompt += "(No telemetry records available)\n"
 

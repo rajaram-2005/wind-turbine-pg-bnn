@@ -18,6 +18,9 @@ def test_unified_health_discovers_every_surface():
         assert body["advisory_only"] is True
         assert body["services"]["operations_api"] == "/api"
         assert body["services"]["model_api"] == "/model-api"
+        assert body["agent_mesh"]["agents"] == ["MIKA", "KAI"]
+        assert body["agent_mesh"]["status"] == "connected"
+        assert body["agent_mesh"]["evidence_path"][-1] == "HUMAN"
 
 
 def test_operations_api_is_connected_under_one_boundary():

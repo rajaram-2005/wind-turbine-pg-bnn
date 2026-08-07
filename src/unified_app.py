@@ -83,6 +83,12 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
                 "assets_tracked": len(operations_api.state.twins),
                 "max_assets": operations_api.state.twin_max_assets,
             },
+            "agent_mesh": {
+                "team_id": "CYBER_PRIME_DUAL_AGENT",
+                "agents": ["MIKA", "KAI"],
+                "status": "connected",
+                "evidence_path": ["SCADA", "PG-BNN", "ISO 281", "TWIN", "FLEET", "HUMAN"],
+            },
         }
 
     # Mount APIs before the catch-all dashboard route.
@@ -93,7 +99,7 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
         try:
             import gradio as gr
 
-            from gradio_app.app import build_interface
+            from gradio_app.app import APP_CSS, build_interface
         except ImportError as exc:  # clear install guidance instead of a partial app
             raise RuntimeError(
                 "The unified dashboard requires demo dependencies; "
@@ -106,6 +112,8 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
             dashboard,
             path="/",
             allowed_paths=None,
+            theme=gr.themes.Soft(primary_hue="teal", secondary_hue="cyan", neutral_hue="slate"),
+            css=APP_CSS,
         )
     else:
 

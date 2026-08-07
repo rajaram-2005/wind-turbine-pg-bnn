@@ -30,6 +30,7 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.agents.cyber_team import build_cyber_team_brief
 from src.api.schemas import (
     AdvisoryRequest,
     AdvisoryResponse,
@@ -85,6 +86,19 @@ def _advisory_or_422(payload: TurbinePayload, serving=None, window_df=None) -> d
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+def _connect_agent_team(payload: TurbinePayload, recommendation: dict) -> dict:
+    """Attach the same MIKA + KAI brief used by twin and dashboard surfaces."""
+    enriched = dict(recommendation)
+    enriched["agent_team"] = build_cyber_team_brief(
+        asset_id=payload.asset_id,
+        predicted_rul_days=recommendation.get("predicted_rul_days"),
+        epistemic_std=recommendation.get("epistemic_std", 0.0),
+        physics_violations=recommendation.get("physics_violations", []),
+        telemetry=payload.telemetry.model_dump(),
+    )
+    return enforce_safety_contract(enriched)
+
+
 def create_app() -> FastAPI:
     """Application factory. Creates a fresh FastAPI instance each call."""
     app = FastAPI(
@@ -134,6 +148,11 @@ def create_app() -> FastAPI:
             "website": WEBSITE,
             "advisory_only": True,
             "serving_model_loaded": app.state.serving is not None,
+            "agent_team": {
+                "team_id": "CYBER_PRIME_DUAL_AGENT",
+                "agents": ["MIKA", "KAI"],
+                "connected_surfaces": ["advisory", "fleet", "twin", "prompt", "cli", "dashboard"],
+            },
             "endpoints": [
                 "/health",
                 "/advisory",
@@ -169,12 +188,12 @@ def create_app() -> FastAPI:
         if payload.telemetry_window is not None:
             window_df = pd.DataFrame(payload.telemetry_window.model_dump())
         rec = _advisory_or_422(payload, serving=app.state.serving, window_df=window_df)
-        enforce_safety_contract(rec)  # defense in depth
+        rec = _connect_agent_team(payload, rec)
         return AdvisoryResponse(**rec)
 
     @app.post("/advisory/fleet", response_model=FleetResponse)
     def advisory_fleet(req: FleetRequest) -> FleetResponse:
-        records = [_advisory_or_422(p) for p in req.assets]
+        records = [_connect_agent_team(p, _advisory_or_422(p)) for p in req.assets]
         for r in records:
             enforce_safety_contract(r)
         util = expected_asset_utilization([r["predicted_rul_days"] for r in records])
@@ -312,6 +331,7 @@ def create_app() -> FastAPI:
             "history_limit": twin.max_history,
             "serving_model_loaded": app.state.serving is not None,
             "advisory_source": (last or {}).get("advisory_source"),
+            "agent_team": (last or {}).get("agent_team"),
             "last_state": last,
             "advisory_only": True,
         }
@@ -343,6 +363,7 @@ def create_app() -> FastAPI:
             "final_bearing_l10_hours": records[-1]["bearing_l10_hours"] if records else None,
             "last_records": records[-5:],
             "last_advisory": advisories[-1] if advisories else None,
+            "agent_team": records[-1].get("agent_team") if records else None,
             "advisory_only": True,
         }
         enforce_safety_contract(body)

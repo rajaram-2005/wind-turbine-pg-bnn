@@ -91,6 +91,36 @@ The twin runtime is hardened for long-running, unattended operation:
 
 ---
 
+## Connected Cyber Prime agent mesh
+
+Every twin state now carries one shared `agent_team` brief produced by
+`src.agents.cyber_team`. This prevents separate product surfaces from inventing
+contradictory interpretations:
+
+- **MIKA** translates RUL, uncertainty, and risk into maintenance-planning language.
+- **KAI** explains physical violations, ISO 281 bearing evidence, telemetry, and wear.
+- The same brief flows through twin history, `/advisory`, `/advisory/fleet`,
+  `/twin/status`, `/twin/simulate`, engineering prompts, CLI output, prediction
+  cards, fleet cards, and the Cyber Twin HUD.
+- `connected_sources` records which evidence points contributed. The agreement
+  score is a coordination indicator, not a calibrated probability.
+
+The Cyber Twin command center also provides:
+
+- **Component Resonance Scan** — scenario-relative health indicators for the
+  rotor, main bearing, gearbox, generator, and converter.
+- **Scenario Lab** — synchronized comparison of multiple operating futures,
+  including RUL runway, wear, stress, uncertainty, and illustrative energy.
+- **Agent Copilot** — evidence-grounded MIKA/KAI answers for maintenance and
+  physics questions; this is deterministic synthesis, not an unbounded LLM.
+- **Human decision gate** — acknowledge, request engineering review, or
+  escalate the evidence without sending control commands to the turbine.
+
+```text
+SCADA → PG-BNN → ISO 281 / constraints → Digital Twin wear → Fleet priority → Human review
+                  ↘ MIKA + KAI shared advisory brief ↗
+```
+
 ## Safety & Non-Actuation Contract
 As with all modules in `wind-turbine-pg-bnn`, the digital twin does not command or dictate physical systems:
 - No manual actuator, throttle, or LOTO procedures are suggested.

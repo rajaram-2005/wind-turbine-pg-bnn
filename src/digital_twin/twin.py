@@ -30,6 +30,7 @@ from typing import Any
 
 import pandas as pd
 
+from src.agents.cyber_team import build_cyber_team_brief
 from src.data.ingest import CHANNELS
 from src.digital_twin.specs import TurbineSpec
 from src.physics.constraints import (
@@ -215,6 +216,20 @@ class WindTurbineDigitalTwin:
         # Bridge to the advisory engine: model path when a serving model is
         # attached, else the incoming bnn_state block (previous behavior).
         advisory, advisory_source, advisory_error = self._compute_advisory(telemetry, bnn_state)
+        team_rul = advisory.get("predicted_rul_days") if advisory else None
+        team_uncertainty = advisory.get("epistemic_std", 0.0) if advisory else 0.0
+        if team_rul is None and bnn_state is not None:
+            team_rul = bnn_state.predicted_rul_days
+            team_uncertainty = bnn_state.epistemic_uncertainty
+        agent_team = build_cyber_team_brief(
+            asset_id=self.asset_id,
+            predicted_rul_days=team_rul,
+            epistemic_std=team_uncertainty,
+            physics_violations=violations,
+            cumulative_wear=self.cumulative_wear,
+            bearing_l10_hours=l10_hours,
+            telemetry=telemetry_dict,
+        )
 
         state_record = {
             "timestamp": timestamp.isoformat(),
@@ -226,6 +241,7 @@ class WindTurbineDigitalTwin:
             "advisory": advisory,
             "advisory_source": advisory_source,
             "advisory_error": advisory_error,
+            "agent_team": agent_team,
         }
         self.state_history.append(state_record)
         if len(self.state_history) > self.max_history:
