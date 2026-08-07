@@ -620,7 +620,7 @@ def make_radar_chart(vibration, bearing_temp, gen_temp, power, wind_speed, hours
                 "Vibration",
             ],
             fill="toself",
-            fillcolor=f"{colors['primary']}22",
+            fillcolor="#00e5a022",
             line={"color": colors["primary"], "width": 2},
             marker={"size": 6, "color": colors["primary"]},
         )
