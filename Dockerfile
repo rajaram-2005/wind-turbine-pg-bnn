@@ -52,8 +52,9 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONFAULTHANDLER=1
 ENV APP_HOME=/app
-ENV MODEL_PATH=/app/models/bnn_demo.pt
-ENV CONFIG_PATH=/app/config.json
+ENV MODEL_PATH=/app/artifacts/pg_bnn_demo/bnn_demo.pt
+ENV CONFIG_PATH=/app/artifacts/pg_bnn_demo/config.json
+ENV SCALER_PATH=/app/artifacts/pg_bnn_demo/scaler.npz
 ENV PORT=8000
 
 # Install runtime system dependencies
@@ -75,8 +76,8 @@ RUN pip install --no-cache-dir /tmp/*.whl \
 
 # Copy application code
 COPY src/ ${APP_HOME}/src/
-COPY config.json ${CONFIG_PATH}
-COPY artifacts/bnn_demo.pt ${MODEL_PATH}
+COPY config.json /app/config.json
+COPY artifacts/ ${APP_HOME}/artifacts/
 
 # Copy and set permissions for entrypoint
 COPY docker/entrypoint.sh /entrypoint.sh
@@ -107,6 +108,9 @@ ARG PYTHON_VERSION=3.11
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV APP_HOME=/app
+ENV MODEL_PATH=/app/artifacts/pg_bnn_demo/bnn_demo.pt
+ENV CONFIG_PATH=/app/artifacts/pg_bnn_demo/config.json
+ENV SCALER_PATH=/app/artifacts/pg_bnn_demo/scaler.npz
 ENV PORT=8000
 
 # Install Python and dependencies
@@ -130,8 +134,8 @@ COPY --from=builder /build/dist/*.whl /tmp/
 RUN pip install --no-cache-dir /tmp/*.whl && rm -rf /tmp/*.whl
 
 COPY src/ ${APP_HOME}/src/
-COPY config.json ${CONFIG_PATH}
-COPY artifacts/bnn_demo.pt ${MODEL_PATH}
+COPY config.json /app/config.json
+COPY artifacts/ ${APP_HOME}/artifacts/
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

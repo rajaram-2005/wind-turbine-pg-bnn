@@ -19,11 +19,10 @@ import json
 import math
 import subprocess
 import sys
-import textwrap
 import wave
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import imageio_ffmpeg
 import matplotlib
@@ -177,14 +176,24 @@ def load_fonts() -> dict[str, ImageFont.FreeTypeFont]:
 FONTS = load_fonts()
 
 
-def rounded_panel(img: Image.Image, box: tuple[int, int, int, int], fill: str, outline: str | None = None) -> None:
+def rounded_panel(
+    img: Image.Image, box: tuple[int, int, int, int], fill: str, outline: str | None = None
+) -> None:
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
     draw.rounded_rectangle(box, radius=28, fill=fill, outline=outline, width=2 if outline else 0)
     img.alpha_composite(overlay)
 
 
-def write_wrapped(draw: ImageDraw.ImageDraw, text: str, xy: tuple[int, int], width: int, font, fill: str, line_spacing: int = 10) -> int:
+def write_wrapped(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    xy: tuple[int, int],
+    width: int,
+    font,
+    fill: str,
+    line_spacing: int = 10,
+) -> int:
     words = text.split()
     lines: list[str] = []
     current = ""
@@ -204,10 +213,14 @@ def write_wrapped(draw: ImageDraw.ImageDraw, text: str, xy: tuple[int, int], wid
     return y
 
 
-def chip(draw: ImageDraw.ImageDraw, xy: tuple[int, int], text: str, fg: str = CYAN, bg: str = "#12314f") -> int:
+def chip(
+    draw: ImageDraw.ImageDraw, xy: tuple[int, int], text: str, fg: str = CYAN, bg: str = "#12314f"
+) -> int:
     bbox = draw.textbbox((0, 0), text, font=FONTS["chip"])
     width = bbox[2] - bbox[0] + 28
-    draw.rounded_rectangle((xy[0], xy[1], xy[0] + width, xy[1] + 42), radius=20, fill=bg, outline=fg)
+    draw.rounded_rectangle(
+        (xy[0], xy[1], xy[0] + width, xy[1] + 42), radius=20, fill=bg, outline=fg
+    )
     draw.text((xy[0] + 14, xy[1] + 8), text, font=FONTS["chip"], fill=fg)
     return width
 
@@ -227,7 +240,9 @@ def make_canvas() -> Image.Image:
 def cover_image(path: Path, size: tuple[int, int]) -> Image.Image:
     src = Image.open(path).convert("RGBA")
     scale = max(size[0] / src.width, size[1] / src.height)
-    resized = src.resize((int(src.width * scale), int(src.height * scale)), Image.Resampling.LANCZOS)
+    resized = src.resize(
+        (int(src.width * scale), int(src.height * scale)), Image.Resampling.LANCZOS
+    )
     left = (resized.width - size[0]) // 2
     top = (resized.height - size[1]) // 2
     return resized.crop((left, top, left + size[0], top + size[1]))
@@ -238,12 +253,20 @@ def gauge_card(stats: Stats, subtitle: str) -> Image.Image:
     img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     color, card_bg = style_for(stats.risk)
-    draw.rounded_rectangle((0, 0, width - 1, height - 1), radius=30, fill=card_bg, outline=color, width=2)
+    draw.rounded_rectangle(
+        (0, 0, width - 1, height - 1), radius=30, fill=card_bg, outline=color, width=2
+    )
     cx, cy = 150, 150
     outer = 102
     inner = 68
     draw.ellipse((cx - outer, cy - outer, cx + outer, cy + outer), fill="#0c172a")
-    draw.arc((cx - outer, cy - outer, cx + outer, cy + outer), start=-90, end=270, fill="#33465f", width=16)
+    draw.arc(
+        (cx - outer, cy - outer, cx + outer, cy + outer),
+        start=-90,
+        end=270,
+        fill="#33465f",
+        width=16,
+    )
     progress = min(max(stats.mean / 365.0, 0.02), 1.0)
     draw.arc(
         (cx - outer, cy - outer, cx + outer, cy + outer),
@@ -298,7 +321,14 @@ def scene1_release_banner() -> Image.Image:
     img = make_canvas()
     draw = ImageDraw.Draw(img)
     draw.text((70, 120), "AeroVigil", font=FONTS["title"], fill=TEXT)
-    write_wrapped(draw, "Physics-guided AI for 45-day wind turbine early warning", (70, 210), 650, FONTS["h2"], CYAN)
+    write_wrapped(
+        draw,
+        "Physics-guided AI for 45-day wind turbine early warning",
+        (70, 210),
+        650,
+        FONTS["h2"],
+        CYAN,
+    )
     return img
 
 
@@ -337,7 +367,14 @@ def scene3_vitals_panel() -> Image.Image:
     img = make_canvas()
     draw = ImageDraw.Draw(img)
     draw.text((70, 58), "Read the turbine's vital signs", font=FONTS["h1"], fill=TEXT)
-    write_wrapped(draw, "No new hardware: AeroVigil reads six standard telemetry signals and turns them into an advisory.", (70, 120), 660, FONTS["body"], MUTED)
+    write_wrapped(
+        draw,
+        "No new hardware: AeroVigil reads six standard telemetry signals and turns them into an advisory.",
+        (70, 120),
+        660,
+        FONTS["body"],
+        MUTED,
+    )
     rounded_panel(img, (84, 210, 1190, 590), fill="#0f1f36", outline="#23547d")
     rows = [
         ("Vibration", "12.5 mm/s", 0.46),
@@ -372,7 +409,12 @@ def scene4_or_5(stats: Stats, title: str, subtitle: str) -> Image.Image:
     rounded_panel(img, (620, 216, 1230, 596), fill="#0e1a30", outline="#244b73")
     img.alpha_composite(hist, (625, 220))
     draw.rounded_rectangle((70, 632, 1180, 680), radius=18, fill="#0f2138")
-    draw.text((98, 644), f"Mean {stats.mean:.1f} d   ·   ±{stats.std:.1f} d   ·   45-day line = schedule before rescue", font=FONTS["body"], fill=color)
+    draw.text(
+        (98, 644),
+        f"Mean {stats.mean:.1f} d   ·   ±{stats.std:.1f} d   ·   45-day line = schedule before rescue",
+        font=FONTS["body"],
+        fill=color,
+    )
     return img
 
 
@@ -410,7 +452,14 @@ def scene7_safety() -> Image.Image:
     img = make_canvas()
     draw = ImageDraw.Draw(img)
     draw.text((70, 58), "Advisory only", font=FONTS["h1"], fill=TEXT)
-    write_wrapped(draw, "The system never takes control. A fail-closed safety contract screens outputs before they leave the boundary.", (70, 122), 720, FONTS["body"], MUTED)
+    write_wrapped(
+        draw,
+        "The system never takes control. A fail-closed safety contract screens outputs before they leave the boundary.",
+        (70, 122),
+        720,
+        FONTS["body"],
+        MUTED,
+    )
     rounded_panel(img, (74, 224, 1180, 610), fill="#0f1f36", outline="#264d75")
     # padlock icon
     draw.rounded_rectangle((176, 328, 404, 548), radius=26, fill="#132848", outline=CYAN, width=3)
@@ -418,11 +467,13 @@ def scene7_safety() -> Image.Image:
     draw.rectangle((252, 410, 326, 468), fill=CYAN)
     draw.ellipse((281, 448, 297, 464), fill="#132848")
     draw.text((500, 300), "ADVISORY ONLY", font=FONTS["title"], fill=TEXT)
-    for idx, line in enumerate([
-        "No control commands",
-        "No LOTO / part-number instructions",
-        "Humans decide the maintenance action",
-    ]):
+    for idx, line in enumerate(
+        [
+            "No control commands",
+            "No LOTO / part-number instructions",
+            "Humans decide the maintenance action",
+        ]
+    ):
         y = 392 + idx * 66
         draw.rounded_rectangle((506, y + 2, 528, y + 24), radius=6, fill=TEAL)
         draw.text((548, y - 8), line, font=FONTS["body"], fill=MUTED)
@@ -433,7 +484,14 @@ def scene8_scoreboard() -> Image.Image:
     img = make_canvas()
     draw = ImageDraw.Draw(img)
     draw.text((70, 62), "AeroVigil", font=FONTS["title"], fill=TEXT)
-    write_wrapped(draw, "Open-source, offline-capable demo package for 45-day early warning.", (72, 134), 620, FONTS["body"], MUTED)
+    write_wrapped(
+        draw,
+        "Open-source, offline-capable demo package for 45-day early warning.",
+        (72, 134),
+        620,
+        FONTS["body"],
+        MUTED,
+    )
     cards = [
         ("94.2%", "early-warning accuracy", TEAL),
         ("100%", "recall", CYAN),
@@ -538,7 +596,9 @@ def make_zoom_segment(image_path: Path, duration: float, out_path: Path) -> None
 def concat_video_segments(segments: list[Path], out_path: Path) -> None:
     concat_list = TEMP_DIR / "segments.txt"
     concat_list.write_text("".join(f"file '{p.resolve()}'\n" for p in segments), encoding="utf-8")
-    run_ffmpeg(["-y", "-f", "concat", "-safe", "0", "-i", str(concat_list), "-c", "copy", str(out_path)])
+    run_ffmpeg(
+        ["-y", "-f", "concat", "-safe", "0", "-i", str(concat_list), "-c", "copy", str(out_path)]
+    )
 
 
 def mux_audio(video_path: Path, audio_path: Path, out_path: Path) -> None:
@@ -565,7 +625,16 @@ def build_gif(scene4: Path, scene5: Path, out_gif: Path) -> None:
     gif_source = TEMP_DIR / "gif_source.mp4"
     concat_video_segments([scene4, scene5], gif_source)
     palette = TEMP_DIR / "palette.png"
-    run_ffmpeg(["-y", "-i", str(gif_source), "-vf", "fps=10,scale=640:-1:flags=lanczos,palettegen", str(palette)])
+    run_ffmpeg(
+        [
+            "-y",
+            "-i",
+            str(gif_source),
+            "-vf",
+            "fps=10,scale=640:-1:flags=lanczos,palettegen",
+            str(palette),
+        ]
+    )
     run_ffmpeg(
         [
             "-y",
@@ -593,15 +662,27 @@ def main() -> int:
     bundle = load_bundle()
     healthy = mc_stats(bundle, "healthy", SCENARIOS["healthy"], n_samples=100)
     critical = mc_stats(bundle, "critical", SCENARIOS["critical"], n_samples=100)
-    print(f"healthy: mean={healthy.mean:.2f} std={healthy.std:.2f} ci=({healthy.ci_low:.2f}, {healthy.ci_high:.2f})")
-    print(f"critical: mean={critical.mean:.2f} std={critical.std:.2f} ci=({critical.ci_low:.2f}, {critical.ci_high:.2f})")
+    print(
+        f"healthy: mean={healthy.mean:.2f} std={healthy.std:.2f} ci=({healthy.ci_low:.2f}, {healthy.ci_high:.2f})"
+    )
+    print(
+        f"critical: mean={critical.mean:.2f} std={critical.std:.2f} ci=({critical.ci_low:.2f}, {critical.ci_high:.2f})"
+    )
 
     scenes = [
         scene1_release_banner(),
         scene2_cost_of_surprise(),
         scene3_vitals_panel(),
-        scene4_or_5(healthy, "Healthy machine", f"Real MCVI inference on the healthy preset. Mean = {healthy.mean:.1f} days."),
-        scene4_or_5(critical, "Critical machine", f"Real MCVI inference on the critical preset. Mean = {critical.mean:.1f} days."),
+        scene4_or_5(
+            healthy,
+            "Healthy machine",
+            f"Real MCVI inference on the healthy preset. Mean = {healthy.mean:.1f} days.",
+        ),
+        scene4_or_5(
+            critical,
+            "Critical machine",
+            f"Real MCVI inference on the critical preset. Mean = {critical.mean:.1f} days.",
+        ),
         scene6_distribution(critical),
         scene7_safety(),
         scene8_scoreboard(),

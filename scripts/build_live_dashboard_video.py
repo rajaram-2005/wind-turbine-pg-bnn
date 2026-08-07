@@ -67,10 +67,10 @@ ORANGE = "#ff9b5f"
 GREEN = "#3dd9b4"
 
 RISK_META = {
-    "LOW":       (GREEN,  "#0f241f", "LOW RISK · healthy trend"),
-    "MODERATE":  (GOLD,   "#2c2611", "MODERATE RISK · inside 45-day plan window"),
-    "HIGH":      (ORANGE, "#2b1b13", "HIGH RISK · intervention soon"),
-    "CRITICAL":  (RED,    "#2a1118", "CRITICAL RISK · act now"),
+    "LOW": (GREEN, "#0f241f", "LOW RISK · healthy trend"),
+    "MODERATE": (GOLD, "#2c2611", "MODERATE RISK · inside 45-day plan window"),
+    "HIGH": (ORANGE, "#2b1b13", "HIGH RISK · intervention soon"),
+    "CRITICAL": (RED, "#2a1118", "CRITICAL RISK · act now"),
 }
 
 SCENARIOS = {
@@ -91,13 +91,19 @@ SCENARIOS = {
     },
 }
 
-FEATURE_LABELS = ["vibration_rms", "bearing_temp", "generator_temp",
-                  "power_output", "wind_speed", "operating_hours"]
+FEATURE_LABELS = [
+    "vibration_rms",
+    "bearing_temp",
+    "generator_temp",
+    "power_output",
+    "wind_speed",
+    "operating_hours",
+]
 CHIP_SHORT_LABELS = ["vibration", "bear temp", "gen temp", "power", "wind", "run hours"]
 CHIP_UNITS = ["mm/s", "°C", "°C", "kW", "m/s", "h"]
 CHIP_NUMS = {
-    "healthy":  [1.5, 65.0, 80.0, 2000.0, 9.0, 1000.0],
-    "warning":  [20.0, 88.0, 115.0, 2100.0, 11.0, 52000.0],
+    "healthy": [1.5, 65.0, 80.0, 2000.0, 9.0, 1000.0],
+    "warning": [20.0, 88.0, 115.0, 2100.0, 11.0, 52000.0],
     "critical": [34.0, 118.0, 150.0, 2400.0, 12.0, 78000.0],
 }
 
@@ -105,9 +111,11 @@ CHIP_NUMS = {
 def format_chips(nums: list[float]) -> list[str]:
     out = []
     for i, v in enumerate(nums):
-        out.append(f"{v:.1f} {CHIP_UNITS[i]}" if CHIP_UNITS[i] == "mm/s"
-                   else f"{v:,.0f} {CHIP_UNITS[i]}")
+        out.append(
+            f"{v:.1f} {CHIP_UNITS[i]}" if CHIP_UNITS[i] == "mm/s" else f"{v:,.0f} {CHIP_UNITS[i]}"
+        )
     return out
+
 
 REC_TITLES = {
     "LOW": "Healthy outlook: keep standard monitoring",
@@ -116,15 +124,23 @@ REC_TITLES = {
     "CRITICAL": "Urgent action: stage crane + crew now",
 }
 REC_BODIES = {
-    "LOW": ("Telemetry looks nominal. Keep trend monitoring on the normal cadence "
-            "and use this as a baseline for future comparisons."),
-    "MODERATE": ("This is your proactive-maintenance zone. Put the turbine on the "
-                 "next maintenance schedule so you avoid a surprise breakdown."),
-    "HIGH": ("The model still sees time to organize the work, but not to wait. "
-             "Confirm parts, watch the trend daily, and reserve your field team."),
-    "CRITICAL": ("Failure risk is inside two weeks. Treat this as a rescue-avoidance "
-                 "window: lock a crane slot, pre-stage spares, and schedule the "
-                 "intervention immediately."),
+    "LOW": (
+        "Telemetry looks nominal. Keep trend monitoring on the normal cadence "
+        "and use this as a baseline for future comparisons."
+    ),
+    "MODERATE": (
+        "This is your proactive-maintenance zone. Put the turbine on the "
+        "next maintenance schedule so you avoid a surprise breakdown."
+    ),
+    "HIGH": (
+        "The model still sees time to organize the work, but not to wait. "
+        "Confirm parts, watch the trend daily, and reserve your field team."
+    ),
+    "CRITICAL": (
+        "Failure risk is inside two weeks. Treat this as a rescue-avoidance "
+        "window: lock a crane slot, pre-stage spares, and schedule the "
+        "intervention immediately."
+    ),
 }
 
 AUDIO_DIR = ROOT / "docs" / "assets" / "audio"
@@ -134,16 +150,16 @@ FRAMES_DIR = Path("/tmp") / "av_live_frames"
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 
 # Timeline anchors (seconds)
-T_LOAD = 8.0          # page fully loaded
-T_CLICK1 = 12.0       # Predict (healthy)
-T_RES1 = 14.0         # healthy results land
-T_SEL_WARN = 23.0     # select warning scenario
-T_CLICK2 = 25.0       # Predict (warning)
+T_LOAD = 8.0  # page fully loaded
+T_CLICK1 = 12.0  # Predict (healthy)
+T_RES1 = 14.0  # healthy results land
+T_SEL_WARN = 23.0  # select warning scenario
+T_CLICK2 = 25.0  # Predict (warning)
 T_RES2 = 26.5
-T_SEL_CRIT = 34.5     # select critical
+T_SEL_CRIT = 34.5  # select critical
 T_CLICK3 = 37.0
 T_RES3 = 38.5
-T_SEL_HEAL = 48.0     # back to healthy
+T_SEL_HEAL = 48.0  # back to healthy
 T_CLICK4 = 50.5
 T_RES4 = 51.5
 T_ENDCARD = 54.5
@@ -209,9 +225,11 @@ def load_stats() -> dict[str, Stats]:
             latency_ms=latency_ms,
             preds=arr,
         )
-        print(f"  {name:9s} mean={m:6.1f} σ={arr.std():5.1f} "
-              f"ci=[{np.percentile(arr, 2.5):6.1f},{np.percentile(arr, 97.5):6.1f}] "
-              f"risk={risk_for(m):8s} {latency_ms:4.0f} ms")
+        print(
+            f"  {name:9s} mean={m:6.1f} σ={arr.std():5.1f} "
+            f"ci=[{np.percentile(arr, 2.5):6.1f},{np.percentile(arr, 97.5):6.1f}] "
+            f"risk={risk_for(m):8s} {latency_ms:4.0f} ms"
+        )
     return out
 
 
@@ -254,9 +272,7 @@ def ease(t: float) -> float:
 def lerp_color(c1: str, c2: str, t: float) -> str:
     r1, g1, b1 = ImageColor.getrgb(c1)
     r2, g2, b2 = ImageColor.getrgb(c2)
-    return "#{:02x}{:02x}{:02x}".format(
-        int(lerp(r1, r2, t)), int(lerp(g1, g2, t)), int(lerp(b1, b2, t))
-    )
+    return f"#{int(lerp(r1, r2, t)):02x}{int(lerp(g1, g2, t)):02x}{int(lerp(b1, b2, t)):02x}"
 
 
 def canvas() -> Image.Image:
@@ -270,14 +286,27 @@ def canvas() -> Image.Image:
     return img
 
 
-def panel(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int],
-          fill: str = PANEL, outline: str | None = None, radius: int = 22) -> None:
-    draw.rounded_rectangle(box, radius=radius, fill=fill,
-                           outline=outline or "rgba(124,211,255,45)", width=1)
+def panel(
+    draw: ImageDraw.ImageDraw,
+    box: tuple[int, int, int, int],
+    fill: str = PANEL,
+    outline: str | None = None,
+    radius: int = 22,
+) -> None:
+    draw.rounded_rectangle(
+        box, radius=radius, fill=fill, outline=outline or "rgba(124,211,255,45)", width=1
+    )
 
 
-def write_wrapped(draw: ImageDraw.ImageDraw, text: str, xy: tuple[int, int],
-                  width: int, font, fill: str, spacing: int = 4) -> int:
+def write_wrapped(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    xy: tuple[int, int],
+    width: int,
+    font,
+    fill: str,
+    spacing: int = 4,
+) -> int:
     words = text.split()
     lines, cur = [], ""
     for w in words:
@@ -329,12 +358,15 @@ def draw_hero(img: Image.Image, active: str, load_alpha: float) -> None:
     d.text((40, 58), "AEROVIGIL · LIVE DASHBOARD", font=FONTS["kicker"], fill=CYAN)
     d.text((26, 82), "Wind-turbine RUL early warning", font=FONTS["title"], fill=TEXT)
     # chips
-    for i, chip_txt in enumerate(["45-day horizon", "100 MC passes", "Physics-guided · ISO 281", "Uncertainty-aware"]):
+    for i, chip_txt in enumerate(
+        ["45-day horizon", "100 MC passes", "Physics-guided · ISO 281", "Uncertainty-aware"]
+    ):
         b = d.textbbox((0, 0), chip_txt, font=FONTS["chip"])
         w = b[2] - b[0] + 22
         x = 26 + i * (w + 9)
-        d.rounded_rectangle((x, 122, x + w, 148), radius=13,
-                            fill=(32, 211, 194, 22), outline=(32, 211, 194, 66))
+        d.rounded_rectangle(
+            (x, 122, x + w, 148), radius=13, fill=(32, 211, 194, 22), outline=(32, 211, 194, 66)
+        )
         d.text((x + 11, 126), chip_txt, font=FONTS["chip"], fill=CYAN)
     # right: scenario segmented control
     d.text((806, 60), "Scenario", font=FONTS["small"], fill=MUTED)
@@ -354,9 +386,16 @@ def draw_hero(img: Image.Image, active: str, load_alpha: float) -> None:
         x += w + 8
 
 
-def draw_gauge(img: Image.Image, box: tuple[int, int, int, int], mean_val: float,
-               sigma: float, ring_color: str, risk_text: str, risk_color: str,
-               fade: float = 1.0) -> None:
+def draw_gauge(
+    img: Image.Image,
+    box: tuple[int, int, int, int],
+    mean_val: float,
+    sigma: float,
+    ring_color: str,
+    risk_text: str,
+    risk_color: str,
+    fade: float = 1.0,
+) -> None:
     x0, y0, x1, y1 = box
     overlay = Image.new("RGBA", (FRAME_W, FRAME_H), (0, 0, 0, 0))
     d = ImageDraw.Draw(overlay)
@@ -364,10 +403,21 @@ def draw_gauge(img: Image.Image, box: tuple[int, int, int, int], mean_val: float
     cx, cy = x0 + 118, y0 + 88
     outer, inner = 82, 55
     d.ellipse((cx - outer, cy - outer, cx + outer, cy + outer), fill="#0c172a")
-    d.arc((cx - outer, cy - outer, cx + outer, cy + outer), start=-90, end=270, fill="#33465f", width=14)
+    d.arc(
+        (cx - outer, cy - outer, cx + outer, cy + outer),
+        start=-90,
+        end=270,
+        fill="#33465f",
+        width=14,
+    )
     progress = max(0.02, min(mean_val / 365.0, 1.0))
-    d.arc((cx - outer, cy - outer, cx + outer, cy + outer),
-          start=-90, end=-90 + int(progress * 360), fill=ring_color, width=14)
+    d.arc(
+        (cx - outer, cy - outer, cx + outer, cy + outer),
+        start=-90,
+        end=-90 + int(progress * 360),
+        fill=ring_color,
+        width=14,
+    )
     d.ellipse((cx - inner, cy - inner, cx + inner, cy + inner), fill="#07111f")
     num = f"{mean_val:.0f}"
     b = d.textbbox((0, 0), num, font=FONTS["gauge"])
@@ -380,23 +430,35 @@ def draw_gauge(img: Image.Image, box: tuple[int, int, int, int], mean_val: float
     d.text((cx - (b[2] - b[0]) / 2, cy + 50), sub, font=FONTS["chip"], fill=CYAN)
     # right side: risk + note
     d.text((x0 + 226, y0 + 26), risk_text, font=FONTS["h2"], fill=risk_color)
-    write_wrapped(d, "AeroVigil estimates how much runway remains before the turbine "
-                     "enters the caution window.", (x0 + 226, y0 + 68), x1 - x0 - 244,
-                  FONTS["small"], MUTED, 4)
+    write_wrapped(
+        d,
+        "AeroVigil estimates how much runway remains before the turbine enters the caution window.",
+        (x0 + 226, y0 + 68),
+        x1 - x0 - 244,
+        FONTS["small"],
+        MUTED,
+        4,
+    )
     if fade < 1.0:
         overlay = overlay.filter(ImageFilter.GaussianBlur(0.4))
     img.alpha_composite(overlay)
 
 
-def draw_badge(img: Image.Image, box: tuple[int, int, int, int], risk: str, fade: float = 1.0) -> None:
+def draw_badge(
+    img: Image.Image, box: tuple[int, int, int, int], risk: str, fade: float = 1.0
+) -> None:
     color, bg, label = RISK_META[risk]
     overlay = Image.new("RGBA", (FRAME_W, FRAME_H), (0, 0, 0, 0))
     d = ImageDraw.Draw(overlay)
     d.rounded_rectangle(box, radius=999, fill=bg, outline=color, width=2)
     b = d.textbbox((0, 0), label, font=FONTS["chip"])
     tw = b[2] - b[0]
-    d.text(((box[0] + box[2]) / 2 - tw / 2, (box[1] + box[3]) / 2 - 9), label,
-           font=FONTS["chip"], fill=color)
+    d.text(
+        ((box[0] + box[2]) / 2 - tw / 2, (box[1] + box[3]) / 2 - 9),
+        label,
+        font=FONTS["chip"],
+        fill=color,
+    )
     if fade < 1.0:
         overlay = overlay.filter(ImageFilter.GaussianBlur(0.4))
     img.alpha_composite(overlay)
@@ -410,23 +472,33 @@ def draw_rec(img: Image.Image, box: tuple[int, int, int, int], risk: str) -> Non
     panel(d, (x0, y0, x1, y1), fill=bg, outline=color)
     d.text((x0 + 22, y0 + 14), "AERO VIGIL RECOMMENDS", font=FONTS["kicker"], fill=color)
     d.text((x0 + 22, y0 + 42), REC_TITLES[risk], font=FONTS["h2"], fill=TEXT)
-    write_wrapped(d, REC_BODIES[risk], (x0 + 22, y0 + 76), x1 - x0 - 44,
-                  FONTS["small"], MUTED, 5)
+    write_wrapped(d, REC_BODIES[risk], (x0 + 22, y0 + 76), x1 - x0 - 44, FONTS["small"], MUTED, 5)
     img.alpha_composite(overlay)
 
 
-def draw_stats(img: Image.Image, box: tuple[int, int, int, int], stats: Stats | None,
-               running: bool, latency_ms: float | None) -> None:
+def draw_stats(
+    img: Image.Image,
+    box: tuple[int, int, int, int],
+    stats: Stats | None,
+    running: bool,
+    latency_ms: float | None,
+) -> None:
     x0, y0, x1, y1 = box
     d = ImageDraw.Draw(img)
     panel(d, (x0, y0, x1, y1))
     d.text((x0 + 20, y0 + 14), "PREDICTION STATS", font=FONTS["kicker"], fill=CYAN)
     rows = [
-        ("95% interval", f"{stats.ci_low:.1f} – {stats.ci_high:.1f} days" if stats and not running else "—"),
+        (
+            "95% interval",
+            f"{stats.ci_low:.1f} – {stats.ci_high:.1f} days" if stats and not running else "—",
+        ),
         ("Uncertainty (σ)", f"{stats.std:.2f} days" if stats and not running else "—"),
         ("Monte Carlo runs", "100"),
         ("Weights source", "local artifacts/pg_bnn_demo"),
-        ("CPU latency", f"{stats.latency_ms:.0f} ms on 2 threads" if stats and not running else "—"),
+        (
+            "CPU latency",
+            f"{stats.latency_ms:.0f} ms on 2 threads" if stats and not running else "—",
+        ),
     ]
     ry = y0 + 34
     for i, (k, v) in enumerate(rows):
@@ -434,12 +506,15 @@ def draw_stats(img: Image.Image, box: tuple[int, int, int, int], stats: Stats | 
         d.text((x1 - 20, ry + i * 27), v, font=FONTS["mono"], fill=TEXT, anchor="ra")
 
 
-def draw_hist(img: Image.Image, box: tuple[int, int, int, int], hist: Image.Image,
-              alpha: float, scale: float) -> None:
+def draw_hist(
+    img: Image.Image, box: tuple[int, int, int, int], hist: Image.Image, alpha: float, scale: float
+) -> None:
     x0, y0, x1, y1 = box
     d = ImageDraw.Draw(img)
     panel(d, (x0, y0, x1, y1))
-    d.text((x0 + 20, y0 + 12), "DISTRIBUTION FROM 100 STOCHASTIC RUNS", font=FONTS["kicker"], fill=CYAN)
+    d.text(
+        (x0 + 20, y0 + 12), "DISTRIBUTION FROM 100 STOCHASTIC RUNS", font=FONTS["kicker"], fill=CYAN
+    )
     if alpha <= 0.01:
         return
     w, h = x1 - x0 - 40, y1 - y0 - 48
@@ -450,8 +525,9 @@ def draw_hist(img: Image.Image, box: tuple[int, int, int, int], hist: Image.Imag
     img.alpha_composite(scaled, (x0 + 20, y1 - 24 - hh))
 
 
-def draw_chips(img: Image.Image, box: tuple[int, int, int, int], values: list[str],
-               fade: float = 1.0) -> None:
+def draw_chips(
+    img: Image.Image, box: tuple[int, int, int, int], values: list[str], fade: float = 1.0
+) -> None:
     x0, y0, x1, y1 = box
     d = ImageDraw.Draw(img)
     d.text((x0, y0 - 4), "LIVE TELEMETRY", font=FONTS["kicker"], fill=CYAN)
@@ -460,40 +536,56 @@ def draw_chips(img: Image.Image, box: tuple[int, int, int, int], values: list[st
         col, row = i % 3, i // 3
         cx = x0 + col * (cw + gap)
         cy = y0 + 16 + row * (ch + 6)
-        d.rounded_rectangle((cx, cy, cx + cw, cy + ch), radius=10,
-                            fill=(16, 51, 86, 140), outline="#21476e")
+        d.rounded_rectangle(
+            (cx, cy, cx + cw, cy + ch), radius=10, fill=(16, 51, 86, 140), outline="#21476e"
+        )
         d.text((cx + 10, cy + 8), label, font=FONTS["tiny"], fill=MUTED)
         d.text((cx + cw - 10, cy + 6), val, font=FONTS["chip"], fill=TEXT, anchor="ra")
 
 
-def draw_button(img: Image.Image, box: tuple[int, int, int, int], state: str,
-                progress: float) -> None:
+def draw_button(
+    img: Image.Image, box: tuple[int, int, int, int], state: str, progress: float
+) -> None:
     x0, y0, x1, y1 = box
     d = ImageDraw.Draw(img)
     if state == "idle":
         d.rounded_rectangle(box, radius=16, fill="#12d5c8", outline="#4db5ff", width=1)
-        d.text((x0 + 22, y0 + 15), "▶  Run prediction — 100 Monte Carlo passes",
-               font=FONTS["chip"], fill="#07111f")
+        d.text(
+            (x0 + 22, y0 + 15),
+            "▶  Run prediction — 100 Monte Carlo passes",
+            font=FONTS["chip"],
+            fill="#07111f",
+        )
     elif state == "running":
         d.rounded_rectangle(box, radius=16, fill="#12314f", outline="#21476e", width=1)
-        d.text((x0 + 22, y0 + 15), "Running 100 Monte Carlo passes…",
-               font=FONTS["chip"], fill=CYAN)
+        d.text((x0 + 22, y0 + 15), "Running 100 Monte Carlo passes…", font=FONTS["chip"], fill=CYAN)
         bar_x0, bar_x1 = x0 + 22, x1 - 22
         bw = int((bar_x1 - bar_x0) * max(0.02, progress))
         d.rounded_rectangle((bar_x0, y1 - 12, bar_x1, y1 - 6), radius=3, fill="#0a1628")
         d.rounded_rectangle((bar_x0, y1 - 12, bar_x0 + bw, y1 - 6), radius=3, fill=TEAL)
     else:  # done
         d.rounded_rectangle(box, radius=16, fill="#0f241f", outline=GREEN, width=1)
-        d.text((x0 + 22, y0 + 15), "✓  100 passes completed — live result below",
-               font=FONTS["chip"], fill=GREEN)
+        d.text(
+            (x0 + 22, y0 + 15),
+            "✓  100 passes completed — live result below",
+            font=FONTS["chip"],
+            fill=GREEN,
+        )
 
 
 def draw_footer(img: Image.Image) -> None:
     d = ImageDraw.Draw(img)
     d.line((24, 694, FRAME_W - 24, 694), fill="rgba(124,211,255,45)", width=1)
-    write_wrapped(d, "Advisory only — decision-support for maintenance planning. "
-                     "AeroVigil never sends control commands to the turbine.",
-                  (24, 700), FRAME_W - 48, FONTS["small"], MUTED, 0)
+    write_wrapped(
+        d,
+        "Advisory only — decision-support for maintenance planning. "
+        "AeroVigil never sends control commands to the turbine.",
+        (24, 700),
+        FRAME_W - 48,
+        FONTS["small"],
+        MUTED,
+        0,
+    )
 
 
 def draw_cursor(img: Image.Image, x: float, y: float, click_t: float | None, now: float) -> None:
@@ -503,8 +595,19 @@ def draw_cursor(img: Image.Image, x: float, y: float, click_t: float | None, now
         r = int(lerp(10, 46, ease(p)))
         a = int(220 * (1 - p))
         d.ellipse((x - r, y - r, x + r, y + r), outline=f"rgba(255,255,255,{a})", width=3)
-    d.polygon([(x, y), (x + 22, y + 7), (x + 14, y + 13), (x + 18, y + 26),
-               (x + 11, y + 24), (x + 7, y + 13), (x, y + 19)], fill="#ffffff", outline="#07111f")
+    d.polygon(
+        [
+            (x, y),
+            (x + 22, y + 7),
+            (x + 14, y + 13),
+            (x + 18, y + 26),
+            (x + 11, y + 24),
+            (x + 7, y + 13),
+            (x, y + 19),
+        ],
+        fill="#ffffff",
+        outline="#07111f",
+    )
 
 
 def draw_caption(img: Image.Image, text: str, alpha: float) -> None:
@@ -516,9 +619,15 @@ def draw_caption(img: Image.Image, text: str, alpha: float) -> None:
     x0, y0 = (FRAME_W - tw) / 2 - 28, 646
     overlay = Image.new("RGBA", (FRAME_W, FRAME_H), (0, 0, 0, 0))
     od = ImageDraw.Draw(overlay)
-    od.rounded_rectangle((x0, y0, x0 + tw + 56, y0 + 42), radius=21,
-                         fill=(10, 22, 40, int(215 * alpha)), outline=(33, 71, 110, int(255 * alpha)))
-    od.text((x0 + 28, y0 + 10), text, font=FONTS["body"], fill=f"rgba(238,247,255,{int(255*alpha)})")
+    od.rounded_rectangle(
+        (x0, y0, x0 + tw + 56, y0 + 42),
+        radius=21,
+        fill=(10, 22, 40, int(215 * alpha)),
+        outline=(33, 71, 110, int(255 * alpha)),
+    )
+    od.text(
+        (x0 + 28, y0 + 10), text, font=FONTS["body"], fill=f"rgba(238,247,255,{int(255 * alpha)})"
+    )
     img.alpha_composite(overlay)
 
 
@@ -539,12 +648,22 @@ def draw_endcard(img: Image.Image, alpha: float) -> None:
         b = d.textbbox((0, 0), chip_txt, font=FONTS["chip"])
         w = b[2] - b[0] + 26
         x0 = cx - w / 2
-        d.rounded_rectangle((x0, y, x0 + w, y + 40), radius=20,
-                            fill=(32, 211, 194, int(26 * alpha)), outline=(32, 211, 194, int(70 * alpha)))
+        d.rounded_rectangle(
+            (x0, y, x0 + w, y + 40),
+            radius=20,
+            fill=(32, 211, 194, int(26 * alpha)),
+            outline=(32, 211, 194, int(70 * alpha)),
+        )
         d.text((cx, y + 11), chip_txt, font=FONTS["chip"], fill=CYAN, anchor="ma")
         y += 52
     d.text((cx, 590), "aerovigil.abacusai.app", font=FONTS["mono"], fill=TEXT, anchor="ma")
-    d.text((cx, 632), "The check-engine light for wind turbines", font=FONTS["small"], fill=MUTED, anchor="ma")
+    d.text(
+        (cx, 632),
+        "The check-engine light for wind turbines",
+        font=FONTS["small"],
+        fill=MUTED,
+        anchor="ma",
+    )
     img.alpha_composite(overlay)
 
 
@@ -606,21 +725,21 @@ class FrameState:
 def cursor_path(t: float) -> tuple[float, float] | None:
     """Return the cursor position (or None when off-screen) for time t."""
     segs = [
-        (7.0, 10.5, (1210, 660), (312, 669)),   # enter -> predict button
-        (10.5, 12.0, (312, 669), (312, 669)),   # hover
-        (13.0, 21.5, (312, 669), (1000, 95)),   # to warning pill
+        (7.0, 10.5, (1210, 660), (312, 669)),  # enter -> predict button
+        (10.5, 12.0, (312, 669), (312, 669)),  # hover
+        (13.0, 21.5, (312, 669), (1000, 95)),  # to warning pill
         (21.5, 23.0, (1000, 95), (1000, 95)),
-        (23.8, 24.8, (1000, 95), (312, 669)),   # back to predict
+        (23.8, 24.8, (1000, 95), (312, 669)),  # back to predict
         (24.8, 25.0, (312, 669), (312, 669)),
-        (26.5, 33.5, (312, 669), (1091, 95)),   # to critical pill
+        (26.5, 33.5, (312, 669), (1091, 95)),  # to critical pill
         (33.5, 34.5, (1091, 95), (1091, 95)),
         (35.3, 36.5, (1091, 95), (312, 669)),
         (36.5, 37.0, (312, 669), (312, 669)),
-        (39.0, 46.0, (312, 669), (878, 95)),    # to healthy pill
+        (39.0, 46.0, (312, 669), (878, 95)),  # to healthy pill
         (46.0, 48.0, (878, 95), (878, 95)),
         (48.8, 50.0, (878, 95), (312, 669)),
         (50.0, 50.5, (312, 669), (312, 669)),
-        (52.0, 55.5, (312, 669), (760, 200)),   # drift away before end card
+        (52.0, 55.5, (312, 669), (760, 200)),  # drift away before end card
     ]
     for t0, t1, p0, p1 in segs:
         if t0 <= t <= t1:
@@ -652,7 +771,6 @@ def frame_state(t: float, stats: dict[str, Stats], hists: dict[str, Image.Image]
 
     # --- gauge value sweeps ---------------------------------------------
     gauge_start = 280.0
-    gauge_end = stats["healthy"].mean
     gauge_val = gauge_start
     gauge_color = GREEN
     risk = "LOW"
@@ -689,8 +807,12 @@ def frame_state(t: float, stats: dict[str, Stats], hists: dict[str, Image.Image]
         risk = "LOW"
 
     # --- shown stats / hist / button -------------------------------------
-    running = (T_CLICK1 <= t < T_RES1 + 0.3) or (T_CLICK2 <= t < T_RES2 + 0.3) \
-        or (T_CLICK3 <= t < T_RES3 + 0.3) or (T_CLICK4 <= t < T_RES4 + 0.3)
+    running = (
+        (T_CLICK1 <= t < T_RES1 + 0.3)
+        or (T_CLICK2 <= t < T_RES2 + 0.3)
+        or (T_CLICK3 <= t < T_RES3 + 0.3)
+        or (T_CLICK4 <= t < T_RES4 + 0.3)
+    )
     shown: Stats | None = None
     hist_img = hists["healthy"]
     hist_alpha, hist_scale = 0.0, 0.0
@@ -742,7 +864,12 @@ def frame_state(t: float, stats: dict[str, Stats], hists: dict[str, Image.Image]
     # --- button state ------------------------------------------------------
     button = "idle"
     progress = 0.0
-    for click_t, res_t in [(T_CLICK1, T_RES1), (T_CLICK2, T_RES2), (T_CLICK3, T_RES3), (T_CLICK4, T_RES4)]:
+    for click_t, res_t in [
+        (T_CLICK1, T_RES1),
+        (T_CLICK2, T_RES2),
+        (T_CLICK3, T_RES3),
+        (T_CLICK4, T_RES4),
+    ]:
         if click_t <= t < click_t + 0.25:
             button = "running"
             progress = 0.05
@@ -791,15 +918,26 @@ def frame_state(t: float, stats: dict[str, Stats], hists: dict[str, Image.Image]
         sigma = lerp(stats["critical"].std, stats["healthy"].std, ease((t - T_RES4) / 2.2))
 
     return FrameState(
-        clock=clock, load_alpha=load_alpha,
-        cursor_pos=cursor_path(t), click_t=active_click(t),
+        clock=clock,
+        load_alpha=load_alpha,
+        cursor_pos=cursor_path(t),
+        click_t=active_click(t),
         active_scenario=active,
-        gauge_val=gauge_val, gauge_sigma=sigma, gauge_color=gauge_color,
-        risk=risk, stats=shown, stats_running=running,
-        hist_img=hist_img, hist_alpha=hist_alpha, hist_scale=hist_scale,
-        chips=chips, chip_fade=chip_fade,
-        button=button, button_progress=progress,
-        caption=caption, endcard=endcard,
+        gauge_val=gauge_val,
+        gauge_sigma=sigma,
+        gauge_color=gauge_color,
+        risk=risk,
+        stats=shown,
+        stats_running=running,
+        hist_img=hist_img,
+        hist_alpha=hist_alpha,
+        hist_scale=hist_scale,
+        chips=chips,
+        chip_fade=chip_fade,
+        button=button,
+        button_progress=progress,
+        caption=caption,
+        endcard=endcard,
     )
 
 
@@ -807,12 +945,20 @@ def render_frame(t: float, st: FrameState) -> Image.Image:
     img = canvas()
     if st.load_alpha < 1.0:
         img = img.filter(ImageFilter.GaussianBlur((1 - st.load_alpha) * 2.2))
-    d = ImageDraw.Draw(img)
+    ImageDraw.Draw(img)
     draw_chrome(img, st.clock, pulse=0.5 + 0.5 * math.sin(t * 4.0))
     draw_hero(img, st.active_scenario, st.load_alpha)
     risk_color, _, _ = RISK_META[st.risk]
-    draw_gauge(img, (24, 156, 600, 336), st.gauge_val, st.gauge_sigma,
-               st.gauge_color, st.risk, risk_color, fade=st.load_alpha)
+    draw_gauge(
+        img,
+        (24, 156, 600, 336),
+        st.gauge_val,
+        st.gauge_sigma,
+        st.gauge_color,
+        st.risk,
+        risk_color,
+        fade=st.load_alpha,
+    )
     draw_badge(img, (24, 344, 600, 390), st.risk, fade=st.load_alpha)
     draw_rec(img, (24, 398, 600, 556), st.risk)
     draw_chips(img, (24, 562, 600, 644), st.chips, fade=st.chip_fade)
@@ -840,7 +986,10 @@ def build_audio() -> Path:
     def place(path: Path, offset: float, gain: float = 0.96) -> None:
         with wave.open(str(path)) as w:
             ch = w.getnchannels()
-            data = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float64) / 32768.0
+            data = (
+                np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float64)
+                / 32768.0
+            )
         if ch == 1:
             data = np.column_stack([data, data])
         start = int(offset * sr)
@@ -896,14 +1045,30 @@ def main() -> None:
     audio = build_audio()
     print("Encoding video + muxing audio...")
     cmd = [
-        FFMPEG, "-y",
-        "-framerate", str(FPS), "-i", str(FRAMES_DIR / "frame_%05d.jpg"),
-        "-i", str(audio),
-        "-c:v", "libx264", "-preset", "medium", "-crf", "19",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "192k",
-        "-t", f"{DURATION:.3f}",
-        "-movflags", "+faststart",
+        FFMPEG,
+        "-y",
+        "-framerate",
+        str(FPS),
+        "-i",
+        str(FRAMES_DIR / "frame_%05d.jpg"),
+        "-i",
+        str(audio),
+        "-c:v",
+        "libx264",
+        "-preset",
+        "medium",
+        "-crf",
+        "19",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-t",
+        f"{DURATION:.3f}",
+        "-movflags",
+        "+faststart",
         str(OUT_VIDEO),
     ]
     subprocess.run(cmd, check=True, capture_output=True)

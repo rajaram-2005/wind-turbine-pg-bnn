@@ -6,12 +6,14 @@ This module provides a production-ready REST API for wind turbine RUL prediction
 
 import asyncio
 import json
+import os
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 import torch
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,8 +26,6 @@ from .model import PhysicsGuidedBNN
 
 # ─── CONFIGURATION ─────────────────────────────────────────────
 DEFAULT_REPO_ID = "AerovigilAI/wind-turbine-pg-bnn"
-MODEL_PATH = "/app/models/bnn_demo.pt"
-CONFIG_PATH = "/app/config.json"
 
 # Input bounds for validation (physical constraints)
 BOUNDS = {
@@ -113,11 +113,45 @@ class BatchOutput(BaseModel):
     model_version: str
 
 
+class TrendInput(BaseModel):
+    """Telemetry sequence/trend for trajectory analysis."""
+
+    samples: list[TelemetryInput] = Field(
+        ..., min_length=1, max_length=1000, description="Chronological telemetry sequence"
+    )
+    n_mcmc_samples: int = Field(
+        default=50, ge=10, le=500, description="Number of MCVI samples per point in trend"
+    )
+
+
+class TrendPointOutput(BaseModel):
+    """Prediction for a point in the trend sequence."""
+
+    step: int = Field(..., description="1-based step index")
+    predicted_rul_days: float = Field(..., description="Mean predicted RUL")
+    uncertainty_days: float = Field(..., description="Standard deviation")
+    confidence_interval_95: list[float] = Field(..., description="[lower, upper] 95% CI")
+    risk_level: str = Field(..., description="LOW, MODERATE, HIGH, or CRITICAL")
+
+
+class TrendOutput(BaseModel):
+    """Trend trajectory and degradation analysis."""
+
+    trend: list[TrendPointOutput]
+    initial_rul_days: float = Field(..., description="Predicted RUL at step 1")
+    latest_rul_days: float = Field(..., description="Predicted RUL at final step")
+    total_rul_delta_days: float = Field(..., description="Change in RUL across sequence")
+    degradation_trend: str = Field(..., description="DEGRADING, STABLE, or IMPROVING")
+    total_time_ms: float = Field(..., description="Server-side inference time")
+    model_version: str
+
+
 class HealthStatus(BaseModel):
     """System health status."""
 
     status: str
     model_loaded: bool
+    scaler_loaded: bool = False
     model_version: str
     device: str
     cuda_available: bool
@@ -138,52 +172,126 @@ class ModelInfo(BaseModel):
 # ─── MODEL LOADING (LIFESPAN) ──────────────────────────────────
 _model: Optional[PhysicsGuidedBNN] = None
 _config: Optional[dict] = None
+_scaler_mean: Optional[np.ndarray] = None
+_scaler_std: Optional[np.ndarray] = None
 _model_version: str = "unknown"
 
 
-def _load_model() -> tuple[PhysicsGuidedBNN, dict]:
-    """Load model from Hugging Face Hub or local path."""
-    global _model_version
+def _find_local_artifacts() -> tuple[Optional[Path], Optional[Path], Optional[Path]]:
+    """Look for local model, config, and scaler files."""
+    repo_root = Path(__file__).resolve().parents[2]
 
-    # Try local first, then download from HF
-    if Path(MODEL_PATH).exists() and Path(CONFIG_PATH).exists():
-        with open(CONFIG_PATH) as f:
-            config = json.load(f)
-        model = PhysicsGuidedBNN(config)
-        model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu", weights_only=True))
-    else:
-        # Download from Hugging Face
-        config_path = hf_hub_download(repo_id=DEFAULT_REPO_ID, filename="config.json")
-        model_path = hf_hub_download(repo_id=DEFAULT_REPO_ID, filename="bnn_demo.pt")
+    # Check explicit env vars first
+    model_env = os.environ.get("MODEL_PATH")
+    config_env = os.environ.get("CONFIG_PATH")
+    scaler_env = os.environ.get("SCALER_PATH")
 
+    if model_env and Path(model_env).exists():
+        m_path = Path(model_env)
+        c_path = (
+            Path(config_env)
+            if config_env and Path(config_env).exists()
+            else m_path.parent / "config.json"
+        )
+        s_path = (
+            Path(scaler_env)
+            if scaler_env and Path(scaler_env).exists()
+            else m_path.parent / "scaler.npz"
+        )
+        return m_path, c_path if c_path.exists() else None, s_path if s_path.exists() else None
+
+    candidate_dirs = [
+        Path(os.environ.get("AEROVIGIL_WEIGHTS_DIR", "")),
+        Path("/app/artifacts/pg_bnn_demo"),
+        repo_root / "artifacts" / "pg_bnn_demo",
+        Path("artifacts/pg_bnn_demo"),
+        Path("/app/models"),
+    ]
+
+    for d in candidate_dirs:
+        if str(d) and d.exists():
+            m_path = d / "bnn_demo.pt"
+            c_path = d / "config.json"
+            s_path = d / "scaler.npz"
+            if m_path.exists():
+                return (
+                    m_path,
+                    c_path if c_path.exists() else None,
+                    s_path if s_path.exists() else None,
+                )
+
+    return None, None, None
+
+
+def _load_model() -> tuple[PhysicsGuidedBNN, dict, Optional[np.ndarray], Optional[np.ndarray]]:
+    """Load model, config, and scaler from local path or Hugging Face Hub."""
+    global _model_version, _scaler_mean, _scaler_std
+
+    model_path, config_path, scaler_path = _find_local_artifacts()
+
+    if model_path and config_path:
         with open(config_path) as f:
             config = json.load(f)
-
         model = PhysicsGuidedBNN(config)
         model.load_state_dict(torch.load(model_path, map_location="cpu", weights_only=True))
 
+        mean, std = None, None
+        if scaler_path and scaler_path.exists():
+            try:
+                scaler_data = np.load(scaler_path)
+                mean = scaler_data["mean"].astype(np.float32)
+                std = scaler_data["std"].astype(np.float32)
+                std = np.where(std < 1e-6, 1.0, std).astype(np.float32)
+            except Exception as e:
+                print(f"⚠️ Warning: Could not load scaler from {scaler_path}: {e}")
+    else:
+        # Download from Hugging Face
+        config_p = hf_hub_download(repo_id=DEFAULT_REPO_ID, filename="config.json")
+        model_p = hf_hub_download(repo_id=DEFAULT_REPO_ID, filename="bnn_demo.pt")
+
+        with open(config_p) as f:
+            config = json.load(f)
+
+        model = PhysicsGuidedBNN(config)
+        model.load_state_dict(torch.load(model_p, map_location="cpu", weights_only=True))
+
+        mean, std = None, None
+        try:
+            scaler_p = hf_hub_download(repo_id=DEFAULT_REPO_ID, filename="scaler.npz")
+            scaler_data = np.load(scaler_p)
+            mean = scaler_data["mean"].astype(np.float32)
+            std = scaler_data["std"].astype(np.float32)
+            std = np.where(std < 1e-6, 1.0, std).astype(np.float32)
+        except Exception:
+            pass
+
     model.eval()
     _model_version = config.get("model_name", "unknown")
+    _scaler_mean = mean
+    _scaler_std = std
 
-    return model, config
+    return model, config, mean, std
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage model lifecycle."""
-    global _model, _config
+    global _model, _config, _scaler_mean, _scaler_std
 
     print("🔄 Loading model...")
     start = time.time()
-    _model, _config = _load_model()
+    _model, _config, _scaler_mean, _scaler_std = _load_model()
     elapsed = time.time() - start
-    print(f"✅ Model loaded in {elapsed:.2f}s")
+    scaler_status = "loaded" if _scaler_mean is not None else "not present"
+    print(f"✅ Model loaded in {elapsed:.2f}s (scaler: {scaler_status})")
 
     yield
 
     print("🧹 Shutting down...")
     _model = None
     _config = None
+    _scaler_mean = None
+    _scaler_std = None
 
 
 # ─── FASTAPI APP ───────────────────────────────────────────────
@@ -252,8 +360,8 @@ def _run_inference(features: torch.Tensor, n_samples: int = 100) -> dict:
 
 
 def _telemetry_to_tensor(telemetry: TelemetryInput) -> torch.Tensor:
-    """Convert Pydantic model to tensor."""
-    return torch.tensor(
+    """Convert Pydantic model to tensor, applying training normalization scaler if present."""
+    raw = np.array(
         [
             [
                 telemetry.vibration_rms,
@@ -264,8 +372,11 @@ def _telemetry_to_tensor(telemetry: TelemetryInput) -> torch.Tensor:
                 telemetry.operating_hours,
             ]
         ],
-        dtype=torch.float32,
+        dtype=np.float32,
     )
+    if _scaler_mean is not None and _scaler_std is not None:
+        raw = (raw - _scaler_mean) / _scaler_std
+    return torch.tensor(raw, dtype=torch.float32)
 
 
 # ─── API ENDPOINTS ─────────────────────────────────────────────
@@ -278,6 +389,10 @@ async def root() -> dict:
         "docs": "/docs",
         "health": "/health",
         "predict": "/predict",
+        "predict_batch": "/predict/batch",
+        "predict_stream": "/predict/stream",
+        "trend": "/trend",
+        "predict_trend": "/predict/trend",
     }
 
 
@@ -287,6 +402,7 @@ async def health() -> HealthStatus:
     return HealthStatus(
         status="healthy" if _model is not None else "unhealthy",
         model_loaded=_model is not None,
+        scaler_loaded=_scaler_mean is not None,
         model_version=_model_version,
         device=str(next(_model.parameters()).device) if _model else "none",
         cuda_available=torch.cuda.is_available(),
@@ -388,6 +504,67 @@ async def predict_stream(
         event_generator(),
         media_type="text/event-stream",
     )
+
+
+def _calculate_trend(trend_input: TrendInput) -> TrendOutput:
+    if len(trend_input.samples) > 1000:
+        raise HTTPException(status_code=422, detail="Trend size exceeds maximum of 1000")
+
+    start = time.time()
+    points: list[TrendPointOutput] = []
+
+    for idx, sample in enumerate(trend_input.samples, start=1):
+        features = _telemetry_to_tensor(sample)
+        res = _run_inference(features, trend_input.n_mcmc_samples)
+        points.append(
+            TrendPointOutput(
+                step=idx,
+                predicted_rul_days=res["predicted_rul_days"],
+                uncertainty_days=res["uncertainty_days"],
+                confidence_interval_95=res["confidence_interval_95"],
+                risk_level=res["risk_level"],
+            )
+        )
+
+    total_time = (time.time() - start) * 1000
+    initial_rul = points[0].predicted_rul_days
+    latest_rul = points[-1].predicted_rul_days
+    delta = round(latest_rul - initial_rul, 2)
+
+    if delta < -1.0:
+        deg = "DEGRADING"
+    elif delta > 1.0:
+        deg = "IMPROVING"
+    else:
+        deg = "STABLE"
+
+    return TrendOutput(
+        trend=points,
+        initial_rul_days=initial_rul,
+        latest_rul_days=latest_rul,
+        total_rul_delta_days=delta,
+        degradation_trend=deg,
+        total_time_ms=round(total_time, 2),
+        model_version=_model_version,
+    )
+
+
+@app.post("/predict/trend", response_model=TrendOutput)
+async def predict_trend(
+    request: Request,
+    trend_input: TrendInput,
+) -> TrendOutput:
+    """Predict RUL trend across a sequence of telemetry readings."""
+    return _calculate_trend(trend_input)
+
+
+@app.post("/trend", response_model=TrendOutput)
+async def trend_endpoint(
+    request: Request,
+    trend_input: TrendInput,
+) -> TrendOutput:
+    """Alias for /predict/trend."""
+    return _calculate_trend(trend_input)
 
 
 # ─── ERROR HANDLERS ────────────────────────────────────────────
