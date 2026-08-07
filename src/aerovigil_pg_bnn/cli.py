@@ -3,7 +3,9 @@
 import argparse
 import json
 import sys
+from pathlib import Path
 
+import numpy as np
 import torch
 
 from .model import PhysicsGuidedBNN
@@ -29,7 +31,7 @@ def main() -> int:
     with open(args.input) as f:
         data = json.load(f)
 
-    features = torch.tensor(
+    raw = np.array(
         [
             [
                 data["vibration_rms"],
@@ -40,8 +42,18 @@ def main() -> int:
                 data["operating_hours"],
             ]
         ],
-        dtype=torch.float32,
+        dtype=np.float32,
     )
+
+    # Check for scaler
+    scaler_path = Path("artifacts/pg_bnn_demo/scaler.npz")
+    if scaler_path.exists():
+        s = np.load(scaler_path)
+        mean, std = s["mean"].astype(np.float32), s["std"].astype(np.float32)
+        std = np.where(std < 1e-6, 1.0, std)
+        raw = (raw - mean) / std
+
+    features = torch.tensor(raw, dtype=torch.float32)
 
     # Inference
     predictions = []

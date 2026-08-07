@@ -8,6 +8,9 @@ echo "╚═══════════════════════�
 echo ""
 echo "📦 Model:    ${MODEL_PATH}"
 echo "⚙️  Config:   ${CONFIG_PATH}"
+if [ -n "${SCALER_PATH}" ] && [ -f "${SCALER_PATH}" ]; then
+    echo "📊 Scaler:   ${SCALER_PATH}"
+fi
 echo "🌐 Port:     ${PORT}"
 echo ""
 

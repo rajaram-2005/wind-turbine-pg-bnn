@@ -262,21 +262,23 @@ def badge_html(risk: str) -> str:
 def recommendation_html(risk: str, title: str, body: str) -> str:
     style = RISK_STYLES[risk]
     return f"""
-    <div class="rec-card" style="border-color:{style['line']}55; box-shadow: inset 0 0 0 1px {style['line']}22;">
-      <div class="rec-title" style="color:{style['color']};">{title}</div>
+    <div class="rec-card" style="border-color:{style["line"]}55; box-shadow: inset 0 0 0 1px {style["line"]}22;">
+      <div class="rec-title" style="color:{style["color"]};">{title}</div>
       <div class="rec-copy">{body}</div>
     </div>
     """
 
 
-def make_histogram(predictions: np.ndarray, mean_rul: float, ci_lower: float, ci_upper: float, risk: str) -> go.Figure:
+def make_histogram(
+    predictions: np.ndarray, mean_rul: float, ci_lower: float, ci_upper: float, risk: str
+) -> go.Figure:
     style = RISK_STYLES[risk]
     fig = go.Figure()
     fig.add_trace(
         go.Histogram(
             x=predictions,
             nbinsx=28,
-            marker=dict(color=style["color"], line=dict(color="#0c1627", width=1.2)),
+            marker={"color": style["color"], "line": {"color": "#0c1627", "width": 1.2}},
             opacity=0.88,
             hovertemplate="%{x:.1f} days<extra></extra>",
         )
@@ -316,7 +318,7 @@ def make_histogram(predictions: np.ndarray, mean_rul: float, ci_lower: float, ci
     fig.update_layout(
         template="plotly_dark",
         height=360,
-        margin=dict(l=18, r=18, t=44, b=18),
+        margin={"l": 18, "r": 18, "t": 44, "b": 18},
         paper_bgcolor="#0d1b31",
         plot_bgcolor="#0d1b31",
         title="Distribution from 100 stochastic runs",
@@ -324,7 +326,7 @@ def make_histogram(predictions: np.ndarray, mean_rul: float, ci_lower: float, ci
         yaxis_title="How often that value appeared",
         bargap=0.05,
         showlegend=False,
-        font=dict(color="#edf6ff"),
+        font={"color": "#edf6ff"},
     )
     fig.update_xaxes(gridcolor="rgba(255,255,255,0.08)")
     fig.update_yaxes(gridcolor="rgba(255,255,255,0.08)")
@@ -456,14 +458,26 @@ def build_interface() -> gr.Blocks:
                     label="Scenario preset",
                     info="Pick a canonical demo case and the sliders will update automatically.",
                 )
-                vibration_rms = gr.Slider(0.0, 40.0, value=12.5, step=0.1, label="🫨 How much is it shaking? (mm/s)")
-                bearing_temp = gr.Slider(30.0, 130.0, value=65.0, step=0.5, label="🌡️ Main bearing temperature (°C)")
-                generator_temp = gr.Slider(40.0, 170.0, value=80.0, step=0.5, label="🔥 Generator temperature (°C)")
-                power_output = gr.Slider(0.0, 3000.0, value=2000.0, step=10.0, label="⚡ Power output (kW)")
+                vibration_rms = gr.Slider(
+                    0.0, 40.0, value=12.5, step=0.1, label="🫨 How much is it shaking? (mm/s)"
+                )
+                bearing_temp = gr.Slider(
+                    30.0, 130.0, value=65.0, step=0.5, label="🌡️ Main bearing temperature (°C)"
+                )
+                generator_temp = gr.Slider(
+                    40.0, 170.0, value=80.0, step=0.5, label="🔥 Generator temperature (°C)"
+                )
+                power_output = gr.Slider(
+                    0.0, 3000.0, value=2000.0, step=10.0, label="⚡ Power output (kW)"
+                )
                 wind_speed = gr.Slider(0.0, 20.0, value=9.0, step=0.1, label="💨 Wind speed (m/s)")
-                operating_hours = gr.Slider(0.0, 90000.0, value=1000.0, step=100.0, label="⏱️ Lifetime run hours")
+                operating_hours = gr.Slider(
+                    0.0, 90000.0, value=1000.0, step=100.0, label="⏱️ Lifetime run hours"
+                )
                 n_samples = gr.Slider(20, 200, value=100, step=10, label="Monte Carlo samples")
-                predict_button = gr.Button("Predict the 45-day outlook", variant="primary", size="lg")
+                predict_button = gr.Button(
+                    "Predict the 45-day outlook", variant="primary", size="lg"
+                )
 
             with gr.Column(scale=6, min_width=420):
                 gauge = gr.HTML(value=gauge_html(280.0, 5.1, "LOW"))
@@ -511,7 +525,14 @@ def build_interface() -> gr.Blocks:
         scenario.change(
             fn=apply_scenario,
             inputs=scenario,
-            outputs=[vibration_rms, bearing_temp, generator_temp, power_output, wind_speed, operating_hours],
+            outputs=[
+                vibration_rms,
+                bearing_temp,
+                generator_temp,
+                power_output,
+                wind_speed,
+                operating_hours,
+            ],
         )
 
         predict_button.click(

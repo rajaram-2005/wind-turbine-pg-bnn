@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import copy
 import json
-import math
 import random
 import sys
 from dataclasses import dataclass
@@ -108,10 +107,7 @@ def build_dataset(n_samples: int = 8000, seed: int = 7) -> tuple[np.ndarray, np.
     """Uniform coverage over the operating envelope plus a few anchor examples."""
     rng = np.random.default_rng(seed)
     X = np.column_stack(
-        [
-            rng.uniform(*OPERATING_RANGES[name], size=n_samples)
-            for name in FEATURE_NAMES
-        ]
+        [rng.uniform(*OPERATING_RANGES[name], size=n_samples) for name in FEATURE_NAMES]
     ).astype(np.float32)
 
     # Add lightly jittered anchor rows so the live demo bands are crisp.
@@ -126,7 +122,9 @@ def build_dataset(n_samples: int = 8000, seed: int = 7) -> tuple[np.ndarray, np.
         repeats = anchor_repeats[name]
         jitter = anchor_jitter[name]
         for _ in range(repeats):
-            sample = scenario + rng.normal(0.0, 1.0, size=scenario.shape).astype(np.float32) * jitter
+            sample = (
+                scenario + rng.normal(0.0, 1.0, size=scenario.shape).astype(np.float32) * jitter
+            )
             for idx, feature_name in enumerate(FEATURE_NAMES):
                 low, high = OPERATING_RANGES[feature_name]
                 sample[idx] = float(np.clip(sample[idx], low, high))
@@ -206,9 +204,7 @@ def sanity_check(model: PhysicsGuidedBNN, mean: np.ndarray, std: np.ndarray) -> 
             f"95%CI=({ci[0]:.2f}, {ci[1]:.2f})"
         )
         if not scenario_band_ok(name, pred_mean):
-            failures.append(
-                f"{name} expected band mismatch: predicted {pred_mean:.2f} days"
-            )
+            failures.append(f"{name} expected band mismatch: predicted {pred_mean:.2f} days")
     return failures
 
 
@@ -243,7 +239,9 @@ def train_model(config: dict, X_scaled: np.ndarray, y: np.ndarray) -> PhysicsGui
     return model
 
 
-def save_artifacts(model: PhysicsGuidedBNN, config: dict, mean: np.ndarray, std: np.ndarray) -> TrainArtifacts:
+def save_artifacts(
+    model: PhysicsGuidedBNN, config: dict, mean: np.ndarray, std: np.ndarray
+) -> TrainArtifacts:
     out_dir = ROOT / "artifacts" / "pg_bnn_demo"
     out_dir.mkdir(parents=True, exist_ok=True)
     weights_path = out_dir / "bnn_demo.pt"
@@ -267,7 +265,9 @@ def main() -> int:
     print("[1/4] Building synthetic teaching set ...")
     X_raw, y = build_dataset(n_samples=8000, seed=7)
     X_scaled, mean, std = zscore_fit_transform(X_raw)
-    print(f"       samples={len(X_raw)} features={X_raw.shape[1]} y_range=({y.min():.1f}, {y.max():.1f})")
+    print(
+        f"       samples={len(X_raw)} features={X_raw.shape[1]} y_range=({y.min():.1f}, {y.max():.1f})"
+    )
 
     print("[2/4] Training offline demo PG-BNN weights ...")
     config = load_base_config()

@@ -2,6 +2,9 @@
 Monte Carlo Variational Inference utilities for uncertainty quantification.
 """
 
+from typing import Optional, Union
+
+import numpy as np
 import torch
 
 from .model import PhysicsGuidedBNN
@@ -17,11 +20,25 @@ class MonteCarloVI:
     Args:
         model: Trained PhysicsGuidedBNN model
         num_samples: Number of Monte Carlo samples for inference (default: 100)
+        scaler_mean: Optional mean vector for feature normalization
+        scaler_std: Optional standard deviation vector for feature normalization
     """
 
-    def __init__(self, model: PhysicsGuidedBNN, num_samples: int = 100):
+    def __init__(
+        self,
+        model: PhysicsGuidedBNN,
+        num_samples: int = 100,
+        scaler_mean: Optional[Union[np.ndarray, torch.Tensor, list[float]]] = None,
+        scaler_std: Optional[Union[np.ndarray, torch.Tensor, list[float]]] = None,
+    ):
         self.model = model
         self.num_samples = num_samples
+        self.scaler_mean = (
+            np.array(scaler_mean, dtype=np.float32) if scaler_mean is not None else None
+        )
+        self.scaler_std = np.array(scaler_std, dtype=np.float32) if scaler_std is not None else None
+        if self.scaler_std is not None:
+            self.scaler_std = np.where(self.scaler_std < 1e-6, 1.0, self.scaler_std)
 
     def predict(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
@@ -95,7 +112,11 @@ class MonteCarloVI:
         Returns:
             Dictionary with prediction results
         """
-        x = torch.tensor([telemetry], dtype=torch.float32)
+        raw = np.array([telemetry], dtype=np.float32)
+        if self.scaler_mean is not None and self.scaler_std is not None:
+            raw = (raw - self.scaler_mean) / self.scaler_std
+
+        x = torch.tensor(raw, dtype=torch.float32)
         result = self.predict_with_confidence(x)
 
         mean_rul = result["mean"].item()
