@@ -169,8 +169,6 @@ def epic_teaching_rule(
     vib = X[:, 0]
     bearing_temp = X[:, 1]
     generator_temp = X[:, 2]
-    power = X[:, 3]
-    wind = X[:, 4]
     hours = X[:, 5]
 
     # Base RUL — calibrated so canonical scenarios land in correct bands:
@@ -225,7 +223,9 @@ def epic_teaching_rule(
     return np.clip(rul, 2.0, 420.0).astype(np.float32)
 
 
-def build_epic_dataset(n_samples: int = 25000, seed: int = 42) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def build_epic_dataset(
+    n_samples: int = 25000, seed: int = 42
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Build a large, diverse synthetic dataset modelled after global wind-farm patterns."""
     rng = np.random.default_rng(seed)
     profile_keys = list(TURBINE_PROFILES.keys())
@@ -240,14 +240,16 @@ def build_epic_dataset(n_samples: int = 25000, seed: int = 42) -> tuple[np.ndarr
     per_turbine = n_samples // len(profile_keys)
     for t_idx, t_key in enumerate(profile_keys):
         profile = TURBINE_PROFILES[t_key]
-        X_t = np.column_stack([
-            rng.uniform(*profile["vibration_range"], size=per_turbine),
-            rng.uniform(*profile["bearing_temp_range"], size=per_turbine),
-            rng.uniform(*profile["generator_temp_range"], size=per_turbine),
-            rng.uniform(*profile["power_range"], size=per_turbine),
-            rng.uniform(*profile["wind_range"], size=per_turbine),
-            rng.uniform(*profile["hours_range"], size=per_turbine),
-        ]).astype(np.float32)
+        X_t = np.column_stack(
+            [
+                rng.uniform(*profile["vibration_range"], size=per_turbine),
+                rng.uniform(*profile["bearing_temp_range"], size=per_turbine),
+                rng.uniform(*profile["generator_temp_range"], size=per_turbine),
+                rng.uniform(*profile["power_range"], size=per_turbine),
+                rng.uniform(*profile["wind_range"], size=per_turbine),
+                rng.uniform(*profile["hours_range"], size=per_turbine),
+            ]
+        ).astype(np.float32)
         X_parts.append(X_t)
         turbine_masks.extend([t_idx] * per_turbine)
         region_masks.extend(rng.integers(0, len(region_keys), size=per_turbine).tolist())
@@ -264,9 +266,21 @@ def build_epic_dataset(n_samples: int = 25000, seed: int = 42) -> tuple[np.ndarr
     anchors_rm = []
     anchors_fm = []
     anchor_configs = {
-        "healthy": {"repeats": 400, "fault": 0, "jitter": np.array([0.8, 1.5, 1.8, 35.0, 0.5, 1000.0], dtype=np.float32)},
-        "warning": {"repeats": 1200, "fault": 1, "jitter": np.array([0.6, 1.2, 1.5, 28.0, 0.35, 8000.0], dtype=np.float32)},
-        "critical": {"repeats": 1800, "fault": 3, "jitter": np.array([0.5, 1.0, 1.3, 22.0, 0.3, 6000.0], dtype=np.float32)},
+        "healthy": {
+            "repeats": 400,
+            "fault": 0,
+            "jitter": np.array([0.8, 1.5, 1.8, 35.0, 0.5, 1000.0], dtype=np.float32),
+        },
+        "warning": {
+            "repeats": 1200,
+            "fault": 1,
+            "jitter": np.array([0.6, 1.2, 1.5, 28.0, 0.35, 8000.0], dtype=np.float32),
+        },
+        "critical": {
+            "repeats": 1800,
+            "fault": 3,
+            "jitter": np.array([0.5, 1.0, 1.3, 22.0, 0.3, 6000.0], dtype=np.float32),
+        },
     }
     # Simple clipping bounds for each feature
     feature_max = np.array([40.0, 130.0, 170.0, 5200.0, 20.0, 87600.0], dtype=np.float32)
@@ -403,8 +417,10 @@ def train_epic_model(config: dict, X_scaled: np.ndarray, y: np.ndarray) -> Physi
     dataset = TensorDataset(X_tensor, y_tensor, hours_tensor)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
-    print(f"\n  Training EPIC model: {len(X_scaled):,} samples, {epochs} epochs, "
-          f"batch_size={batch_size}")
+    print(
+        f"\n  Training EPIC model: {len(X_scaled):,} samples, {epochs} epochs, "
+        f"batch_size={batch_size}"
+    )
     print(f"  Architecture: {config['network']['hidden_dims']}\n")
 
     best_loss = float("inf")

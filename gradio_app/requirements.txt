@@ -8,4 +8,5 @@ matplotlib>=3.8.0
 pillow>=10.0.0
 imageio-ffmpeg>=0.6.0
 gradio>=4.0.0
-huggingface-hub>=0.20.0
+# 1.x requires Python 3.10; the project supports Python 3.9+.
+huggingface-hub>=0.20.0,<1.0
