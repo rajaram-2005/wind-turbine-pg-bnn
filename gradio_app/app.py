@@ -962,7 +962,6 @@ input[type="range"]::-webkit-slider-thumb {
 def build_interface() -> gr.Blocks:
     with gr.Blocks(
         title="AeroVigil EPIC — Wind Turbine Health Intelligence",
-        css=APP_CSS,
     ) as demo:
         # Hidden background element
         bg_html = gr.HTML(value=animated_background("LOW"), visible=True)
