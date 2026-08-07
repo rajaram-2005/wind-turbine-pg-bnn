@@ -66,6 +66,17 @@ RISK_LABELS = {
     "CRITICAL": "CRITICAL RISK · Immediate action required",
 }
 
+
+def _hex_to_rgba(hex_color: str, alpha: float) -> str:
+    """Convert #RRGGBB hex to rgba(r,g,b,alpha) for Plotly compatibility.
+    Plotly does not support 8-char hex #RRGGBBAA, so use rgba format."""
+    hex_color = hex_color.lstrip("#")
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
 CPU_THREADS = max(1, min(os.cpu_count() or 1, 4))
 torch.set_num_threads(CPU_THREADS)
 
@@ -620,7 +631,7 @@ def make_radar_chart(vibration, bearing_temp, gen_temp, power, wind_speed, hours
                 "Vibration",
             ],
             fill="toself",
-            fillcolor="#00e5a022",
+            fillcolor="rgba(0,229,160,0.13)",
             line={"color": colors["primary"], "width": 2},
             marker={"size": 6, "color": colors["primary"]},
         )
@@ -699,7 +710,7 @@ def make_trend_chart(hours_val, risk):
             mode="lines",
             line={"color": colors["primary"], "width": 0},
             fill="tozeroy",
-            fillcolor=f"{colors['primary']}11",
+            fillcolor=_hex_to_rgba(colors["primary"], 0.07),
             showlegend=False,
             hoverinfo="skip",
         )
@@ -1376,7 +1387,7 @@ def run_twin_simulation(scenario_name, extra_hours, vib, btemp, gtemp, power, wi
             line={"color": colors["primary"], "width": 3},
             name="Projected RUL",
             fill="tozeroy",
-            fillcolor=f"{colors['primary']}15",
+            fillcolor=_hex_to_rgba(colors["primary"], 0.08),
         )
     )
     fig.add_hline(
