@@ -30,8 +30,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /build
 
-# Install Python dependencies first (cache layer)
-COPY pyproject.toml ./
+# Build the complete project wheel. Source and metadata must be present before
+# invoking the PEP 517 backend (the old image attempted to build from the
+# manifest alone, which produced an incomplete/failed package).
+COPY pyproject.toml README.md LICENSE config.json ./
+COPY src/ ./src/
 RUN pip install --upgrade pip \
     && pip install build \
     && python -m build --wheel --outdir dist/
@@ -71,11 +74,15 @@ WORKDIR ${APP_HOME}
 
 # Copy and install the built wheel from builder stage
 COPY --from=builder /build/dist/*.whl /tmp/
-RUN pip install --no-cache-dir /tmp/*.whl \
+RUN WHEEL="$(echo /tmp/*.whl)" \
+    && pip install --no-cache-dir "${WHEEL}[api,demo]" \
     && rm -rf /tmp/*.whl
 
-# Copy application code
+# Copy the complete unified application surface.
 COPY src/ ${APP_HOME}/src/
+COPY gradio_app/ ${APP_HOME}/gradio_app/
+COPY configs/ ${APP_HOME}/configs/
+COPY examples/ ${APP_HOME}/examples/
 COPY config.json /app/config.json
 COPY artifacts/ ${APP_HOME}/artifacts/
 
@@ -131,9 +138,14 @@ RUN pip install --no-cache-dir torch==${TORCH_VERSION} --index-url https://downl
 
 # Copy application
 COPY --from=builder /build/dist/*.whl /tmp/
-RUN pip install --no-cache-dir /tmp/*.whl && rm -rf /tmp/*.whl
+RUN WHEEL="$(echo /tmp/*.whl)" \
+    && pip install --no-cache-dir "${WHEEL}[api,demo]" \
+    && rm -rf /tmp/*.whl
 
 COPY src/ ${APP_HOME}/src/
+COPY gradio_app/ ${APP_HOME}/gradio_app/
+COPY configs/ ${APP_HOME}/configs/
+COPY examples/ ${APP_HOME}/examples/
 COPY config.json /app/config.json
 COPY artifacts/ ${APP_HOME}/artifacts/
 COPY docker/entrypoint.sh /entrypoint.sh

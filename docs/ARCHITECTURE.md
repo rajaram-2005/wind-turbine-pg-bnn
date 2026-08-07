@@ -6,6 +6,19 @@ This document maps every module in `wind-turbine-pg-bnn` and the data flow that
 connects them: *config → data → physics → model/serving → predictor → safety →
 reporting → api/ui/cli*, plus the digital-twin and meta/hermes paths.
 
+## Single deployment boundary
+
+`src/unified_app.py` is the canonical runtime. It binds the Gradio operator UI,
+the complete operations API, and the low-level model API into one ASGI process
+and one port. `/health` discovers the whole system, `/api/*` connects advisory,
+fleet, twin, telemetry, and reporting, `/model-api/*` exposes raw PG-BNN
+inference, and `/` serves the dashboard. Mounted child lifespans are explicitly
+managed by the parent, so model initialization is not skipped.
+
+The former standalone apps remain import-compatible, but they are compatibility
+surfaces rather than separate deployments. `docker compose up aerovigil` and
+`make serve` both start the unified boundary.
+
 Rendered Mermaid versions of these diagrams — including the inference pipeline
 sequence — live in [`DIAGRAMS.md`](DIAGRAMS.md).
 

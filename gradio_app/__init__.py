@@ -1,0 +1,1 @@
+"""AeroVigil Gradio operator dashboard."""
