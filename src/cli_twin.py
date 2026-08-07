@@ -201,6 +201,14 @@ def run_status(args: argparse.Namespace) -> int:
             print(
                 f"Probabilistic predicted RUL: {last_rec['bnn_state']['predicted_rul_days']:.1f} days"
             )
+        team = last_rec["agent_team"]
+        print("------------------------------------------------------------")
+        print(
+            f"Cyber Prime Agents: MIKA + KAI | {team['risk_level']} | "
+            f"agreement {team['agreement_score_pct']:.1f}%"
+        )
+        print(f"  MIKA: {team['agents']['mika']['finding']}")
+        print(f"  KAI: {team['agents']['kai']['finding']}")
         if args.advisory:
             adv = last_rec.get("advisory")
             print("------------------------------------------------------------")

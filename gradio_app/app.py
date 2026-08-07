@@ -30,15 +30,40 @@ from huggingface_hub import hf_hub_download
 
 if __package__:
     from .colors import hex_to_rgba
+    from .cyber_twin import (
+        CYBER_TWIN_CSS,
+        render_agent_answer,
+        render_agent_council,
+        render_component_diagnostics,
+        render_cyber_twin,
+        render_human_review_receipt,
+        render_scenario_comparison,
+        render_twin_result,
+    )
+    from .twin_scenarios import SCENARIO_CONFIGS, project_scenario
 else:
     from colors import hex_to_rgba
+    from cyber_twin import (
+        CYBER_TWIN_CSS,
+        render_agent_answer,
+        render_agent_council,
+        render_component_diagnostics,
+        render_cyber_twin,
+        render_human_review_receipt,
+        render_scenario_comparison,
+        render_twin_result,
+    )
+    from twin_scenarios import SCENARIO_CONFIGS, project_scenario
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from aerovigil_pg_bnn import PhysicsGuidedBNN  # noqa: E402
+from src.agents.cyber_team import build_cyber_team_brief  # noqa: E402
 
 # ── Constants ─────────────────────────────────────────────────────
 
@@ -431,54 +456,67 @@ def create_risk_badge(risk: str) -> str:
     """
 
 
-def create_recommendation_card(risk: str, title: str, body: str) -> str:
+def create_recommendation_card(
+    risk: str,
+    title: str,
+    body: str,
+    *,
+    rul_days: float | None = None,
+    uncertainty: float = 0.0,
+    telemetry: dict[str, float] | None = None,
+) -> str:
     colors = RISK_COLORS[risk]
+    team = build_cyber_team_brief(
+        asset_id="PREDICTION-CONSOLE",
+        predicted_rul_days=rul_days,
+        epistemic_std=uncertainty,
+        telemetry=telemetry,
+        risk=risk,
+    )
+    mika = team["agents"]["mika"]
+    kai = team["agents"]["kai"]
     return f"""
     <div style="padding:20px 24px;border-radius:20px;
                 background:linear-gradient(135deg,rgba(10,22,40,0.95),rgba(16,35,63,0.9));
                 border:1px solid {hex_to_rgba(colors["primary"], 0.2)};
                 box-shadow:inset 0 0 0 1px {hex_to_rgba(colors["primary"], 0.07)}, 0 8px 32px rgba(0,0,0,0.3);
                 backdrop-filter:blur(10px);margin-top:8px;">
-      <div style="font-size:18px;font-weight:800;color:{colors["primary"]};margin-bottom:8px;">
-        {title}
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+        <div><div style="font-size:18px;font-weight:800;color:{colors["primary"]};margin-bottom:8px;">{title}</div>
+        <div style="color:rgba(180,200,220,0.85);line-height:1.65;font-size:14px;">{body}</div></div>
+        <div style="flex:none;padding:6px 9px;border-radius:999px;border:1px solid {hex_to_rgba(colors["primary"], 0.2)};
+                    color:{colors["primary"]};font:700 9px monospace;letter-spacing:.1em;">DUAL AGENT · {team["agreement_score_pct"]:.1f}%</div>
       </div>
-      <div style="color:rgba(180,200,220,0.85);line-height:1.65;font-size:15px;">
-        {body}
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px;">
+        <div style="padding:11px 12px;border-radius:12px;background:rgba(255,61,242,.055);border:1px solid rgba(255,61,242,.15);"><div style="color:#ff91f8;font:800 10px monospace;letter-spacing:.11em;">MIKA // MAINTENANCE</div><div style="margin-top:5px;color:rgba(211,221,243,.72);font-size:11px;line-height:1.5;">{mika["finding"]}</div></div>
+        <div style="padding:11px 12px;border-radius:12px;background:rgba(32,227,255,.045);border:1px solid rgba(32,227,255,.14);"><div style="color:#72f2ff;font:800 10px monospace;letter-spacing:.11em;">KAI // PHYSICS</div><div style="margin-top:5px;color:rgba(211,221,243,.72);font-size:11px;line-height:1.5;">{kai["finding"]}</div></div>
       </div>
-    </div>
-    """
+      <div style="margin-top:9px;color:rgba(142,188,218,.48);font:700 8px monospace;letter-spacing:.1em;text-transform:uppercase;">Linked · {" · ".join(team["connected_sources"])}</div>
+    </div>"""
 
 
 def create_fleet_card(t: dict) -> str:
     colors = RISK_COLORS[t["risk"]]
+    team = build_cyber_team_brief(
+        asset_id=t["id"],
+        predicted_rul_days=t["rul_days"],
+        telemetry={
+            "vibration_rms": t["vibration_rms"],
+            "temperature_c": t["bearing_temp"],
+            "power_output": t["power_output"],
+        },
+        risk=t["risk"],
+    )
     return f"""
-    <div style="padding:16px;border-radius:18px;
-                background:linear-gradient(135deg,rgba(10,22,40,0.92),rgba(16,35,63,0.88));
-                border:1px solid {hex_to_rgba(colors["primary"], 0.13)};
-                box-shadow:0 4px 20px rgba(0,0,0,0.2);min-width:200px;
-                transition:transform 0.3s,box-shadow 0.3s;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <span style="font-size:13px;font-weight:800;color:{colors["primary"]};
-                     letter-spacing:0.05em;">{t["id"]}</span>
-        <span style="width:8px;height:8px;border-radius:50%;background:{colors["primary"]};
-                     box-shadow:0 0 8px {colors["primary"]};"></span>
-      </div>
-      <div style="font-size:16px;font-weight:700;color:#edf6ff;margin-bottom:4px;">{t["name"]}</div>
-      <div style="font-size:12px;color:rgba(160,180,200,0.7);margin-bottom:10px;">{t["model"]} · {t["location"]}</div>
-      <div style="font-size:28px;font-weight:900;color:{colors["primary"]};
-                  text-shadow:0 0 15px {colors["glow"]};">{t["rul_days"]:.0f}<span style="font-size:13px;color:rgba(160,180,200,0.6);margin-left:4px;">days</span></div>
-      <div style="margin-top:8px;height:4px;border-radius:2px;background:rgba(255,255,255,0.06);overflow:hidden;">
-        <div style="height:100%;width:{min(100, max(0, t["rul_days"] / 365 * 100)):.1f}%;
-                    background:linear-gradient(90deg,{colors["secondary"]},{colors["primary"]});
-                    border-radius:2px;transition:width 1s;"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:rgba(160,180,200,0.5);">
-        <span>Vib: {t["vibration_rms"]} mm/s</span>
-        <span>Temp: {t["bearing_temp"]}°C</span>
-        <span>{t["operating_hours"]:.0f}h</span>
-      </div>
-    </div>
-    """
+    <div style="padding:16px;border-radius:18px;background:linear-gradient(135deg,rgba(10,22,40,0.92),rgba(16,35,63,0.88));
+                border:1px solid {hex_to_rgba(colors["primary"], 0.13)};box-shadow:0 4px 20px rgba(0,0,0,0.2);min-width:200px;transition:transform .3s,box-shadow .3s;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><span style="font-size:13px;font-weight:800;color:{colors["primary"]};letter-spacing:.05em;">{t["id"]}</span><span style="width:8px;height:8px;border-radius:50%;background:{colors["primary"]};box-shadow:0 0 8px {colors["primary"]};"></span></div>
+      <div style="display:flex;align-items:center;gap:6px;margin:-2px 0 8px;color:rgba(163,204,226,.55);font:700 8px monospace;letter-spacing:.1em;text-transform:uppercase;"><span style="color:#ff91f8;">MIKA</span><span>+</span><span style="color:#72f2ff;">KAI</span><span style="margin-left:auto;color:{colors["primary"]};">{team["agreement_score_pct"]:.1f}% linked</span></div>
+      <div style="font-size:16px;font-weight:700;color:#edf6ff;margin-bottom:4px;">{t["name"]}</div><div style="font-size:12px;color:rgba(160,180,200,.7);margin-bottom:10px;">{t["model"]} · {t["location"]}</div>
+      <div style="font-size:28px;font-weight:900;color:{colors["primary"]};text-shadow:0 0 15px {colors["glow"]};">{t["rul_days"]:.0f}<span style="font-size:13px;color:rgba(160,180,200,.6);margin-left:4px;">days</span></div>
+      <div style="margin-top:8px;height:4px;border-radius:2px;background:rgba(255,255,255,.06);overflow:hidden;"><div style="height:100%;width:{min(100, max(0, t["rul_days"] / 365 * 100)):.1f}%;background:linear-gradient(90deg,{colors["secondary"]},{colors["primary"]});border-radius:2px;"></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:rgba(160,180,200,.5);"><span>Vib: {t["vibration_rms"]} mm/s</span><span>Temp: {t["bearing_temp"]}°C</span><span>{t["operating_hours"]:.0f}h</span></div>
+    </div>"""
 
 
 def create_kpi_strip() -> str:
@@ -510,6 +548,28 @@ def create_kpi_strip() -> str:
       </div>
     </div>
     """
+
+
+def create_agent_mesh_banner() -> str:
+    """Show the shared dual-agent path that links every dashboard surface."""
+    points = [
+        ("SCADA", "telemetry"),
+        ("PG-BNN", "probability"),
+        ("ISO 281", "physics"),
+        ("TWIN", "wear"),
+        ("FLEET", "priority"),
+        ("HUMAN", "review"),
+    ]
+    nodes = '<span class="agent-mesh-line"></span>'.join(
+        f'<span class="agent-mesh-node"><b>{name}</b><small>{detail}</small></span>'
+        for name, detail in points
+    )
+    return f"""
+    <div class="agent-mesh">
+      <div class="agent-mesh-title"><span class="agent-mesh-pulse"></span>
+        <span><b>CYBER PRIME AGENT MESH</b><small>MIKA + KAI share one evidence graph across every view</small></span></div>
+      <div class="agent-mesh-path">{nodes}</div><div class="agent-mesh-state">ALL POINTS LINKED</div>
+    </div>"""
 
 
 def create_fleet_dashboard_html() -> str:
@@ -856,7 +916,26 @@ def predict_rul(
     bg = animated_background(risk)
     gauge = create_animated_gauge(mean_rul, std_rul, risk)
     badge = create_risk_badge(risk)
-    rec = create_recommendation_card(risk, rec_title, rec_copy)
+    prediction_telemetry = {
+        "vibration_mms": vibration_rms,
+        "temperature_c": bearing_temp,
+        "power_output": power_output,
+    }
+    rec = create_recommendation_card(
+        risk,
+        rec_title,
+        rec_copy,
+        rul_days=mean_rul,
+        uncertainty=std_rul,
+        telemetry=prediction_telemetry,
+    )
+    agent_team = build_cyber_team_brief(
+        asset_id="PREDICTION-CONSOLE",
+        predicted_rul_days=mean_rul,
+        epistemic_std=std_rul,
+        telemetry=prediction_telemetry,
+        risk=risk,
+    )
 
     histogram = make_histogram(predictions, mean_rul, ci_lower, ci_upper, risk)
     radar = make_radar_chart(
@@ -880,6 +959,7 @@ def predict_rul(
         "risk_level": risk,
         "latency_ms": round(latency_ms, 1),
         "raw_input": dict(zip(FEATURE_NAMES, raw_values)),
+        "agent_team": agent_team,
     }
     return bg, gauge, badge, rec, histogram, radar, trend, power_curve, stats, payload
 
@@ -964,6 +1044,7 @@ input[type="range"]::-webkit-slider-thumb {
 /* Dropdown */
 .gr-dropdown { border-radius: 12px !important; }
 """
+APP_CSS += CYBER_TWIN_CSS
 
 
 # ── Build the app ─────────────────────────────────────────────────
@@ -1010,8 +1091,9 @@ def build_interface() -> gr.Blocks:
         </div>
         """)
 
-        # KPI strip
+        # KPI strip + connected dual-agent evidence mesh
         gr.HTML(create_kpi_strip())
+        gr.HTML(create_agent_mesh_banner())
 
         with gr.Tabs():
             # ── TAB 1: Dashboard ─────────────────────────────
@@ -1127,39 +1209,139 @@ def build_interface() -> gr.Blocks:
                 fleet_bar = make_fleet_comparison_chart()
                 gr.Plot(value=fleet_bar, label="Fleet RUL Comparison")
 
-            # ── TAB 4: Digital Twin ──────────────────────────
-            with gr.TabItem("🏭 Digital Twin"):
-                gr.HTML("""
-                <div style="padding:16px 20px;border-radius:18px;
-                            background:linear-gradient(135deg,rgba(10,22,40,0.92),rgba(16,35,63,0.88));
-                            border:1px solid rgba(124,211,255,0.1);margin-bottom:12px;">
-                  <h3 style="margin:0;color:#edf6ff;font-size:18px;font-weight:800;">
-                    🏭 Digital Twin — Scenario Simulator
-                  </h3>
-                  <p style="margin:6px 0 0;color:rgba(160,180,200,0.6);font-size:13px;">
-                    Simulate future operating scenarios and their impact on bearing life
-                  </p>
-                </div>
-                """)
+            # ── TAB 4: CYBER PRIME Digital Twin ──────────────
+            with gr.TabItem("⚡ Cyber Twin"):
+                twin_visual = gr.HTML(
+                    value=render_cyber_twin(
+                        "Nominal operation",
+                        12.5,
+                        65.0,
+                        80.0,
+                        2000.0,
+                        9.0,
+                        1000.0,
+                        280.0,
+                        "LOW",
+                        RISK_COLORS["LOW"]["primary"],
+                    )
+                )
                 with gr.Row():
-                    with gr.Column():
+                    with gr.Column(scale=1, elem_classes=["cyber-control-panel"]):
+                        gr.HTML("""
+                        <div style="padding:2px 2px 12px;"><div style="color:#00e5a0;font-family:monospace;font-size:9px;letter-spacing:.2em;text-transform:uppercase;">Mission control</div>
+                        <h3 style="margin:5px 0 4px;color:#edf6ff;font-size:18px;">Fork the future</h3>
+                        <p style="margin:0;color:rgba(160,190,215,.62);font-size:12px;line-height:1.5;">Select an operating reality, then let the physics and Bayesian layers project its effect on the asset.</p></div>
+                        """)
                         twin_scenario = gr.Dropdown(
-                            choices=[
-                                "Nominal operation",
-                                "High wind overload",
-                                "Derated operation",
-                                "Tropical heat stress",
-                            ],
+                            choices=list(SCENARIO_CONFIGS),
                             value="Nominal operation",
-                            label="Scenario",
+                            label="Scenario protocol",
                         )
                         twin_hours = gr.Slider(
-                            0, 20000, 5000, 500, label="Additional hours to simulate"
+                            500, 20000, 5000, 500, label="Forecast horizon · operating hours"
                         )
-                        twin_btn = gr.Button("🔬 Run Simulation", variant="primary")
-                    with gr.Column():
-                        twin_output = gr.HTML()
-                twin_chart = gr.Plot(label="Scenario Projection")
+                        twin_btn = gr.Button("⚡ Initialize Neural Forecast", variant="primary")
+                        gr.HTML(
+                            """<div style="display:flex;gap:8px;align-items:flex-start;padding:10px 2px 0;color:rgba(154,184,207,.54);font-size:10px;line-height:1.5;"><span style="color:#ffd600;">◇</span>Advisory simulation only. Cyber Twin never sends commands to the turbine.</div>"""
+                        )
+                    with gr.Column(scale=1):
+                        twin_output = gr.HTML(
+                            value=render_twin_result(
+                                "Nominal operation",
+                                "LOW",
+                                RISK_COLORS["LOW"]["primary"],
+                                280.0,
+                                6000.0,
+                                1.0,
+                                18.0,
+                            )
+                        )
+                twin_chart = gr.Plot(label="Neural Degradation Forecast")
+                with gr.Row():
+                    twin_components = gr.HTML(
+                        value=render_component_diagnostics(12.5, 65.0, 80.0, 2000.0, 9.0, 280.0)
+                    )
+                    twin_council = gr.HTML(
+                        value=render_agent_council(
+                            "Nominal operation", 12.5, 65.0, 2000.0, 280.0, "LOW"
+                        )
+                    )
+
+                with gr.Tabs():
+                    with gr.TabItem("◈ Scenario Lab"):
+                        gr.HTML(
+                            """<div style="padding:10px 2px;color:rgba(176,205,222,.66);font-size:12px;">Run parallel futures against the same synchronized asset state. Rankings compare healthy-life runway, component stress, wear, and simulated energy.</div>"""
+                        )
+                        compare_scenarios = gr.CheckboxGroup(
+                            choices=list(SCENARIO_CONFIGS),
+                            value=["Nominal operation", "High wind overload", "Derated operation"],
+                            label="Parallel futures",
+                        )
+                        compare_btn = gr.Button("◇ Compare Future Branches", variant="secondary")
+                        compare_summary = gr.HTML()
+                        compare_chart = gr.Plot(label="Parallel Scenario Comparison")
+                        compare_btn.click(
+                            fn=compare_twin_scenarios,
+                            inputs=[
+                                compare_scenarios,
+                                twin_hours,
+                                vibration_rms,
+                                bearing_temp,
+                                generator_temp,
+                                power_output,
+                                wind_speed,
+                                operating_hours,
+                            ],
+                            outputs=[compare_summary, compare_chart],
+                        )
+
+                    with gr.TabItem("◎ Agent Copilot"):
+                        with gr.Row():
+                            with gr.Column(scale=2, elem_classes=["cyber-control-panel"]):
+                                agent_question = gr.Textbox(
+                                    label="Ask MIKA + KAI",
+                                    placeholder="Why is bearing risk rising? When should engineering review it?",
+                                    lines=2,
+                                )
+                                ask_agents_btn = gr.Button("Ask Agent Council", variant="secondary")
+                            with gr.Column(scale=3):
+                                agent_answer = gr.HTML()
+                        ask_agents_btn.click(
+                            fn=ask_cyber_agents,
+                            inputs=[
+                                agent_question,
+                                twin_scenario,
+                                twin_hours,
+                                vibration_rms,
+                                bearing_temp,
+                                generator_temp,
+                                power_output,
+                                wind_speed,
+                                operating_hours,
+                            ],
+                            outputs=[agent_answer],
+                        )
+                        review_history = gr.State([])
+                        with gr.Row():
+                            with gr.Column(scale=2, elem_classes=["cyber-control-panel"]):
+                                human_decision = gr.Radio(
+                                    choices=[
+                                        "Acknowledge evidence",
+                                        "Request engineering review",
+                                        "Escalate to reliability lead",
+                                    ],
+                                    value="Acknowledge evidence",
+                                    label="Human decision gate",
+                                )
+                                review_btn = gr.Button("Record Human Review", variant="primary")
+                            with gr.Column(scale=3):
+                                review_receipt = gr.HTML()
+                        review_btn.click(
+                            fn=record_human_twin_review,
+                            inputs=[human_decision, twin_scenario, review_history],
+                            outputs=[review_receipt, review_history],
+                        )
+
                 twin_btn.click(
                     fn=run_twin_simulation,
                     inputs=[
@@ -1172,7 +1354,7 @@ def build_interface() -> gr.Blocks:
                         wind_speed,
                         operating_hours,
                     ],
-                    outputs=[twin_output, twin_chart],
+                    outputs=[twin_visual, twin_output, twin_chart, twin_components, twin_council],
                 )
 
             # ── TAB 5: Analytics ─────────────────────────────
@@ -1354,80 +1536,320 @@ def make_fleet_comparison_chart():
 
 
 def run_twin_simulation(scenario_name, extra_hours, vib, btemp, gtemp, power, wind, hours):
-    """Simulate degradation under different scenarios."""
-    total_hours = hours + extra_hours
-    scenarios_config = {
-        "Nominal operation": {"vib_mult": 1.0, "temp_bias": 0, "degradation": 1.0},
-        "High wind overload": {"vib_mult": 1.8, "temp_bias": 8, "degradation": 1.5},
-        "Derated operation": {"vib_mult": 0.7, "temp_bias": -5, "degradation": 0.6},
-        "Tropical heat stress": {"vib_mult": 1.2, "temp_bias": 20, "degradation": 1.3},
-    }
-    cfg = scenarios_config[scenario_name]
-    future_hours = np.linspace(hours, total_hours, 100)
-    base_vib = vib * cfg["vib_mult"]
-    base_temp = btemp + cfg["temp_bias"]
+    """Project an operating fork and render the Cyber Prime twin experience."""
+    projection = project_scenario(scenario_name, extra_hours, vib, btemp, gtemp, power, wind, hours)
+    cfg = projection["config"]
+    future_hours = projection["hours"]
+    rul = projection["rul"]
+    upper = projection["upper"]
+    lower = projection["lower"]
+    wear_index = projection["wear_index"]
+    final_rul = projection["final_rul"]
+    total_hours = projection["total_hours"]
+    base_vib = projection["projected_vibration"]
+    base_temp = projection["projected_bearing_temp"]
+    projected_generator_temp = projection["projected_generator_temp"]
+    projected_power = projection["projected_power"]
+    projected_wind = projection["projected_wind"]
+    stress_pct = projection["stress_pct"]
+    hours = float(hours)
 
-    rul = np.clip(
-        450.0
-        - 5.5 * max(base_vib - 5.0, 0) ** 1.18
-        - 2.4 * max(base_temp - 52.0, 0) ** 1.12
-        - (future_hours / 87600.0) * 220.0 * cfg["degradation"],
-        0,
-        450,
-    )
-
-    colors = RISK_COLORS[classify_risk(float(rul[-1]))[0]]
+    risk, _, _ = classify_risk(final_rul)
+    accent = RISK_COLORS[risk]["primary"]
     fig = go.Figure()
+    fig.add_hrect(y0=0, y1=14, fillcolor="rgba(255,23,68,0.08)", line_width=0)
+    fig.add_hrect(y0=14, y1=45, fillcolor="rgba(255,214,0,0.055)", line_width=0)
+    fig.add_trace(
+        go.Scatter(
+            x=future_hours,
+            y=upper,
+            mode="lines",
+            line={"width": 0, "color": "rgba(139,233,255,0)"},
+            hoverinfo="skip",
+            showlegend=False,
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=future_hours,
+            y=lower,
+            mode="lines",
+            line={"width": 0, "color": "rgba(139,233,255,0)"},
+            fill="tonexty",
+            fillcolor=hex_to_rgba(accent, 0.12),
+            name="Bayesian confidence field",
+            hovertemplate="Lower field: %{y:.1f} days<extra></extra>",
+        )
+    )
     fig.add_trace(
         go.Scatter(
             x=future_hours,
             y=rul,
             mode="lines",
-            line={"color": colors["primary"], "width": 3},
-            name="Projected RUL",
-            fill="tozeroy",
-            fillcolor=hex_to_rgba(colors["primary"], 0.08),
+            line={"color": hex_to_rgba(accent, 0.18), "width": 12},
+            hoverinfo="skip",
+            showlegend=False,
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=future_hours,
+            y=rul,
+            mode="lines",
+            line={"color": accent, "width": 3},
+            name="Neural RUL trajectory",
+            hovertemplate="%{x:,.0f} h · %{y:.1f} days<extra>Neural RUL</extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=future_hours,
+            y=wear_index,
+            mode="lines",
+            line={"color": "#ff3df2", "width": 2, "dash": "dot"},
+            name="Digital wear index",
+            yaxis="y2",
+            hovertemplate="%{x:,.0f} h · %{y:.1f}%<extra>Wear index</extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[total_hours],
+            y=[final_rul],
+            mode="markers+text",
+            marker={"size": 13, "color": accent, "line": {"color": "#ffffff", "width": 2}},
+            text=[f"  {final_rul:.0f}d"],
+            textposition="middle right",
+            textfont={"color": accent, "size": 12},
+            name="Forecast horizon",
+            hovertemplate="Final projection: %{y:.1f} days<extra></extra>",
         )
     )
     fig.add_hline(
-        y=45, line_color="#ffd600", line_dash="dot", line_width=2, annotation_text="45-day line"
+        y=45,
+        line_color="#ffd600",
+        line_dash="dot",
+        line_width=1.5,
+        annotation_text="PLANNING GATE · 45D",
+        annotation_font_color="#ffd600",
+        annotation_position="top left",
     )
     fig.add_hline(
-        y=14, line_color="#ff1744", line_dash="dot", line_width=2, annotation_text="critical"
+        y=14,
+        line_color="#ff1744",
+        line_dash="dot",
+        line_width=1.5,
+        annotation_text="CRITICAL GATE · 14D",
+        annotation_font_color="#ff6b89",
+        annotation_position="bottom left",
     )
     fig.add_vline(
-        x=hours, line_color="#8be9ff", line_dash="dash", line_width=2, annotation_text="now"
+        x=hours,
+        line_color="#8be9ff",
+        line_dash="dash",
+        line_width=1.5,
+        annotation_text="SYNC POINT",
+        annotation_font_color="#8be9ff",
     )
     fig.update_layout(
         template="plotly_dark",
-        height=350,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        title={"text": f"Scenario: {scenario_name}", "font": {"color": "#edf6ff", "size": 15}},
-        xaxis_title="Operating Hours",
-        yaxis_title="Projected healthy life (days)",
-        font={"color": "#edf6ff", "family": "system-ui"},
+        height=450,
+        margin={"l": 50, "r": 58, "t": 72, "b": 48},
+        paper_bgcolor="rgba(2,6,18,0)",
+        plot_bgcolor="rgba(3,8,25,0.86)",
+        title={
+            "text": (
+                "<span style='font-size:11px;color:#8be9ff'>CYBER PRIME // NEURAL LIFE-LINE</span>"
+                f"<br><b>{scenario_name}</b>"
+            ),
+            "font": {"color": "#edf6ff", "size": 17},
+            "x": 0.02,
+        },
+        xaxis={
+            "title": "SIMULATION CLOCK · OPERATING HOURS",
+            "gridcolor": "rgba(139,233,255,0.055)",
+            "linecolor": "rgba(139,233,255,0.16)",
+            "tickfont": {"color": "rgba(190,218,235,0.66)"},
+        },
+        yaxis={
+            "title": "HEALTHY LIFE · DAYS",
+            "range": [0, max(80.0, float(np.max(upper)) * 1.12)],
+            "gridcolor": "rgba(139,233,255,0.055)",
+            "linecolor": "rgba(139,233,255,0.16)",
+            "tickfont": {"color": "rgba(190,218,235,0.66)"},
+        },
+        yaxis2={
+            "title": {"text": "DIGITAL WEAR · %", "font": {"color": "#ff91f8"}},
+            "overlaying": "y",
+            "side": "right",
+            "range": [0, 100],
+            "showgrid": False,
+            "tickfont": {"color": "#ff91f8"},
+        },
+        legend={
+            "orientation": "h",
+            "yanchor": "bottom",
+            "y": 1.01,
+            "xanchor": "right",
+            "x": 1,
+            "font": {"color": "rgba(220,240,250,0.72)", "size": 10},
+            "bgcolor": "rgba(2,6,18,0)",
+        },
+        hovermode="x unified",
+        hoverlabel={"bgcolor": "#070d20", "bordercolor": accent, "font_color": "#edf6ff"},
+        font={"color": "#edf6ff", "family": "Inter, system-ui"},
     )
-    fig.update_xaxes(gridcolor="rgba(255,255,255,0.06)")
-    fig.update_yaxes(gridcolor="rgba(255,255,255,0.06)")
+    visual = render_cyber_twin(
+        scenario_name,
+        base_vib,
+        base_temp,
+        projected_generator_temp,
+        projected_power,
+        projected_wind,
+        total_hours,
+        final_rul,
+        risk,
+        accent,
+    )
+    result = render_twin_result(
+        scenario_name,
+        risk,
+        accent,
+        final_rul,
+        total_hours,
+        float(cfg["degradation"]),
+        stress_pct,
+    )
+    components = render_component_diagnostics(
+        base_vib, base_temp, projected_generator_temp, projected_power, projected_wind, final_rul
+    )
+    council = render_agent_council(
+        scenario_name, base_vib, base_temp, projected_power, final_rul, risk
+    )
+    return visual, result, fig, components, council
 
-    final_rul = float(rul[-1])
-    risk, _, _ = classify_risk(final_rul)
-    status_color = RISK_COLORS[risk]["primary"]
-    info = f"""
-    <div style="padding:20px;border-radius:18px;
-                background:linear-gradient(135deg,rgba(10,22,40,0.92),rgba(16,35,63,0.88));
-                border:1px solid {hex_to_rgba(status_color, 0.2)};">
-      <h4 style="color:{status_color};margin:0 0 12px;">🔬 Simulation Result</h4>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px;">
-        <div><span style="color:rgba(160,180,200,0.6);">Scenario:</span> <b style="color:#edf6ff;">{scenario_name}</b></div>
-        <div><span style="color:rgba(160,180,200,0.6);">Total hours:</span> <b style="color:#edf6ff;">{total_hours:,.0f}h</b></div>
-        <div><span style="color:rgba(160,180,200,0.6);">Final RUL:</span> <b style="color:{status_color};">{final_rul:.0f} days</b></div>
-        <div><span style="color:rgba(160,180,200,0.6);">Degradation rate:</span> <b style="color:#edf6ff;">{cfg["degradation"]}x</b></div>
-      </div>
-    </div>
-    """
-    return info, fig
+
+def compare_twin_scenarios(scenarios, extra_hours, vib, btemp, gtemp, power, wind, hours):
+    """Compare multiple operating futures on one synchronized timeline."""
+    selected = list(scenarios or ["Nominal operation"])
+    projections = [
+        project_scenario(name, extra_hours, vib, btemp, gtemp, power, wind, hours, points=120)
+        for name in selected
+    ]
+    fig = go.Figure()
+    rows = []
+    for projection in projections:
+        accent = str(projection["config"]["accent"])
+        final_rul = projection["final_rul"]
+        risk, _, _ = classify_risk(final_rul)
+        fig.add_trace(
+            go.Scatter(
+                x=projection["hours"],
+                y=projection["rul"],
+                mode="lines",
+                name=projection["scenario"],
+                line={"color": accent, "width": 3},
+                hovertemplate=(
+                    f"{projection['scenario']}<br>%{{x:,.0f}} h · %{{y:.1f}} days<extra></extra>"
+                ),
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[projection["total_hours"]],
+                y=[final_rul],
+                mode="markers",
+                marker={"size": 9, "color": accent, "line": {"color": "#ffffff", "width": 1}},
+                showlegend=False,
+                hovertemplate=f"{final_rul:.1f} days<extra>{projection['scenario']}</extra>",
+            )
+        )
+        rows.append(
+            {
+                "scenario": projection["scenario"],
+                "accent": accent,
+                "final_rul": final_rul,
+                "final_wear": projection["final_wear"],
+                "stress_pct": projection["stress_pct"],
+                "energy_mwh": projection["energy_mwh"],
+                "risk": risk,
+            }
+        )
+    fig.add_hrect(y0=0, y1=14, fillcolor="rgba(255,23,68,0.07)", line_width=0)
+    fig.add_hrect(y0=14, y1=45, fillcolor="rgba(255,214,0,0.045)", line_width=0)
+    fig.add_hline(y=45, line_color="#ffd600", line_dash="dot", line_width=1)
+    fig.add_hline(y=14, line_color="#ff1744", line_dash="dot", line_width=1)
+    fig.update_layout(
+        template="plotly_dark",
+        height=460,
+        margin={"l": 48, "r": 24, "t": 68, "b": 45},
+        paper_bgcolor="rgba(2,6,18,0)",
+        plot_bgcolor="rgba(3,8,25,0.86)",
+        title={
+            "text": "<span style='font-size:11px;color:#8be9ff'>SCENARIO LAB // PARALLEL FUTURES</span><br><b>Decision Runway Comparison</b>",
+            "font": {"color": "#edf6ff", "size": 17},
+            "x": 0.02,
+        },
+        xaxis={"title": "SYNCHRONIZED OPERATING HOURS", "gridcolor": "rgba(139,233,255,0.055)"},
+        yaxis={"title": "PROJECTED HEALTHY LIFE · DAYS", "gridcolor": "rgba(139,233,255,0.055)"},
+        legend={"orientation": "h", "yanchor": "bottom", "y": 1.01, "x": 0, "font": {"size": 9}},
+        hovermode="x unified",
+        font={"family": "Inter, system-ui", "color": "#edf6ff"},
+    )
+    return render_scenario_comparison(rows), fig
+
+
+def ask_cyber_agents(question, scenario_name, extra_hours, vib, btemp, gtemp, power, wind, hours):
+    """Answer an operator question from the connected deterministic evidence brief."""
+    question = str(question or "").strip()
+    if not question:
+        return render_agent_answer(
+            "No question entered",
+            "Enter a question about maintenance timing, physics, uncertainty, or scenario impact.",
+            "COUNCIL",
+            ["human_review"],
+        )
+    projection = project_scenario(
+        scenario_name, extra_hours, vib, btemp, gtemp, power, wind, hours, points=80
+    )
+    risk, _, _ = classify_risk(projection["final_rul"])
+    team = build_cyber_team_brief(
+        asset_id="TWIN-07",
+        predicted_rul_days=projection["final_rul"],
+        physics_violations=[],
+        cumulative_wear=projection["final_wear"] / 100.0,
+        telemetry={
+            "vibration_mms": projection["projected_vibration"],
+            "temperature_c": projection["projected_bearing_temp"],
+            "power_output": projection["projected_power"],
+        },
+        risk=risk,
+    )
+    lower = question.lower()
+    if any(word in lower for word in ("physics", "vibration", "temperature", "bearing", "why")):
+        agent, answer = "KAI", team["agents"]["kai"]["finding"]
+    elif any(word in lower for word in ("when", "maintenance", "inspect", "crew", "plan")):
+        agent = "MIKA"
+        answer = (
+            f"{team['agents']['mika']['finding']} The current advisory review window is "
+            f"approximately {team['review_window_days']:.1f} days."
+        )
+    else:
+        agent, answer = "COUNCIL", team["shared_summary"]
+    return render_agent_answer(question, answer, agent, team["connected_sources"])
+
+
+def record_human_twin_review(decision, scenario_name, history):
+    """Append an advisory-only operator decision to session audit history."""
+    history = list(history or [])[-7:]
+    history.append({"sequence": len(history) + 1, "decision": decision, "scenario": scenario_name})
+    receipt = render_human_review_receipt(decision, scenario_name)
+    trail = "".join(
+        f"<span class='ct-evidence-chip'>#{item['sequence']} · {item['decision']}</span>"
+        for item in history
+    )
+    receipt += f"<div class='ct-evidence-chips' style='margin-top:8px;'>{trail}</div>"
+    return receipt, history
 
 
 def make_risk_distribution_chart():

@@ -13,6 +13,8 @@ these schemas, and every payload is screened by ``enforce_safety_contract``
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Re-export the domain models so API consumers can import everything from
@@ -143,6 +145,7 @@ class AdvisoryResponse(BaseModel):
     early_warning_triggered: bool = False
     warning_horizon_days: float = 45.0
     rationale: str
+    agent_team: dict[str, Any] | None = None
     advisory_only: bool = True
     generated_at: str
     disclaimer: str

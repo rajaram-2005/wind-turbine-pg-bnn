@@ -45,6 +45,8 @@ def test_root_advertises_advisory_only(client: TestClient):
     body = resp.json()
     assert body["advisory_only"] is True
     assert "DECISION-SUPPORT ONLY" in body["disclaimer"]
+    assert body["agent_team"]["agents"] == ["MIKA", "KAI"]
+    assert set(body["agent_team"]["connected_surfaces"]) >= {"advisory", "fleet", "twin"}
 
 
 def test_health(client: TestClient):
@@ -67,6 +69,9 @@ def test_advisory_returns_advisory_only_recommendation(client: TestClient):
     assert body["suggested_inspection_window_days"] <= 7
     # Two physics violations expected (vibration + temperature over limit).
     assert len(body["physics_violations"]) >= 2
+    assert body["agent_team"]["team_id"] == "CYBER_PRIME_DUAL_AGENT"
+    assert body["agent_team"]["agents"]["mika"]["name"] == "MIKA"
+    assert body["agent_team"]["agents"]["kai"]["name"] == "KAI"
     # No forbidden direct-actuation fields leak through.
     for bad in BLOCKED_KEYS:
         assert bad not in body
@@ -138,6 +143,7 @@ def test_fleet_endpoint_returns_summary_and_assets(client: TestClient):
     assert summary.mean_rul_days == pytest.approx((14.2 + 300.0) / 2, rel=1e-6)
     for asset in body["assets"]:
         assert asset["advisory_only"] is True
+        assert asset["agent_team"]["team_id"] == "CYBER_PRIME_DUAL_AGENT"
         for bad in BLOCKED_KEYS:
             assert bad not in asset
 

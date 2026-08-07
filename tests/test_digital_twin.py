@@ -51,6 +51,9 @@ def test_digital_twin_operations():
     assert rec["cumulative_wear"] > 0.0
     assert len(rec["physics_violations"]) == 0
     assert rec["bearing_l10_hours"] > 0.0
+    assert rec["agent_team"]["team_id"] == "CYBER_PRIME_DUAL_AGENT"
+    assert rec["agent_team"]["agents"]["mika"]["name"] == "MIKA"
+    assert rec["agent_team"]["agents"]["kai"]["name"] == "KAI"
 
     # Ingest bad telemetry (causing violations)
     tel_bad = Telemetry(
@@ -62,6 +65,7 @@ def test_digital_twin_operations():
     )
     rec_bad = twin.update_state(tel_bad, bnn)
     assert len(rec_bad["physics_violations"]) >= 3
+    assert "active constraint" in rec_bad["agent_team"]["agents"]["kai"]["finding"]
     # Wear should have increased faster
     assert rec_bad["cumulative_wear"] > rec["cumulative_wear"]
 
@@ -184,4 +188,7 @@ def test_engineering_prompt_generation():
     prompt = generate_engineering_prompt(twin)
     assert "Asset ID: WTG-TEST-03" in prompt
     assert "NREL 5MW Reference Turbine" in prompt
+    assert "CYBER PRIME DUAL-AGENT ASSESSMENT" in prompt
+    assert "MIKA / Maintenance Strategist" in prompt
+    assert "KAI / Physics Constraint Sentinel" in prompt
     assert "DECISION-SUPPORT ONLY" in prompt

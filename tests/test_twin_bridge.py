@@ -175,6 +175,8 @@ def test_api_twin_status_creates_and_reports(api_client):
     assert body["advisory_only"] is True
     assert body["n_state_records"] >= 1
     assert body["last_state"]["physics_violations"] == []
+    assert body["agent_team"]["team_id"] == "CYBER_PRIME_DUAL_AGENT"
+    assert body["last_state"]["agent_team"] == body["agent_team"]
     # No serving model configured in this app → no advisory source.
     assert body["last_state"]["advisory_source"] is None
 
@@ -255,6 +257,9 @@ def test_api_twin_prompt(api_client):
     assert body["asset_id"] == "WTG-PR"
     assert "SYSTEM INSTRUCTIONS" in body["prompt"]
     assert "WTG-PR" in body["prompt"]
+    assert "CYBER PRIME DUAL-AGENT ASSESSMENT" in body["prompt"]
+    assert "MIKA / Maintenance Strategist" in body["prompt"]
+    assert "KAI / Physics Constraint Sentinel" in body["prompt"]
     assert body["advisory_only"] is True
 
 
@@ -290,6 +295,9 @@ def test_cli_twin_status_advisory_bnn_state(tmp_path, capsys):
     assert "Advisory (source: bnn_state)" in out
     assert "Predicted RUL: 25.4 days" in out
     assert "Early warning (45d): TRIGGERED" in out
+    assert "Cyber Prime Agents: MIKA + KAI" in out
+    assert "MIKA:" in out
+    assert "KAI:" in out
 
 
 def test_cli_twin_status_advisory_without_inputs(capsys):
