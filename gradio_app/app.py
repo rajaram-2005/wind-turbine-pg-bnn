@@ -962,6 +962,7 @@ input[type="range"]::-webkit-slider-thumb {
 def build_interface() -> gr.Blocks:
     with gr.Blocks(
         title="AeroVigil EPIC — Wind Turbine Health Intelligence",
+        css=APP_CSS,
     ) as demo:
         # Hidden background element
         bg_html = gr.HTML(value=animated_background("LOW"), visible=True)
@@ -983,6 +984,20 @@ def build_interface() -> gr.Blocks:
                     font-weight:400;letter-spacing:0.02em;">
             See the failure before it happens · Schedule the repair before it becomes a rescue
           </p>
+          <nav style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:14px;">
+            <a href="/api/docs" target="_blank" style="color:#8be9ff;text-decoration:none;
+               border:1px solid rgba(139,233,255,.22);border-radius:999px;padding:6px 12px;">
+              Advisory · Twin · Telemetry API
+            </a>
+            <a href="/model-api/docs" target="_blank" style="color:#8be9ff;text-decoration:none;
+               border:1px solid rgba(139,233,255,.22);border-radius:999px;padding:6px 12px;">
+              PG-BNN Model API
+            </a>
+            <a href="/health" target="_blank" style="color:#00e5a0;text-decoration:none;
+               border:1px solid rgba(0,229,160,.22);border-radius:999px;padding:6px 12px;">
+              Unified Health
+            </a>
+          </nav>
         </div>
         """)
 

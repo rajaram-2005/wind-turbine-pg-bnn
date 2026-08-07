@@ -1,22 +1,23 @@
 version: "3.9"
 
 services:
-  # ─── CPU Inference API ─────────────────────────────────────
-  api:
+  # Canonical deployment: dashboard and every API share one process, host,
+  # health check, artifact mount, and port.
+  aerovigil:
     build:
       context: .
       dockerfile: Dockerfile
       target: runtime
     image: aerovigilai/wind-turbine-pg-bnn:latest
-    container_name: aerovigil-api
+    container_name: aerovigil
     ports:
       - "8000:8000"
     environment:
-      - SERVICE_MODE=api
+      - SERVICE_MODE=all
       - PORT=8000
       - LOG_LEVEL=info
     volumes:
-      - ./artifacts:/app/models:ro
+      - ./artifacts:/app/artifacts:ro
       - ./config.json:/app/config.json:ro
     restart: unless-stopped
     healthcheck:
@@ -25,56 +26,37 @@ services:
       timeout: 10s
       retries: 3
 
-  # ─── Gradio Demo ───────────────────────────────────────────
-  gradio:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    image: aerovigilai/wind-turbine-pg-bnn:latest
-    container_name: aerovigil-gradio
-    ports:
-      - "7860:7860"
-    environment:
-      - SERVICE_MODE=gradio
-    volumes:
-      - ./artifacts:/app/models:ro
-      - ./config.json:/app/config.json:ro
-      - ./gradio_app:/app/gradio_app:ro
-    restart: unless-stopped
-
-  # ─── Development Shell ─────────────────────────────────────
+  # Development shell uses exactly the same image and project tree.
   dev:
     build:
       context: .
       dockerfile: Dockerfile
       target: runtime
     image: aerovigilai/wind-turbine-pg-bnn:latest
-    container_name: aerovigil-dev
+    profiles: ["dev"]
     stdin_open: true
     tty: true
     environment:
       - SERVICE_MODE=cli
     volumes:
       - .:/app
-      - ./artifacts:/app/models:ro
     command: bash
 
-  # ─── GPU Inference (if CUDA available) ────────────────────
-  api-gpu:
+  # Optional GPU variant of the same unified application.
+  aerovigil-gpu:
     build:
       context: .
       dockerfile: Dockerfile
       target: gpu
     image: aerovigilai/wind-turbine-pg-bnn:gpu
-    container_name: aerovigil-api-gpu
+    profiles: ["gpu"]
     ports:
       - "8000:8000"
     environment:
-      - SERVICE_MODE=api
+      - SERVICE_MODE=all
       - PORT=8000
     volumes:
-      - ./artifacts:/app/models:ro
+      - ./artifacts:/app/artifacts:ro
       - ./config.json:/app/config.json:ro
     deploy:
       resources:

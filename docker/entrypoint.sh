@@ -36,8 +36,14 @@ if torch.cuda.is_available():
 "
 
 # Start service based on environment
-if [ "${SERVICE_MODE}" = "api" ]; then
-    echo "🚀 Starting FastAPI inference server..."
+if [ "${SERVICE_MODE}" = "all" ] || [ "${SERVICE_MODE}" = "unified" ]; then
+    echo "🚀 Starting unified dashboard + APIs on one port..."
+    exec uvicorn src.unified_app:app --host 0.0.0.0 --port ${PORT} --workers 1
+elif [ "${SERVICE_MODE}" = "api" ]; then
+    echo "🚀 Starting advisory API (legacy standalone mode)..."
+    exec uvicorn src.api.app:app --host 0.0.0.0 --port ${PORT} --workers 1
+elif [ "${SERVICE_MODE}" = "model-api" ]; then
+    echo "🚀 Starting low-level model API (legacy standalone mode)..."
     exec uvicorn src.aerovigil_pg_bnn.api:app --host 0.0.0.0 --port ${PORT} --workers 1
 elif [ "${SERVICE_MODE}" = "cli" ]; then
     echo "🔧 Running CLI inference..."
@@ -46,7 +52,7 @@ elif [ "${SERVICE_MODE}" = "gradio" ]; then
     echo "🎨 Starting Gradio demo..."
     exec python3 gradio_app/app.py
 else
-    echo "ℹ️  Container ready. Set SERVICE_MODE=api|cli|gradio to start service."
-    echo "    Example: docker run -e SERVICE_MODE=api aerovigil-pg-bnn"
+    echo "ℹ️  Container ready. Set SERVICE_MODE=all|api|model-api|cli|gradio."
+    echo "    Recommended: docker run -e SERVICE_MODE=all -p 8000:8000 aerovigil-pg-bnn"
     exec "$@"
 fi

@@ -7,11 +7,12 @@
 PYTHON ?= python
 PKG    := src/aerovigil_pg_bnn
 
-.PHONY: help dev install lint format format-check typecheck security test build docker-lint ci clean
+.PHONY: help dev install serve lint format format-check typecheck security test build docker-lint ci clean
 
 help: ## Show this help
 	@echo "Aerovigil PG-BNN — local CI targets (run 'make ci' for everything):"
 	@echo "  make ci           full pipeline: lint, format-check, typecheck, security, test, build"
+	@echo "  make serve        one-port dashboard + all APIs on http://localhost:8000"
 	@echo "  make lint         ruff check"
 	@echo "  make format       ruff format (writes)"
 	@echo "  make format-check ruff format --check"
@@ -24,9 +25,12 @@ help: ## Show this help
 	@echo "  make clean        remove build artifacts"
 
 dev: ## Install api + dev dependencies (lint, test, build, serve tools)
-	$(PYTHON) -m pip install -e ".[api,dev]"
+	$(PYTHON) -m pip install -e ".[api,dev,demo]"
 
 install: dev ## Alias for dev
+
+serve: ## Run the complete application through one process and port
+	$(PYTHON) -m uvicorn src.unified_app:app --host 0.0.0.0 --port 8000
 
 lint: ## Lint with ruff
 	ruff check .

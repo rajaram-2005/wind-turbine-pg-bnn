@@ -160,6 +160,31 @@ of the global installed fleet.
   the engineers who act on them. AeroVigil's physics guidance and uncertainty
   estimates are designed to close that trust gap.
 
+## One connected application — dashboard + every API
+
+AeroVigil now runs as **one project on one port**. The operator dashboard,
+advisory engine, fleet reporting, digital twin, AeroZip telemetry, and raw PG-BNN
+inference API all share the same process and deployment boundary:
+
+```bash
+pip install -e ".[api,demo]"
+uvicorn src.unified_app:app --host 0.0.0.0 --port 8000
+```
+
+Open <http://localhost:8000> for the dashboard. The connected service surfaces
+are available without starting any other server:
+
+| Surface | Path |
+|---|---|
+| Operator dashboard | `/` |
+| Unified health/discovery | `/health` |
+| Advisory, fleet, twin, telemetry, reports | `/api` (`/api/docs`) |
+| Low-level PG-BNN prediction | `/model-api` (`/model-api/docs`) |
+
+Or run the complete container with `docker compose up aerovigil`; dashboard and
+APIs are all exposed on port 8000. The old standalone launch commands remain
+available only for backwards compatibility.
+
 ## Try it right now — offline demo in 2 commands
 
 [![AeroVigil demo GIF](https://raw.githubusercontent.com/rajaram-2005/wind-turbine-pg-bnn/arena%2F019fd767-wind-turbine-pg-bnn/docs/assets/demo.gif)](docs/assets/aerovigil-demo.mp4)
