@@ -914,6 +914,8 @@ intervention—not emergency response.
 > operators, O&M leaders, ClimateTech investors, reliability researchers, and
 > industrial-IoT collaborators working to make renewable infrastructure more
 > resilient.
+>
+> **Connect:** [Rajaram on LinkedIn](https://www.linkedin.com/in/rajaramkuttalingampillai/)
 
 Read the full [Rajaram LinkedIn profile copy](docs/LINKEDIN_PROFILE.md) for
 headlines, project entries, and skills.

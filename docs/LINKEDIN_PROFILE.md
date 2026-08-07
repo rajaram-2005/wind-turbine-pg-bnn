@@ -1,5 +1,7 @@
 # Rajaram — LinkedIn Profile Copy
 
+**Profile:** [linkedin.com/in/rajaramkuttalingampillai](https://www.linkedin.com/in/rajaramkuttalingampillai/)
+
 ## 1. Headline options
 
 ### **Option A — Founder / investor focus**
