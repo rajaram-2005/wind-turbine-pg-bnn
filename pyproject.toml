@@ -47,7 +47,8 @@ dependencies = [
     "numpy>=1.24.0",
     "scipy>=1.10.0",
     "pandas>=2.0.0",
-    "huggingface-hub>=0.20.0",
+    # huggingface-hub 1.x requires Python 3.10; keep the declared Python 3.9 floor installable.
+    "huggingface-hub>=0.20.0,<1.0",
     "tqdm>=4.65.0",
     "pyyaml>=6.0",
 ]
@@ -63,7 +64,8 @@ dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
     "ruff>=0.6.0",
-    "mypy>=1.5.0",
+    # mypy 2.x no longer supports checking the package's declared Python 3.9 floor.
+    "mypy>=1.5.0,<2.0",
     "bandit>=1.7.5",
     "build>=1.0.0",
     "twine>=4.0.0",
@@ -132,6 +134,10 @@ skips = ["B104", "B615"]
 
 [tool.mypy]
 python_version = "3.9"
+# Some newest optional/runtime dependencies use Python 3.10-only syntax.
+# Type-check first-party code against the project's supported Python 3.9 floor;
+# dependencies are exercised by the test suite.
+follow_imports = "skip"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

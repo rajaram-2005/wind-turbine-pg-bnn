@@ -78,16 +78,27 @@ FLEET_TURBINES = [
     {"id": "WT-004", "name": "Mumbai Coast 2", "model": "Suzlon S97", "location": "Gujarat, IN"},
     {"id": "WT-005", "name": "Iowa Plains A", "model": "GE 1.5 SLE", "location": "Iowa, US"},
     {"id": "WT-006", "name": "Iowa Plains B", "model": "GE 1.5 SLE", "location": "Iowa, US"},
-    {"id": "WT-007", "name": "Patagonia Wind", "model": "Gamesa G114", "location": "Buenos Aires, AR"},
+    {
+        "id": "WT-007",
+        "name": "Patagonia Wind",
+        "model": "Gamesa G114",
+        "location": "Buenos Aires, AR",
+    },
     {"id": "WT-008", "name": "Nordic Frost", "model": "Nordex N100", "location": "Finland"},
     {"id": "WT-009", "name": "Sahara Edge", "model": "Siemens SWT-2.3", "location": "Morocco"},
     {"id": "WT-010", "name": "Offshore Delta", "model": "Senvion MM92", "location": "Netherlands"},
     {"id": "WT-011", "name": "Highland Echo", "model": "NREL 5MW", "location": "Scotland, UK"},
-    {"id": "WT-012", "name": "Tropical Breeze", "model": "Suzlon S97", "location": "Tamil Nadu, IN"},
+    {
+        "id": "WT-012",
+        "name": "Tropical Breeze",
+        "model": "Suzlon S97",
+        "location": "Tamil Nadu, IN",
+    },
 ]
 
 
 # ── Model loading ─────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class LoadedBundle:
@@ -147,25 +158,38 @@ def load_bundle() -> LoadedBundle:
 
 # ── Core logic ────────────────────────────────────────────────────
 
+
 def apply_scenario(name: str) -> tuple[float, float, float, float, float, float]:
     return SCENARIOS[name]
 
 
 def classify_risk(mean_rul: float) -> tuple[str, str, str]:
     if mean_rul < 14.0:
-        return ("CRITICAL", "🚨 Urgent: Stage crane + crew now",
-                "Failure risk is inside two weeks. Lock a crane slot, pre-stage spares, "
-                "and schedule intervention immediately.")
+        return (
+            "CRITICAL",
+            "🚨 Urgent: Stage crane + crew now",
+            "Failure risk is inside two weeks. Lock a crane slot, pre-stage spares, "
+            "and schedule intervention immediately.",
+        )
     if mean_rul < 30.0:
-        return ("HIGH", "⚠️ Plan repair in 2–4 weeks",
-                "The model sees time to organize, but not to wait. "
-                "Confirm parts, watch the trend daily, reserve your field team.")
+        return (
+            "HIGH",
+            "⚠️ Plan repair in 2–4 weeks",
+            "The model sees time to organize, but not to wait. "
+            "Confirm parts, watch the trend daily, reserve your field team.",
+        )
     if mean_rul < 45.0:
-        return ("MODERATE", "📋 Use the 45-day planning window",
-                "Proactive-maintenance zone. Put the turbine on the next maintenance "
-                "schedule to avoid a surprise breakdown.")
-    return ("LOW", "✅ Healthy: keep standard monitoring",
-            "Telemetry looks nominal. Keep trend monitoring on normal cadence.")
+        return (
+            "MODERATE",
+            "📋 Use the 45-day planning window",
+            "Proactive-maintenance zone. Put the turbine on the next maintenance "
+            "schedule to avoid a surprise breakdown.",
+        )
+    return (
+        "LOW",
+        "✅ Healthy: keep standard monitoring",
+        "Telemetry looks nominal. Keep trend monitoring on normal cadence.",
+    )
 
 
 def preprocess_input(raw_values: list[float], bundle: LoadedBundle) -> np.ndarray:
@@ -196,25 +220,36 @@ def simulate_fleet_prediction(rng: np.random.Generator) -> list[dict]:
         power = float(rng.uniform(800.0, 2600.0))
         wind = float(rng.uniform(4.0, 16.0))
         hours = float(rng.uniform(500.0, 82000.0))
-        rul = max(5.0, min(400.0, 420.0 - 5.0 * max(vib - 5.0, 0) ** 1.15
-                           - 2.0 * max(temp - 55.0, 0) ** 1.1
-                           - (hours / 87600.0) * 200.0 + rng.normal(0, 8)))
+        rul = max(
+            5.0,
+            min(
+                400.0,
+                420.0
+                - 5.0 * max(vib - 5.0, 0) ** 1.15
+                - 2.0 * max(temp - 55.0, 0) ** 1.1
+                - (hours / 87600.0) * 200.0
+                + rng.normal(0, 8),
+            ),
+        )
         risk, _, _ = classify_risk(rul)
-        fleet_data.append({
-            **t,
-            "vibration_rms": round(vib, 1),
-            "bearing_temp": round(temp, 1),
-            "generator_temp": round(gen_temp, 1),
-            "power_output": round(power, 0),
-            "wind_speed": round(wind, 1),
-            "operating_hours": round(hours, 0),
-            "rul_days": round(rul, 1),
-            "risk": risk,
-        })
+        fleet_data.append(
+            {
+                **t,
+                "vibration_rms": round(vib, 1),
+                "bearing_temp": round(temp, 1),
+                "generator_temp": round(gen_temp, 1),
+                "power_output": round(power, 0),
+                "wind_speed": round(wind, 1),
+                "operating_hours": round(hours, 0),
+                "rul_days": round(rul, 1),
+                "risk": risk,
+            }
+        )
     return fleet_data
 
 
 # ── HTML generators ───────────────────────────────────────────────
+
 
 def animated_background(risk: str = "LOW") -> str:
     colors = RISK_COLORS[risk]
@@ -228,7 +263,7 @@ def animated_background(risk: str = "LOW") -> str:
             <stop offset="100%" style="stop-color:#060d18"/>
           </radialGradient>
           <radialGradient id="glowGrad" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" style="stop-color:{colors['glow']}"/>
+            <stop offset="0%" style="stop-color:{colors["glow"]}"/>
             <stop offset="100%" style="stop-color:transparent"/>
           </radialGradient>
           <linearGradient id="bladeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -242,7 +277,7 @@ def animated_background(risk: str = "LOW") -> str:
         <rect width="100%" height="100%" fill="url(#skyGrad)"/>
         <!-- Stars -->
         <g opacity="0.6">
-          {''.join(f'<circle cx="{i*7.3%500}" cy="{i*3.7%300}" r="{0.5+i%3*0.3}" fill="white" opacity="{0.3+i%5*0.1}"><animate attributeName="opacity" values="{0.2+i%3*0.1};{0.6+i%4*0.1};{0.2+i%3*0.1}" dur="{2+i%4}s" repeatCount="indefinite"/></circle>' for i in range(40))}
+          {"".join(f'<circle cx="{i * 7.3 % 500}" cy="{i * 3.7 % 300}" r="{0.5 + i % 3 * 0.3}" fill="white" opacity="{0.3 + i % 5 * 0.1}"><animate attributeName="opacity" values="{0.2 + i % 3 * 0.1};{0.6 + i % 4 * 0.1};{0.2 + i % 3 * 0.1}" dur="{2 + i % 4}s" repeatCount="indefinite"/></circle>' for i in range(40))}
         </g>
         <!-- Ambient glow -->
         <ellipse cx="50%" cy="35%" rx="45%" ry="30%" fill="url(#glowGrad)" opacity="0.4">
@@ -250,7 +285,7 @@ def animated_background(risk: str = "LOW") -> str:
         </ellipse>
         <!-- Wind particles -->
         <g opacity="0.25">
-          {''.join(f'<line x1="-10" y1="{20+i*25}" x2="40" y2="{18+i*25}" stroke="{colors["primary"]}" stroke-width="1" opacity="0.4"><animate attributeName="x1" values="-10;100%" dur="{3+i%5}s" repeatCount="indefinite"/><animate attributeName="x2" values="40;calc(100% + 40px)" dur="{3+i%5}s" repeatCount="indefinite"/></line>' for i in range(12))}
+          {"".join(f'<line x1="-10" y1="{20 + i * 25}" x2="40" y2="{18 + i * 25}" stroke="{colors["primary"]}" stroke-width="1" opacity="0.4"><animate attributeName="x1" values="-10;100%" dur="{3 + i % 5}s" repeatCount="indefinite"/><animate attributeName="x2" values="40;calc(100% + 40px)" dur="{3 + i % 5}s" repeatCount="indefinite"/></line>' for i in range(12))}
         </g>
         <!-- Wind turbine 1 (left) -->
         <g transform="translate(12%, 55%)" filter="url(#glow)" opacity="0.35">
@@ -261,7 +296,7 @@ def animated_background(risk: str = "LOW") -> str:
             <path d="M0,0 L78,45 Q80,52 72,50 Z" fill="url(#bladeGrad)" opacity="0.6"/>
             <path d="M0,0 L-70,45 Q-78,50 -75,42 Z" fill="url(#bladeGrad)" opacity="0.5"/>
           </g>
-          <circle cx="0" cy="0" r="5" fill="{colors['primary']}" opacity="0.8">
+          <circle cx="0" cy="0" r="5" fill="{colors["primary"]}" opacity="0.8">
             <animate attributeName="r" values="4;6;4" dur="3s" repeatCount="indefinite"/>
           </circle>
         </g>
@@ -274,7 +309,7 @@ def animated_background(risk: str = "LOW") -> str:
             <path d="M0,0 L69,40 Q72,46 65,44 Z" fill="url(#bladeGrad)" opacity="0.5"/>
             <path d="M0,0 L-62,40 Q-68,44 -65,38 Z" fill="url(#bladeGrad)" opacity="0.4"/>
           </g>
-          <circle cx="0" cy="0" r="4" fill="{colors['secondary']}" opacity="0.7">
+          <circle cx="0" cy="0" r="4" fill="{colors["secondary"]}" opacity="0.7">
             <animate attributeName="opacity" values="0.5;0.9;0.5" dur="4s" repeatCount="indefinite"/>
           </circle>
         </g>
@@ -287,10 +322,10 @@ def animated_background(risk: str = "LOW") -> str:
             <path d="M0,0 L61,35 Q63,40 57,38 Z" fill="url(#bladeGrad)" opacity="0.4"/>
             <path d="M0,0 L-55,35 Q-60,38 -57,33 Z" fill="url(#bladeGrad)" opacity="0.3"/>
           </g>
-          <circle cx="0" cy="0" r="3" fill="{colors['primary']}" opacity="0.6"/>
+          <circle cx="0" cy="0" r="3" fill="{colors["primary"]}" opacity="0.6"/>
         </g>
         <!-- Horizon glow -->
-        <ellipse cx="50%" cy="92%" rx="60%" ry="8%" fill="{colors['primary']}" opacity="0.04"/>
+        <ellipse cx="50%" cy="92%" rx="60%" ry="8%" fill="{colors["primary"]}" opacity="0.04"/>
       </svg>
     </div>
     """
@@ -304,17 +339,17 @@ def create_animated_gauge(mean_rul: float, std_rul: float, risk: str) -> str:
     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 12px;
                 background:linear-gradient(180deg,rgba(8,17,31,0.95),rgba(10,22,40,0.98));
                 border-radius:24px;border:1px solid rgba(124,211,255,0.12);
-                box-shadow:0 0 60px {colors['glow']}, inset 0 0 30px rgba(0,0,0,0.3);
+                box-shadow:0 0 60px {colors["glow"]}, inset 0 0 30px rgba(0,0,0,0.3);
                 position:relative;overflow:hidden;">
       <!-- Animated ring background pulse -->
       <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:280px;height:280px;
-                  border-radius:50%;border:2px solid {colors['primary']};opacity:0.1;
+                  border-radius:50%;border:2px solid {colors["primary"]};opacity:0.1;
                   animation:pulse-ring 3s ease-in-out infinite;"></div>
       <svg width="260" height="220" viewBox="0 0 260 220">
         <defs>
           <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" style="stop-color:{colors['secondary']}"/>
-            <stop offset="100%" style="stop-color:{colors['primary']}"/>
+            <stop offset="0%" style="stop-color:{colors["secondary"]}"/>
+            <stop offset="100%" style="stop-color:{colors["primary"]}"/>
           </linearGradient>
           <filter id="gaugeGlow">
             <feGaussianBlur stdDeviation="4" result="blur"/>
@@ -336,18 +371,18 @@ def create_animated_gauge(mean_rul: float, std_rul: float, risk: str) -> str:
               stroke-dasharray="{angle * 3.14:.1f} 1000"
               style="transition: stroke-dasharray 1.5s cubic-bezier(0.4,0,0.2,1);"/>
         <!-- Tick marks -->
-        {"".join(f'<line x1="{130+105*np.cos(np.radians(225-i*2.7))}" y1="{130-105*np.sin(np.radians(225-i*2.7))}" x2="{130+95*np.cos(np.radians(225-i*2.7))}" y2="{130-95*np.sin(np.radians(225-i*2.7))}" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>' for i in range(0, 100, 10))}
+        {"".join(f'<line x1="{130 + 105 * np.cos(np.radians(225 - i * 2.7))}" y1="{130 - 105 * np.sin(np.radians(225 - i * 2.7))}" x2="{130 + 95 * np.cos(np.radians(225 - i * 2.7))}" y2="{130 - 95 * np.sin(np.radians(225 - i * 2.7))}" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>' for i in range(0, 100, 10))}
         <!-- Center value -->
-        <text x="130" y="115" text-anchor="middle" fill="{colors['primary']}"
+        <text x="130" y="115" text-anchor="middle" fill="{colors["primary"]}"
               font-size="52" font-weight="900" font-family="system-ui"
-              style="filter:drop-shadow(0 0 12px {colors['glow']});">
+              style="filter:drop-shadow(0 0 12px {colors["glow"]});">
           {mean_rul:.0f}
         </text>
         <text x="130" y="145" text-anchor="middle" fill="rgba(200,220,240,0.6)"
               font-size="13" font-weight="500" font-family="system-ui">
           days of healthy life
         </text>
-        <text x="130" y="170" text-anchor="middle" fill="{colors['secondary']}"
+        <text x="130" y="170" text-anchor="middle" fill="{colors["secondary"]}"
               font-size="14" font-weight="700" font-family="system-ui">
           ±{std_rul:.1f} days uncertainty
         </text>
@@ -365,23 +400,23 @@ def create_animated_gauge(mean_rul: float, std_rul: float, risk: str) -> str:
 def create_risk_badge(risk: str) -> str:
     colors = RISK_COLORS[risk]
     label = RISK_LABELS[risk]
-    pulse = 'animation:pulse-badge 2s ease-in-out infinite;' if risk == "CRITICAL" else ""
+    pulse = "animation:pulse-badge 2s ease-in-out infinite;" if risk == "CRITICAL" else ""
     return f"""
     <div style="display:inline-flex;align-items:center;gap:12px;padding:12px 20px;
                 border-radius:16px;font-size:15px;font-weight:800;
-                letter-spacing:0.04em;border:2px solid {colors['primary']}44;
-                background:{colors['glow']};color:{colors['primary']};
-                box-shadow:0 0 20px {colors['glow']};{pulse}
+                letter-spacing:0.04em;border:2px solid {colors["primary"]}44;
+                background:{colors["glow"]};color:{colors["primary"]};
+                box-shadow:0 0 20px {colors["glow"]};{pulse}
                 backdrop-filter:blur(10px);">
-      <span style="width:10px;height:10px;border-radius:50%;background:{colors['primary']};
-                   box-shadow:0 0 10px {colors['primary']};
+      <span style="width:10px;height:10px;border-radius:50%;background:{colors["primary"]};
+                   box-shadow:0 0 10px {colors["primary"]};
                    animation:blink 1.5s ease-in-out infinite;"></span>
       {label}
     </div>
     <style>
       @keyframes pulse-badge {{
-        0%,100% {{ box-shadow: 0 0 20px {colors['glow']}; }}
-        50% {{ box-shadow: 0 0 40px {colors['glow']}, 0 0 60px {colors['glow']}; }}
+        0%,100% {{ box-shadow: 0 0 20px {colors["glow"]}; }}
+        50% {{ box-shadow: 0 0 40px {colors["glow"]}, 0 0 60px {colors["glow"]}; }}
       }}
       @keyframes blink {{
         0%,100% {{ opacity:1; }} 50% {{ opacity:0.4; }}
@@ -395,10 +430,10 @@ def create_recommendation_card(risk: str, title: str, body: str) -> str:
     return f"""
     <div style="padding:20px 24px;border-radius:20px;
                 background:linear-gradient(135deg,rgba(10,22,40,0.95),rgba(16,35,63,0.9));
-                border:1px solid {colors['primary']}33;
-                box-shadow:inset 0 0 0 1px {colors['primary']}11, 0 8px 32px rgba(0,0,0,0.3);
+                border:1px solid {colors["primary"]}33;
+                box-shadow:inset 0 0 0 1px {colors["primary"]}11, 0 8px 32px rgba(0,0,0,0.3);
                 backdrop-filter:blur(10px);margin-top:8px;">
-      <div style="font-size:18px;font-weight:800;color:{colors['primary']};margin-bottom:8px;">
+      <div style="font-size:18px;font-weight:800;color:{colors["primary"]};margin-bottom:8px;">
         {title}
       </div>
       <div style="color:rgba(180,200,220,0.85);line-height:1.65;font-size:15px;">
@@ -413,28 +448,28 @@ def create_fleet_card(t: dict) -> str:
     return f"""
     <div style="padding:16px;border-radius:18px;
                 background:linear-gradient(135deg,rgba(10,22,40,0.92),rgba(16,35,63,0.88));
-                border:1px solid {colors['primary']}22;
+                border:1px solid {colors["primary"]}22;
                 box-shadow:0 4px 20px rgba(0,0,0,0.2);min-width:200px;
                 transition:transform 0.3s,box-shadow 0.3s;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <span style="font-size:13px;font-weight:800;color:{colors['primary']};
-                     letter-spacing:0.05em;">{t['id']}</span>
-        <span style="width:8px;height:8px;border-radius:50%;background:{colors['primary']};
-                     box-shadow:0 0 8px {colors['primary']};"></span>
+        <span style="font-size:13px;font-weight:800;color:{colors["primary"]};
+                     letter-spacing:0.05em;">{t["id"]}</span>
+        <span style="width:8px;height:8px;border-radius:50%;background:{colors["primary"]};
+                     box-shadow:0 0 8px {colors["primary"]};"></span>
       </div>
-      <div style="font-size:16px;font-weight:700;color:#edf6ff;margin-bottom:4px;">{t['name']}</div>
-      <div style="font-size:12px;color:rgba(160,180,200,0.7);margin-bottom:10px;">{t['model']} · {t['location']}</div>
-      <div style="font-size:28px;font-weight:900;color:{colors['primary']};
-                  text-shadow:0 0 15px {colors['glow']};">{t['rul_days']:.0f}<span style="font-size:13px;color:rgba(160,180,200,0.6);margin-left:4px;">days</span></div>
+      <div style="font-size:16px;font-weight:700;color:#edf6ff;margin-bottom:4px;">{t["name"]}</div>
+      <div style="font-size:12px;color:rgba(160,180,200,0.7);margin-bottom:10px;">{t["model"]} · {t["location"]}</div>
+      <div style="font-size:28px;font-weight:900;color:{colors["primary"]};
+                  text-shadow:0 0 15px {colors["glow"]};">{t["rul_days"]:.0f}<span style="font-size:13px;color:rgba(160,180,200,0.6);margin-left:4px;">days</span></div>
       <div style="margin-top:8px;height:4px;border-radius:2px;background:rgba(255,255,255,0.06);overflow:hidden;">
-        <div style="height:100%;width:{min(100,max(0,t['rul_days']/365*100)):.1f}%;
-                    background:linear-gradient(90deg,{colors['secondary']},{colors['primary']});
+        <div style="height:100%;width:{min(100, max(0, t["rul_days"] / 365 * 100)):.1f}%;
+                    background:linear-gradient(90deg,{colors["secondary"]},{colors["primary"]});
                     border-radius:2px;transition:width 1s;"></div>
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:rgba(160,180,200,0.5);">
-        <span>Vib: {t['vibration_rms']} mm/s</span>
-        <span>Temp: {t['bearing_temp']}°C</span>
-        <span>{t['operating_hours']:.0f}h</span>
+        <span>Vib: {t["vibration_rms"]} mm/s</span>
+        <span>Temp: {t["bearing_temp"]}°C</span>
+        <span>{t["operating_hours"]:.0f}h</span>
       </div>
     </div>
     """
@@ -494,30 +529,65 @@ def create_fleet_dashboard_html() -> str:
 
 # ── Chart generators ──────────────────────────────────────────────
 
+
 def make_histogram(predictions, mean_rul, ci_lower, ci_upper, risk):
     colors = RISK_COLORS[risk]
     fig = go.Figure()
-    fig.add_trace(go.Histogram(
-        x=predictions, nbinsx=32,
-        marker={"color": colors["primary"], "line": {"color": "#0c1627", "width": 1}},
-        opacity=0.85, hovertemplate="%{{x:.1f}} days<extra></extra>",
-    ))
-    fig.add_vline(x=mean_rul, line_color="#8be9ff", line_width=3,
-                  annotation_text=f"mean {mean_rul:.1f}d", annotation_position="top right")
-    fig.add_vline(x=ci_lower, line_color="#cfd8e3", line_width=2, line_dash="dash",
-                  annotation_text="95% CI", annotation_position="top left")
+    fig.add_trace(
+        go.Histogram(
+            x=predictions,
+            nbinsx=32,
+            marker={"color": colors["primary"], "line": {"color": "#0c1627", "width": 1}},
+            opacity=0.85,
+            hovertemplate="%{{x:.1f}} days<extra></extra>",
+        )
+    )
+    fig.add_vline(
+        x=mean_rul,
+        line_color="#8be9ff",
+        line_width=3,
+        annotation_text=f"mean {mean_rul:.1f}d",
+        annotation_position="top right",
+    )
+    fig.add_vline(
+        x=ci_lower,
+        line_color="#cfd8e3",
+        line_width=2,
+        line_dash="dash",
+        annotation_text="95% CI",
+        annotation_position="top left",
+    )
     fig.add_vline(x=ci_upper, line_color="#cfd8e3", line_width=2, line_dash="dash")
-    fig.add_vline(x=45.0, line_color="#ffd600", line_width=3, line_dash="dot",
-                  annotation_text="45-day", annotation_position="bottom right")
-    fig.add_vline(x=14.0, line_color="#ff1744", line_width=3, line_dash="dot",
-                  annotation_text="critical", annotation_position="bottom left")
+    fig.add_vline(
+        x=45.0,
+        line_color="#ffd600",
+        line_width=3,
+        line_dash="dot",
+        annotation_text="45-day",
+        annotation_position="bottom right",
+    )
+    fig.add_vline(
+        x=14.0,
+        line_color="#ff1744",
+        line_width=3,
+        line_dash="dot",
+        annotation_text="critical",
+        annotation_position="bottom left",
+    )
     fig.update_layout(
-        template="plotly_dark", height=340,
+        template="plotly_dark",
+        height=340,
         margin={"l": 18, "r": 18, "t": 44, "b": 18},
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        title={"text": "Monte Carlo Prediction Distribution", "font": {"color": "#edf6ff", "size": 15}},
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        title={
+            "text": "Monte Carlo Prediction Distribution",
+            "font": {"color": "#edf6ff", "size": 15},
+        },
         xaxis_title="Predicted healthy life remaining (days)",
-        yaxis_title="Frequency", bargap=0.04, showlegend=False,
+        yaxis_title="Frequency",
+        bargap=0.04,
+        showlegend=False,
         font={"color": "#edf6ff", "family": "system-ui"},
     )
     fig.update_xaxes(gridcolor="rgba(255,255,255,0.06)", zerolinecolor="rgba(255,255,255,0.08)")
@@ -536,29 +606,64 @@ def make_radar_chart(vibration, bearing_temp, gen_temp, power, wind_speed, hours
     age_health = max(0, 100 - hours / 876)
 
     fig = go.Figure()
-    fig.add_trace(go.Scatterpolar(
-        r=[vib_health, temp_health, gen_health, power_health, wind_health, age_health] + [vib_health],
-        theta=["Vibration", "Bearing Temp", "Generator Temp", "Power", "Wind", "Age", "Vibration"],
-        fill="toself", fillcolor=f"{colors['primary']}22",
-        line=dict(color=colors["primary"], width=2),
-        marker=dict(size=6, color=colors["primary"]),
-    ))
+    fig.add_trace(
+        go.Scatterpolar(
+            r=[vib_health, temp_health, gen_health, power_health, wind_health, age_health]
+            + [vib_health],
+            theta=[
+                "Vibration",
+                "Bearing Temp",
+                "Generator Temp",
+                "Power",
+                "Wind",
+                "Age",
+                "Vibration",
+            ],
+            fill="toself",
+            fillcolor=f"{colors['primary']}22",
+            line={"color": colors["primary"], "width": 2},
+            marker={"size": 6, "color": colors["primary"]},
+        )
+    )
     # Add threshold ring
-    fig.add_trace(go.Scatterpolar(
-        r=[50]*7, theta=["Vibration", "Bearing Temp", "Generator Temp", "Power", "Wind", "Age", "Vibration"],
-        fill="none", line=dict(color="rgba(255,255,255,0.1)", width=1, dash="dot"),
-        showlegend=False, hoverinfo="skip",
-    ))
+    fig.add_trace(
+        go.Scatterpolar(
+            r=[50] * 7,
+            theta=[
+                "Vibration",
+                "Bearing Temp",
+                "Generator Temp",
+                "Power",
+                "Wind",
+                "Age",
+                "Vibration",
+            ],
+            fill="none",
+            line={"color": "rgba(255,255,255,0.1)", "width": 1, "dash": "dot"},
+            showlegend=False,
+            hoverinfo="skip",
+        )
+    )
     fig.update_layout(
-        polar=dict(
-            bgcolor="rgba(0,0,0,0)",
-            radialaxis=dict(visible=True, range=[0, 100], gridcolor="rgba(255,255,255,0.08)",
-                           tickcolor="rgba(255,255,255,0.1)", tickfont={"color": "rgba(160,180,200,0.5)", "size": 10}),
-            angularaxis=dict(gridcolor="rgba(255,255,255,0.06)",
-                            tickfont={"color": "#8be9ff", "size": 12}),
-        ),
-        template="plotly_dark", height=360, showlegend=False,
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        polar={
+            "bgcolor": "rgba(0,0,0,0)",
+            "radialaxis": {
+                "visible": True,
+                "range": [0, 100],
+                "gridcolor": "rgba(255,255,255,0.08)",
+                "tickcolor": "rgba(255,255,255,0.1)",
+                "tickfont": {"color": "rgba(160,180,200,0.5)", "size": 10},
+            },
+            "angularaxis": {
+                "gridcolor": "rgba(255,255,255,0.06)",
+                "tickfont": {"color": "#8be9ff", "size": 12},
+            },
+        },
+        template="plotly_dark",
+        height=360,
+        showlegend=False,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         margin={"l": 40, "r": 40, "t": 40, "b": 40},
         title={"text": "Turbine Health Radar", "font": {"color": "#edf6ff", "size": 15}},
     )
@@ -577,31 +682,64 @@ def make_trend_chart(hours_val, risk):
     health_noisy = np.clip(health_noisy, 0, 450)
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=t, y=health_noisy, mode="lines",
-        line={"color": colors["primary"], "width": 2.5},
-        name="Health Index", hovertemplate="%{{x:.0f}}h: %{{y:.1f}} days<extra></extra>",
-    ))
-    fig.add_trace(go.Scatter(
-        x=t, y=health_noisy, mode="lines",
-        line={"color": colors["primary"], "width": 0},
-        fill="tozeroy", fillcolor=f"{colors['primary']}11",
-        showlegend=False, hoverinfo="skip",
-    ))
-    fig.add_hline(y=45, line_color="#ffd600", line_width=2, line_dash="dot",
-                  annotation_text="45-day plan window", annotation_position="top right")
-    fig.add_hline(y=14, line_color="#ff1744", line_width=2, line_dash="dot",
-                  annotation_text="critical", annotation_position="bottom right")
-    fig.add_vline(x=hours_val, line_color="#8be9ff", line_width=2, line_dash="dash",
-                  annotation_text="now", annotation_position="top")
+    fig.add_trace(
+        go.Scatter(
+            x=t,
+            y=health_noisy,
+            mode="lines",
+            line={"color": colors["primary"], "width": 2.5},
+            name="Health Index",
+            hovertemplate="%{{x:.0f}}h: %{{y:.1f}} days<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=t,
+            y=health_noisy,
+            mode="lines",
+            line={"color": colors["primary"], "width": 0},
+            fill="tozeroy",
+            fillcolor=f"{colors['primary']}11",
+            showlegend=False,
+            hoverinfo="skip",
+        )
+    )
+    fig.add_hline(
+        y=45,
+        line_color="#ffd600",
+        line_width=2,
+        line_dash="dot",
+        annotation_text="45-day plan window",
+        annotation_position="top right",
+    )
+    fig.add_hline(
+        y=14,
+        line_color="#ff1744",
+        line_width=2,
+        line_dash="dot",
+        annotation_text="critical",
+        annotation_position="bottom right",
+    )
+    fig.add_vline(
+        x=hours_val,
+        line_color="#8be9ff",
+        line_width=2,
+        line_dash="dash",
+        annotation_text="now",
+        annotation_position="top",
+    )
 
     fig.update_layout(
-        template="plotly_dark", height=340,
+        template="plotly_dark",
+        height=340,
         margin={"l": 18, "r": 18, "t": 44, "b": 18},
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         title={"text": "Degradation Trend Over Time", "font": {"color": "#edf6ff", "size": 15}},
-        xaxis_title="Operating Hours", yaxis_title="Estimated Healthy Life (days)",
-        showlegend=False, font={"color": "#edf6ff", "family": "system-ui"},
+        xaxis_title="Operating Hours",
+        yaxis_title="Estimated Healthy Life (days)",
+        showlegend=False,
+        font={"color": "#edf6ff", "family": "system-ui"},
     )
     fig.update_xaxes(gridcolor="rgba(255,255,255,0.06)")
     fig.update_yaxes(gridcolor="rgba(255,255,255,0.06)")
@@ -613,34 +751,59 @@ def make_power_curve(wind_speed, power_output, risk):
     winds = np.linspace(0, 25, 100)
     rated = 2500.0
     cut_in, rated_wind, cut_out = 3.0, 12.0, 25.0
-    power_curve = np.where(winds < cut_in, 0,
-                  np.where(winds < rated_wind, rated * ((winds - cut_in) / (rated_wind - cut_in)) ** 3,
-                  np.where(winds <= cut_out, rated, 0)))
+    power_curve = np.where(
+        winds < cut_in,
+        0,
+        np.where(
+            winds < rated_wind,
+            rated * ((winds - cut_in) / (rated_wind - cut_in)) ** 3,
+            np.where(winds <= cut_out, rated, 0),
+        ),
+    )
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=winds, y=power_curve, mode="lines",
-        line={"color": "rgba(0,184,212,0.5)", "width": 2, "dash": "dash"},
-        name="Ideal power curve",
-    ))
-    fig.add_trace(go.Scatter(
-        x=[wind_speed], y=[power_output], mode="markers",
-        marker={"size": 16, "color": colors["primary"],
+    fig.add_trace(
+        go.Scatter(
+            x=winds,
+            y=power_curve,
+            mode="lines",
+            line={"color": "rgba(0,184,212,0.5)", "width": 2, "dash": "dash"},
+            name="Ideal power curve",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[wind_speed],
+            y=[power_output],
+            mode="markers",
+            marker={
+                "size": 16,
+                "color": colors["primary"],
                 "line": {"color": "white", "width": 2},
-                "symbol": "circle"},
-        name="Current operating point",
-    ))
-    fig.add_trace(go.Scatter(
-        x=[wind_speed], y=[power_output], mode="markers",
-        marker={"size": 30, "color": f"{colors['primary']}33", "symbol": "circle"},
-        showlegend=False, hoverinfo="skip",
-    ))
+                "symbol": "circle",
+            },
+            name="Current operating point",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[wind_speed],
+            y=[power_output],
+            mode="markers",
+            marker={"size": 30, "color": f"{colors['primary']}33", "symbol": "circle"},
+            showlegend=False,
+            hoverinfo="skip",
+        )
+    )
     fig.update_layout(
-        template="plotly_dark", height=340,
+        template="plotly_dark",
+        height=340,
         margin={"l": 18, "r": 18, "t": 44, "b": 18},
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         title={"text": "Power Curve Analysis", "font": {"color": "#edf6ff", "size": 15}},
-        xaxis_title="Wind Speed (m/s)", yaxis_title="Power Output (kW)",
+        xaxis_title="Wind Speed (m/s)",
+        yaxis_title="Power Output (kW)",
         font={"color": "#edf6ff", "family": "system-ui"},
     )
     fig.update_xaxes(gridcolor="rgba(255,255,255,0.06)")
@@ -650,12 +813,26 @@ def make_power_curve(wind_speed, power_output, risk):
 
 # ── Main prediction function ──────────────────────────────────────
 
-def predict_rul(vibration_rms, bearing_temp, generator_temp, power_output,
-                wind_speed, operating_hours, n_samples):
+
+def predict_rul(
+    vibration_rms,
+    bearing_temp,
+    generator_temp,
+    power_output,
+    wind_speed,
+    operating_hours,
+    n_samples,
+):
     started = time.perf_counter()
     bundle = load_bundle()
-    raw_values = [float(vibration_rms), float(bearing_temp), float(generator_temp),
-                  float(power_output), float(wind_speed), float(operating_hours)]
+    raw_values = [
+        float(vibration_rms),
+        float(bearing_temp),
+        float(generator_temp),
+        float(power_output),
+        float(wind_speed),
+        float(operating_hours),
+    ]
     model_input = preprocess_input(raw_values, bundle)
     predictions = run_inference(bundle, model_input, int(n_samples))
 
@@ -672,8 +849,9 @@ def predict_rul(vibration_rms, bearing_temp, generator_temp, power_output,
     rec = create_recommendation_card(risk, rec_title, rec_copy)
 
     histogram = make_histogram(predictions, mean_rul, ci_lower, ci_upper, risk)
-    radar = make_radar_chart(vibration_rms, bearing_temp, generator_temp,
-                             power_output, wind_speed, operating_hours, risk)
+    radar = make_radar_chart(
+        vibration_rms, bearing_temp, generator_temp, power_output, wind_speed, operating_hours, risk
+    )
     trend = make_trend_chart(operating_hours, risk)
     power_curve = make_power_curve(wind_speed, power_output, risk)
 
@@ -686,8 +864,10 @@ def predict_rul(vibration_rms, bearing_temp, generator_temp, power_output,
         f"- **Inference latency:** {latency_ms:.0f} ms ({CPU_THREADS} threads)\n"
     )
     payload = {
-        "mean_rul_days": round(mean_rul, 2), "uncertainty_days": round(std_rul, 2),
-        "ci_95": [round(ci_lower, 2), round(ci_upper, 2)], "risk_level": risk,
+        "mean_rul_days": round(mean_rul, 2),
+        "uncertainty_days": round(std_rul, 2),
+        "ci_95": [round(ci_lower, 2), round(ci_upper, 2)],
+        "risk_level": risk,
         "latency_ms": round(latency_ms, 1),
         "raw_input": dict(zip(FEATURE_NAMES, raw_values)),
     }
@@ -778,6 +958,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 # ── Build the app ─────────────────────────────────────────────────
 
+
 def build_interface() -> gr.Blocks:
     with gr.Blocks(
         title="AeroVigil EPIC — Wind Turbine Health Intelligence",
@@ -808,12 +989,14 @@ def build_interface() -> gr.Blocks:
         # KPI strip
         gr.HTML(create_kpi_strip())
 
-        with gr.Tabs() as tabs:
+        with gr.Tabs():
             # ── TAB 1: Dashboard ─────────────────────────────
             with gr.TabItem("📊 Dashboard"):
                 gr.HTML(create_fleet_dashboard_html(), elem_classes=["glass-card"])
                 with gr.Row():
-                    fleet_refresh = gr.Button("🔄 Refresh Fleet Data", variant="secondary", size="sm")
+                    fleet_refresh = gr.Button(
+                        "🔄 Refresh Fleet Data", variant="secondary", size="sm"
+                    )
                 fleet_output = gr.HTML()
                 fleet_refresh.click(fn=generate_fleet, outputs=[fleet_output])
 
@@ -834,35 +1017,48 @@ def build_interface() -> gr.Blocks:
                         </div>
                         """)
                         scenario = gr.Dropdown(
-                            choices=list(SCENARIOS.keys()), value="🟢 Healthy turbine",
+                            choices=list(SCENARIOS.keys()),
+                            value="🟢 Healthy turbine",
                             label="Scenario Preset",
                             info="Pick a demo case — sliders update automatically",
                         )
-                        vibration_rms = gr.Slider(0.0, 40.0, value=12.5, step=0.1,
-                                                   label="🫨 Vibration RMS (mm/s)")
-                        bearing_temp = gr.Slider(30.0, 130.0, value=65.0, step=0.5,
-                                                  label="🌡️ Bearing Temperature (°C)")
-                        generator_temp = gr.Slider(40.0, 170.0, value=80.0, step=0.5,
-                                                    label="🔥 Generator Temperature (°C)")
-                        power_output = gr.Slider(0.0, 3000.0, value=2000.0, step=10.0,
-                                                  label="⚡ Power Output (kW)")
-                        wind_speed = gr.Slider(0.0, 20.0, value=9.0, step=0.1,
-                                                label="💨 Wind Speed (m/s)")
-                        operating_hours = gr.Slider(0.0, 90000.0, value=1000.0, step=100.0,
-                                                     label="⏱️ Operating Hours")
-                        n_samples = gr.Slider(20, 200, value=100, step=10,
-                                               label="🎲 Monte Carlo Samples")
+                        vibration_rms = gr.Slider(
+                            0.0, 40.0, value=12.5, step=0.1, label="🫨 Vibration RMS (mm/s)"
+                        )
+                        bearing_temp = gr.Slider(
+                            30.0, 130.0, value=65.0, step=0.5, label="🌡️ Bearing Temperature (°C)"
+                        )
+                        generator_temp = gr.Slider(
+                            40.0, 170.0, value=80.0, step=0.5, label="🔥 Generator Temperature (°C)"
+                        )
+                        power_output = gr.Slider(
+                            0.0, 3000.0, value=2000.0, step=10.0, label="⚡ Power Output (kW)"
+                        )
+                        wind_speed = gr.Slider(
+                            0.0, 20.0, value=9.0, step=0.1, label="💨 Wind Speed (m/s)"
+                        )
+                        operating_hours = gr.Slider(
+                            0.0, 90000.0, value=1000.0, step=100.0, label="⏱️ Operating Hours"
+                        )
+                        n_samples = gr.Slider(
+                            20, 200, value=100, step=10, label="🎲 Monte Carlo Samples"
+                        )
                         predict_btn = gr.Button("🚀 Run Prediction", variant="primary", size="lg")
 
                     with gr.Column(scale=6, min_width=420):
                         gauge_html = gr.HTML(value=create_animated_gauge(280.0, 5.1, "LOW"))
                         risk_badge_html = gr.HTML(value=create_risk_badge("LOW"))
-                        rec_html = gr.HTML(value=create_recommendation_card(
-                            "LOW", "✅ Healthy: keep standard monitoring",
-                            "Telemetry looks nominal. Press Predict to run stochastic inference."))
+                        rec_html = gr.HTML(
+                            value=create_recommendation_card(
+                                "LOW",
+                                "✅ Healthy: keep standard monitoring",
+                                "Telemetry looks nominal. Press Predict to run stochastic inference.",
+                            )
+                        )
                         stats_md = gr.Markdown(
                             "### 📊 Prediction Stats\n- **Run a prediction** to see results",
-                            elem_classes=["glass-card"])
+                            elem_classes=["glass-card"],
+                        )
                         api_payload = gr.JSON(value={}, visible=False)
 
                 # Charts row
@@ -901,11 +1097,11 @@ def build_interface() -> gr.Blocks:
                   </p>
                 </div>
                 """)
-                fleet_view_html = gr.HTML(value=create_fleet_dashboard_html())
+                gr.HTML(value=create_fleet_dashboard_html())
                 fleet_map = make_fleet_map_chart()
-                fleet_map_plot = gr.Plot(value=fleet_map, label="Global Fleet Map")
+                gr.Plot(value=fleet_map, label="Global Fleet Map")
                 fleet_bar = make_fleet_comparison_chart()
-                fleet_bar_plot = gr.Plot(value=fleet_bar, label="Fleet RUL Comparison")
+                gr.Plot(value=fleet_bar, label="Fleet RUL Comparison")
 
             # ── TAB 4: Digital Twin ──────────────────────────
             with gr.TabItem("🏭 Digital Twin"):
@@ -924,19 +1120,36 @@ def build_interface() -> gr.Blocks:
                 with gr.Row():
                     with gr.Column():
                         twin_scenario = gr.Dropdown(
-                            choices=["Nominal operation", "High wind overload",
-                                     "Derated operation", "Tropical heat stress"],
-                            value="Nominal operation", label="Scenario")
-                        twin_hours = gr.Slider(0, 20000, 5000, 500,
-                                                label="Additional hours to simulate")
+                            choices=[
+                                "Nominal operation",
+                                "High wind overload",
+                                "Derated operation",
+                                "Tropical heat stress",
+                            ],
+                            value="Nominal operation",
+                            label="Scenario",
+                        )
+                        twin_hours = gr.Slider(
+                            0, 20000, 5000, 500, label="Additional hours to simulate"
+                        )
                         twin_btn = gr.Button("🔬 Run Simulation", variant="primary")
                     with gr.Column():
                         twin_output = gr.HTML()
                 twin_chart = gr.Plot(label="Scenario Projection")
-                twin_btn.click(fn=run_twin_simulation,
-                              inputs=[twin_scenario, twin_hours, vibration_rms, bearing_temp,
-                                      generator_temp, power_output, wind_speed, operating_hours],
-                              outputs=[twin_output, twin_chart])
+                twin_btn.click(
+                    fn=run_twin_simulation,
+                    inputs=[
+                        twin_scenario,
+                        twin_hours,
+                        vibration_rms,
+                        bearing_temp,
+                        generator_temp,
+                        power_output,
+                        wind_speed,
+                        operating_hours,
+                    ],
+                    outputs=[twin_output, twin_chart],
+                )
 
             # ── TAB 5: Analytics ─────────────────────────────
             with gr.TabItem("📈 Analytics"):
@@ -951,12 +1164,12 @@ def build_interface() -> gr.Blocks:
                 """)
                 with gr.Row():
                     analytics_risk_dist = make_risk_distribution_chart()
-                    risk_dist_plot = gr.Plot(value=analytics_risk_dist, label="Risk Distribution")
+                    gr.Plot(value=analytics_risk_dist, label="Risk Distribution")
                     analytics_oem = make_oem_comparison_chart()
-                    oem_plot = gr.Plot(value=analytics_oem, label="OEM Comparison")
+                    gr.Plot(value=analytics_oem, label="OEM Comparison")
                 with gr.Row():
                     analytics_timeline = make_timeline_chart()
-                    timeline_plot = gr.Plot(value=analytics_timeline, label="Maintenance Timeline")
+                    gr.Plot(value=analytics_timeline, label="Maintenance Timeline")
 
         # Footer
         gr.HTML("""
@@ -981,54 +1194,102 @@ def build_interface() -> gr.Blocks:
 
         # Wire up events
         scenario.change(
-            fn=apply_scenario, inputs=scenario,
-            outputs=[vibration_rms, bearing_temp, generator_temp,
-                     power_output, wind_speed, operating_hours])
+            fn=apply_scenario,
+            inputs=scenario,
+            outputs=[
+                vibration_rms,
+                bearing_temp,
+                generator_temp,
+                power_output,
+                wind_speed,
+                operating_hours,
+            ],
+        )
 
         predict_btn.click(
             fn=predict_rul,
-            inputs=[vibration_rms, bearing_temp, generator_temp,
-                    power_output, wind_speed, operating_hours, n_samples],
-            outputs=[bg_html, gauge_html, risk_badge_html, rec_html,
-                     hist_plot, radar_plot, trend_plot, power_plot, stats_md, api_payload],
-            api_name="predict_rul")
+            inputs=[
+                vibration_rms,
+                bearing_temp,
+                generator_temp,
+                power_output,
+                wind_speed,
+                operating_hours,
+                n_samples,
+            ],
+            outputs=[
+                bg_html,
+                gauge_html,
+                risk_badge_html,
+                rec_html,
+                hist_plot,
+                radar_plot,
+                trend_plot,
+                power_plot,
+                stats_md,
+                api_payload,
+            ],
+            api_name="predict_rul",
+        )
 
     return demo
 
 
 # ── Additional chart generators for tabs ──────────────────────────
 
+
 def make_fleet_map_chart():
     fig = go.Figure()
     locations = [
-        ("North Ridge α", 57.0, 10.0), ("North Ridge β", 57.1, 10.2),
-        ("Mumbai Coast 1", 19.0, 72.8), ("Mumbai Coast 2", 19.1, 72.9),
-        ("Iowa Plains A", 41.9, -93.1), ("Iowa Plains B", 42.0, -93.0),
-        ("Patagonia Wind", -40.7, -65.3), ("Nordic Frost", 61.9, 24.0),
-        ("Sahara Edge", 31.6, -8.0), ("Offshore Delta", 52.4, 4.3),
-        ("Highland Echo", 57.5, -5.0), ("Tropical Breeze", 11.0, 77.5),
+        ("North Ridge α", 57.0, 10.0),
+        ("North Ridge β", 57.1, 10.2),
+        ("Mumbai Coast 1", 19.0, 72.8),
+        ("Mumbai Coast 2", 19.1, 72.9),
+        ("Iowa Plains A", 41.9, -93.1),
+        ("Iowa Plains B", 42.0, -93.0),
+        ("Patagonia Wind", -40.7, -65.3),
+        ("Nordic Frost", 61.9, 24.0),
+        ("Sahara Edge", 31.6, -8.0),
+        ("Offshore Delta", 52.4, 4.3),
+        ("Highland Echo", 57.5, -5.0),
+        ("Tropical Breeze", 11.0, 77.5),
     ]
     rng = np.random.default_rng(42)
     for name, lat, lon in locations:
         rul = float(rng.uniform(8, 350))
         risk, _, _ = classify_risk(rul)
         colors = RISK_COLORS[risk]
-        fig.add_trace(go.Scattergeo(
-            lat=[lat], lon=[lon], text=[f"{name}<br>RUL: {rul:.0f}d"],
-            mode="markers", hoverinfo="text",
-            marker=dict(size=max(8, min(20, rul/15)), color=colors["primary"],
-                       opacity=0.8, line=dict(width=1, color="white")),
-        ))
+        fig.add_trace(
+            go.Scattergeo(
+                lat=[lat],
+                lon=[lon],
+                text=[f"{name}<br>RUL: {rul:.0f}d"],
+                mode="markers",
+                hoverinfo="text",
+                marker={
+                    "size": max(8, min(20, rul / 15)),
+                    "color": colors["primary"],
+                    "opacity": 0.8,
+                    "line": {"width": 1, "color": "white"},
+                },
+            )
+        )
     fig.update_geos(
-        showcountries=True, countrycolor="rgba(124,211,255,0.1)",
-        showcoastlines=True, coastlinecolor="rgba(124,211,255,0.2)",
-        showland=True, landcolor="rgba(10,22,40,0.8)",
-        showocean=True, oceancolor="rgba(6,13,24,0.9)",
+        showcountries=True,
+        countrycolor="rgba(124,211,255,0.1)",
+        showcoastlines=True,
+        coastlinecolor="rgba(124,211,255,0.2)",
+        showland=True,
+        landcolor="rgba(10,22,40,0.8)",
+        showocean=True,
+        oceancolor="rgba(6,13,24,0.9)",
         projection_type="natural earth",
     )
     fig.update_layout(
-        template="plotly_dark", height=450,
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        template="plotly_dark",
+        height=450,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         margin={"l": 0, "r": 0, "t": 30, "b": 0},
         title={"text": "🌍 Global Fleet Locations", "font": {"color": "#edf6ff", "size": 16}},
         font={"color": "#edf6ff"},
@@ -1041,18 +1302,26 @@ def make_fleet_comparison_chart():
     turbines = [t["id"] for t in FLEET_TURBINES]
     ruls = [float(rng.uniform(8, 350)) for _ in turbines]
     colors_list = [RISK_COLORS[classify_risk(r)[0]]["primary"] for r in ruls]
-    fig = go.Figure(go.Bar(
-        x=turbines, y=ruls, marker_color=colors_list,
-        text=[f"{r:.0f}d" for r in ruls], textposition="outside",
-        textfont={"color": "#edf6ff", "size": 11},
-    ))
+    fig = go.Figure(
+        go.Bar(
+            x=turbines,
+            y=ruls,
+            marker_color=colors_list,
+            text=[f"{r:.0f}d" for r in ruls],
+            textposition="outside",
+            textfont={"color": "#edf6ff", "size": 11},
+        )
+    )
     fig.add_hline(y=45, line_color="#ffd600", line_dash="dot", line_width=2)
     fig.add_hline(y=14, line_color="#ff1744", line_dash="dot", line_width=2)
     fig.update_layout(
-        template="plotly_dark", height=320,
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        template="plotly_dark",
+        height=320,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         title={"text": "RUL Comparison Across Fleet", "font": {"color": "#edf6ff", "size": 15}},
-        xaxis_title="Turbine", yaxis_title="Days of healthy life remaining",
+        xaxis_title="Turbine",
+        yaxis_title="Days of healthy life remaining",
         font={"color": "#edf6ff", "family": "system-ui"},
     )
     fig.update_xaxes(gridcolor="rgba(255,255,255,0.06)", tickangle=45)
@@ -1075,30 +1344,44 @@ def run_twin_simulation(scenario_name, extra_hours, vib, btemp, gtemp, power, wi
     base_temp = btemp + cfg["temp_bias"]
 
     rul = np.clip(
-        450.0 - 5.5 * max(base_vib - 5.0, 0) ** 1.18
+        450.0
+        - 5.5 * max(base_vib - 5.0, 0) ** 1.18
         - 2.4 * max(base_temp - 52.0, 0) ** 1.12
         - (future_hours / 87600.0) * 220.0 * cfg["degradation"],
-        0, 450
+        0,
+        450,
     )
 
     colors = RISK_COLORS[classify_risk(float(rul[-1]))[0]]
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=future_hours, y=rul, mode="lines",
-        line={"color": colors["primary"], "width": 3},
-        name="Projected RUL", fill="tozeroy", fillcolor=f"{colors['primary']}15",
-    ))
-    fig.add_hline(y=45, line_color="#ffd600", line_dash="dot", line_width=2,
-                  annotation_text="45-day line")
-    fig.add_hline(y=14, line_color="#ff1744", line_dash="dot", line_width=2,
-                  annotation_text="critical")
-    fig.add_vline(x=hours, line_color="#8be9ff", line_dash="dash", line_width=2,
-                  annotation_text="now")
+    fig.add_trace(
+        go.Scatter(
+            x=future_hours,
+            y=rul,
+            mode="lines",
+            line={"color": colors["primary"], "width": 3},
+            name="Projected RUL",
+            fill="tozeroy",
+            fillcolor=f"{colors['primary']}15",
+        )
+    )
+    fig.add_hline(
+        y=45, line_color="#ffd600", line_dash="dot", line_width=2, annotation_text="45-day line"
+    )
+    fig.add_hline(
+        y=14, line_color="#ff1744", line_dash="dot", line_width=2, annotation_text="critical"
+    )
+    fig.add_vline(
+        x=hours, line_color="#8be9ff", line_dash="dash", line_width=2, annotation_text="now"
+    )
     fig.update_layout(
-        template="plotly_dark", height=350,
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        template="plotly_dark",
+        height=350,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         title={"text": f"Scenario: {scenario_name}", "font": {"color": "#edf6ff", "size": 15}},
-        xaxis_title="Operating Hours", yaxis_title="Projected healthy life (days)",
+        xaxis_title="Operating Hours",
+        yaxis_title="Projected healthy life (days)",
         font={"color": "#edf6ff", "family": "system-ui"},
     )
     fig.update_xaxes(gridcolor="rgba(255,255,255,0.06)")
@@ -1116,7 +1399,7 @@ def run_twin_simulation(scenario_name, extra_hours, vib, btemp, gtemp, power, wi
         <div><span style="color:rgba(160,180,200,0.6);">Scenario:</span> <b style="color:#edf6ff;">{scenario_name}</b></div>
         <div><span style="color:rgba(160,180,200,0.6);">Total hours:</span> <b style="color:#edf6ff;">{total_hours:,.0f}h</b></div>
         <div><span style="color:rgba(160,180,200,0.6);">Final RUL:</span> <b style="color:{status_color};">{final_rul:.0f} days</b></div>
-        <div><span style="color:rgba(160,180,200,0.6);">Degradation rate:</span> <b style="color:#edf6ff;">{cfg['degradation']}x</b></div>
+        <div><span style="color:rgba(160,180,200,0.6);">Degradation rate:</span> <b style="color:#edf6ff;">{cfg["degradation"]}x</b></div>
       </div>
     </div>
     """
@@ -1128,14 +1411,20 @@ def make_risk_distribution_chart():
     ruls = [float(rng.uniform(5, 350)) for _ in FLEET_TURBINES]
     risks = [classify_risk(r)[0] for r in ruls]
     counts = {r: risks.count(r) for r in ["LOW", "MODERATE", "HIGH", "CRITICAL"]}
-    colors_list = [RISK_COLORS[r]["primary"] for r in counts.keys()]
-    fig = go.Figure(go.Pie(
-        labels=list(counts.keys()), values=list(counts.values()),
-        marker_colors=colors_list, hole=0.5,
-        textinfo="label+value", textfont={"color": "#edf6ff", "size": 13},
-    ))
+    colors_list = [RISK_COLORS[r]["primary"] for r in counts]
+    fig = go.Figure(
+        go.Pie(
+            labels=list(counts.keys()),
+            values=list(counts.values()),
+            marker_colors=colors_list,
+            hole=0.5,
+            textinfo="label+value",
+            textfont={"color": "#edf6ff", "size": 13},
+        )
+    )
     fig.update_layout(
-        template="plotly_dark", height=350,
+        template="plotly_dark",
+        height=350,
         paper_bgcolor="rgba(0,0,0,0)",
         title={"text": "Fleet Risk Distribution", "font": {"color": "#edf6ff", "size": 15}},
         font={"color": "#edf6ff"},
@@ -1148,17 +1437,25 @@ def make_oem_comparison_chart():
     rng = np.random.default_rng(123)
     avg_ruls = [float(rng.uniform(50, 280)) for _ in oems]
     colors_list = [RISK_COLORS[classify_risk(r)[0]]["primary"] for r in avg_ruls]
-    fig = go.Figure(go.Bar(
-        x=oems, y=avg_ruls, marker_color=colors_list,
-        text=[f"{r:.0f}d" for r in avg_ruls], textposition="outside",
-        textfont={"color": "#edf6ff", "size": 11},
-    ))
+    fig = go.Figure(
+        go.Bar(
+            x=oems,
+            y=avg_ruls,
+            marker_color=colors_list,
+            text=[f"{r:.0f}d" for r in avg_ruls],
+            textposition="outside",
+            textfont={"color": "#edf6ff", "size": 11},
+        )
+    )
     fig.add_hline(y=45, line_color="#ffd600", line_dash="dot", line_width=2)
     fig.update_layout(
-        template="plotly_dark", height=350,
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        template="plotly_dark",
+        height=350,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         title={"text": "Average RUL by OEM Model", "font": {"color": "#edf6ff", "size": 15}},
-        xaxis_title="OEM", yaxis_title="Avg. healthy life (days)",
+        xaxis_title="OEM",
+        yaxis_title="Avg. healthy life (days)",
         font={"color": "#edf6ff", "family": "system-ui"},
     )
     fig.update_xaxes(gridcolor="rgba(255,255,255,0.06)")
@@ -1168,23 +1465,32 @@ def make_oem_comparison_chart():
 
 def make_timeline_chart():
     import datetime
+
     rng = np.random.default_rng(42)
     today = datetime.date.today()
-    dates = [today + datetime.timedelta(days=i*7) for i in range(12)]
+    dates = [today + datetime.timedelta(days=i * 7) for i in range(12)]
     planned = [int(rng.integers(0, 4)) for _ in range(12)]
     warnings = [int(rng.integers(1, 6)) for _ in range(12)]
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=dates, y=planned, name="Planned interventions",
-                         marker_color="#00e5a0", opacity=0.8))
-    fig.add_trace(go.Bar(x=dates, y=warnings, name="Active warnings",
-                         marker_color="#ffd600", opacity=0.8))
+    fig.add_trace(
+        go.Bar(
+            x=dates, y=planned, name="Planned interventions", marker_color="#00e5a0", opacity=0.8
+        )
+    )
+    fig.add_trace(
+        go.Bar(x=dates, y=warnings, name="Active warnings", marker_color="#ffd600", opacity=0.8)
+    )
     fig.update_layout(
-        template="plotly_dark", height=350, barmode="group",
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        template="plotly_dark",
+        height=350,
+        barmode="group",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         title={"text": "12-Week Maintenance Timeline", "font": {"color": "#edf6ff", "size": 15}},
-        xaxis_title="Week", yaxis_title="Turbines",
+        xaxis_title="Week",
+        yaxis_title="Turbines",
         font={"color": "#edf6ff", "family": "system-ui"},
-        legend=dict(font=dict(color="#edf6ff")),
+        legend={"font": {"color": "#edf6ff"}},
     )
     fig.update_xaxes(gridcolor="rgba(255,255,255,0.06)")
     fig.update_yaxes(gridcolor="rgba(255,255,255,0.06)")
@@ -1194,8 +1500,11 @@ def make_timeline_chart():
 if __name__ == "__main__":
     demo = build_interface()
     demo.queue(default_concurrency_limit=1).launch(
-        server_name="0.0.0.0", server_port=7860,
-        allowed_paths=[str(ROOT)], strict_cors=False, show_error=True,
+        server_name="0.0.0.0",
+        server_port=7860,
+        allowed_paths=[str(ROOT)],
+        strict_cors=False,
+        show_error=True,
         theme=gr.themes.Soft(primary_hue="teal", secondary_hue="cyan", neutral_hue="slate"),
         css=APP_CSS,
     )
