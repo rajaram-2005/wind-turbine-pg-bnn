@@ -42,12 +42,6 @@ spec:
           envFrom:
             - configMapRef:
                 name: aerovigil-config
-          env:
-            - name: HF_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: aerovigil-secrets
-                  key: HF_TOKEN
           resources:
             requests:
               memory: "512Mi"

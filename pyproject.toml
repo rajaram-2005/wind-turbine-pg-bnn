@@ -47,8 +47,6 @@ dependencies = [
     "numpy>=1.24.0",
     "scipy>=1.10.0",
     "pandas>=2.0.0",
-    # huggingface-hub 1.x requires Python 3.10; keep the declared Python 3.9 floor installable.
-    "huggingface-hub>=0.20.0,<1.0",
     "tqdm>=4.65.0",
     "pyyaml>=6.0",
 ]
@@ -82,11 +80,10 @@ all = [
 
 [project.urls]
 Homepage = "https://aerovigil.abacusai.app"
-Documentation = "https://huggingface.co/AerovigilAI/wind-turbine-pg-bnn"
+Documentation = "https://github.com/rajaram-2005/wind-turbine-pg-bnn#readme"
 Repository = "https://github.com/rajaram-2005/wind-turbine-pg-bnn"
 Issues = "https://github.com/rajaram-2005/wind-turbine-pg-bnn/issues"
 "Live Demo" = "https://aerovigil.abacusai.app"
-"Hugging Face" = "https://huggingface.co/AerovigilAI/wind-turbine-pg-bnn"
 
 [project.scripts]
 aerovigil-infer = "aerovigil_pg_bnn.cli:main"

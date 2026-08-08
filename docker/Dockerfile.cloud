@@ -1,0 +1,38 @@
+# Cloud training image: CUDA + PyTorch + full physics-guided AI stack.
+#
+# Build:  docker build -f docker/Dockerfile.cloud -t pg-ai-cloud .
+# Run:    docker run --gpus all -v $PWD/artifacts:/app/artifacts pg-ai-cloud \
+#             python main.py train --config configs/default.yaml
+
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# System deps (build tools only for optional C++ edge library compilation)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git build-essential cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python deps for training, export, XAI, active learning, and federation
+COPY pyproject.toml ./
+RUN pip install \
+        numpy pandas pyyaml pydantic \
+        onnx onnxruntime \
+        shap \
+        flwr \
+        matplotlib \
+        pytest
+
+# Project source
+COPY configs/ configs/
+COPY src/ src/
+COPY main.py model.py ./
+COPY artifacts/ artifacts/
+COPY tests/ tests/
+
+# Default: train the PG-BNN with the physics-guided objective
+CMD ["python", "main.py", "train", "--config", "configs/default.yaml"]

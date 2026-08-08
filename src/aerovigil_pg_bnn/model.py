@@ -157,12 +157,15 @@ class PhysicsGuidedBNN(nn.Module):
         return elbo
 
     @classmethod
-    def from_pretrained(cls, repo_id: str, cache_dir: Optional[str] = None) -> "PhysicsGuidedBNN":
-        """Load model from Hugging Face Hub."""
-        from huggingface_hub import hf_hub_download
+    def from_pretrained(
+        cls, model_dir: str = "artifacts/pg_bnn_demo", cache_dir: Optional[str] = None
+    ) -> "PhysicsGuidedBNN":
+        """Load model from a local artifacts directory bundled with the repo."""
+        from pathlib import Path
 
-        config_path = hf_hub_download(repo_id=repo_id, filename="config.json", cache_dir=cache_dir)
-        model_path = hf_hub_download(repo_id=repo_id, filename="bnn_demo.pt", cache_dir=cache_dir)
+        base = Path(model_dir)
+        config_path = base / "config.json"
+        model_path = base / "bnn_demo.pt"
 
         with open(config_path) as f:
             config = json.load(f)

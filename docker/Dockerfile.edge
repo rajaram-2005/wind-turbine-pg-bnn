@@ -1,0 +1,36 @@
+# Lightweight edge inference image: ONNX Runtime only (no PyTorch).
+#
+# Build:  docker build -f docker/Dockerfile.edge -t pg-ai-edge .
+# Run:    docker run -v $PWD/artifacts:/models pg-ai-edge \
+#             python /app/edge_infer.py /models/pg_bnn.onnx
+#
+# Image size stays small (~300 MB) — suitable for nacelle/substation gateways.
+
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# ONNX Runtime CPU + numpy: the entire inference dependency set.
+RUN pip install onnxruntime numpy
+
+# Minimal inference entrypoint (mean + variance heads).
+RUN printf '%s\n' \
+    'import sys' \
+    'import numpy as np' \
+    'import onnxruntime as ort' \
+    '' \
+    'def main(model_path: str) -> None:' \
+    '    sess = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])' \
+    '    dim = sess.get_inputs()[0].shape[1]' \
+    '    x = np.random.randn(1, int(dim)).astype(np.float32)' \
+    '    mean, variance = sess.run(None, {sess.get_inputs()[0].name: x})' \
+    '    print({"mean": mean.tolist(), "std": np.sqrt(variance).tolist()})' \
+    '' \
+    'if __name__ == "__main__":' \
+    '    main(sys.argv[1] if len(sys.argv) > 1 else "/models/pg_bnn.onnx")' \
+    > /app/edge_infer.py
+
+CMD ["python", "/app/edge_infer.py", "/models/pg_bnn.onnx"]
