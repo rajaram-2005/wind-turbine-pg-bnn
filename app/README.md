@@ -33,9 +33,23 @@ uvicorn app.server:app --host 0.0.0.0 --port 8080
 ## One operator path
 
 The browser app keeps asset advisory, USB/cloud hardware intake, physics-guided
-evidence, digital-twin status/scenarios, and fleet reports in one UI at `/`.
-The integrated API remains below the single `/api` namespace; use `/api/docs`
-for AeroZip compression/restore and integration endpoints.
+evidence, digital-twin status/scenarios, fleet reports, and access to the
+low-level PG-BNN API in one UI at `/`. The integrated API remains below the
+single `/api` namespace:
+
+| Service | Path |
+|---|---|
+| Operator / advisory API | `/api` and `/api/docs` |
+| Low-level model API | `/api/model` and `/api/model/docs` |
+| Hardware and cloud intake | `/api/hardware/ingest` |
+| Digital twin | `/api/twin/status`, `/api/twin/simulate`, `/api/twin/prompt` |
+| Fleet reporting | `/api/fleet/report` |
+| AeroZip telemetry | `/api/telemetry/compress`, `/api/telemetry/restore` |
+
+Framework training, export, active learning, explanation, and federated
+workflows use the same repository model and are reached through the unified
+CLI: `python -m src physics <command>`. This keeps training credentials and
+long-running jobs out of the browser request path.
 
 All outputs are decision support only; this application issues no turbine
 commands.

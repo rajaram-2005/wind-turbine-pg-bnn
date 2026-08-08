@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from src.aerovigil_pg_bnn.api import app as low_level_model_api
 from src.api.app import create_app as create_operations_api
 from src.version import APP_VERSION, PRODUCT
 
@@ -33,6 +34,7 @@ def create_app() -> FastAPI:
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         # Mounted applications do not automatically receive lifespan events.
         async with AsyncExitStack() as stack:
+            await stack.enter_async_context(low_level_model_api.router.lifespan_context(low_level_model_api))
             await stack.enter_async_context(operations_api.router.lifespan_context(operations_api))
             yield
 
@@ -52,6 +54,7 @@ def create_app() -> FastAPI:
             "advisory_only": True,
             "web_app": True,
             "api": "/api",
+            "model_api": "/api/model",
         }
 
     @application.get("/", include_in_schema=False)
@@ -59,6 +62,8 @@ def create_app() -> FastAPI:
         return FileResponse(STATIC_DIR / "index.html")
 
     application.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    # Specific mount must precede `/api`, otherwise the operations mount catches it.
+    application.mount("/api/model", low_level_model_api, name="model-api")
     application.mount("/api", operations_api, name="operations-api")
     return application
 

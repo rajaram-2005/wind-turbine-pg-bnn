@@ -496,6 +496,10 @@ are available without starting any other server:
 | Advisory, fleet, twin, telemetry, reports | `/api` (`/api/docs`) |
 | Low-level PG-BNN prediction | `/model-api` (`/model-api/docs`) |
 
+When running the separately deployable AeroVigilAI web app in `app/`, all
+operator and model services live below one API root: `/api` and
+`/api/model` respectively. The browser UI links to both API documents.
+
 ### Attach the physics-guided framework
 
 The operations application can load a checkpoint emitted by `main.py train` and
