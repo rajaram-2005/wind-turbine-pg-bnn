@@ -8,11 +8,11 @@ import 'package:http/http.dart' as http;
 /// points at the single canonical AeroVigil deployment on
 /// `http://localhost:8080`.
 class ApiService {
-  ApiService({String? baseUrl}) : baseUrl = baseUrl ?? defaultBaseUrl;
+  ApiService({String? baseUrl}) : baseUrl = baseUrl ?? const String.fromEnvironment('API_BASE', defaultValue: 'http://localhost:8080');
 
   /// Canonical AeroVigil server. Override for device/emulator networking
-  /// (e.g. `http://10.0.2.2:8080` on the Android emulator).
-  static const String defaultBaseUrl = 'http://localhost:8080';
+  /// (e.g. `http://10.0.2.2:8080` on the Android emulator via --dart-define=API_BASE=http://10.0.2.2:8080).
+  static const String defaultBaseUrl = String.fromEnvironment('API_BASE', defaultValue: 'http://localhost:8080');
 
   final String baseUrl;
 

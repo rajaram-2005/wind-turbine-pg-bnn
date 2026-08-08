@@ -93,6 +93,8 @@ _CORS_ORIGINS = [
     "http://localhost:8080",
     "http://127.0.0.1:8080",
     "http://localhost:3000",
+    "http://10.0.2.2:8080",
+    "http://10.0.2.2",
     "capacitor://localhost",
     "ionic://localhost",
     "https://aerovigil.abacusai.app",
@@ -137,7 +139,7 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
     application.add_middleware(
         CORSMiddleware,
         allow_origins=_CORS_ORIGINS,
-        allow_origin_regex=r"^http://(localhost|127\.0\.0\.1)(:\d+)?$",
+        allow_origin_regex=r"^http://(localhost|127\.0\.0\.1|10\.0\.2\.2)(:\d+)?$",
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],

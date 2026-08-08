@@ -43,7 +43,7 @@ class _DeterministicWrapper(nn.Module):
 def export_bnn_to_onnx(
     model: PhysicsGuidedBNN,
     output_path: str,
-    opset: int = 17,
+    opset: int = 18,
     validate: bool = True,
     atol: float = 1e-4,
 ) -> Path:

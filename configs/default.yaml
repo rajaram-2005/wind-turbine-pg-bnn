@@ -137,7 +137,7 @@ federated:
   physics_aware_aggregation: true  # server weights clients by physics loss
 
 deployment:
-  onnx_opset: 17
+  onnx_opset: 18
   onnx_path: artifacts/pg_bnn.onnx
   quantize: false           # optional INT8 dynamic quantisation for edge
   validate_export: true
