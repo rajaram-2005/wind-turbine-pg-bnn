@@ -313,7 +313,12 @@ def create_app() -> FastAPI:
                 spec = get_spec(model_key)
             except KeyError as exc:
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
-            twin = WindTurbineDigitalTwin(asset_id, spec, serving_model=app.state.serving)
+            twin = WindTurbineDigitalTwin(
+                asset_id,
+                spec,
+                serving_model=app.state.serving,
+                physics_guided_model=app.state.physics_guided,
+            )
             # Seed with the spec's nominal operating point so status/prompt
             # are meaningful from the first call. A bad seed must not leave a
             # half-initialized twin in the registry.
@@ -427,7 +432,10 @@ def create_app() -> FastAPI:
         for twin in app.state.twins.values():
             last = twin.state_history[-1] if twin.state_history else {}
             if last.get("advisory"):
-                records.append(last["advisory"])
+                record = dict(last["advisory"])
+                if last.get("physics_guided"):
+                    record["physics_guided"] = last["physics_guided"]
+                records.append(record)
 
         if not records:
             from pathlib import Path

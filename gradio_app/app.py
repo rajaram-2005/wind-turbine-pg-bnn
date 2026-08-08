@@ -63,6 +63,16 @@ if str(SRC) not in sys.path:
 
 from aerovigil_pg_bnn import PhysicsGuidedBNN  # noqa: E402
 from src.agents.cyber_team import build_cyber_team_brief  # noqa: E402
+from src.integrations.physics_guided import PhysicsGuidedServingModel  # noqa: E402
+from src.utils.schema import Telemetry  # noqa: E402
+
+
+@lru_cache(maxsize=1)
+def _physics_guided_dashboard_model() -> PhysicsGuidedServingModel | None:
+    """Load the optional framework checkpoint once for the dashboard process."""
+    path = os.environ.get("AV_PHYSICS_GUIDED_MODEL_PATH")
+    return PhysicsGuidedServingModel.load(path) if path else None
+
 
 # ── Constants ─────────────────────────────────────────────────────
 
@@ -936,6 +946,22 @@ def predict_rul(
         risk=risk,
     )
 
+    physics_guided = None
+    physics_model = _physics_guided_dashboard_model()
+    if physics_model is not None:
+        # The demo console has wind and power but no shaft RPM/load input.
+        # Use an explicitly labelled nominal RPM and load derived from power.
+        physics_guided = physics_model.evaluate(
+            Telemetry(
+                vibration_mms=float(vibration_rms),
+                temperature_c=float(generator_temp),
+                rpm=1600.0,
+                oil_viscosity_cst=30.0,
+                load_pct=min(100.0, max(0.0, float(power_output) / 20.0)),
+            ),
+            {"wind_speed_ms": float(wind_speed), "power_output_kw": float(power_output)},
+        )
+
     histogram = make_histogram(predictions, mean_rul, ci_lower, ci_upper, risk)
     radar = make_radar_chart(
         vibration_rms, bearing_temp, generator_temp, power_output, wind_speed, operating_hours, risk
@@ -951,6 +977,11 @@ def predict_rul(
         f"- **Model:** {bundle.source}\n"
         f"- **Inference latency:** {latency_ms:.0f} ms ({CPU_THREADS} threads)\n"
     )
+    if physics_guided:
+        stats += (
+            f"- **Physics-guided posterior:** {physics_guided['target_mean']:.3f} "
+            f"± {physics_guided['total_std']:.3f} ({physics_guided['target_name']})\n"
+        )
     payload = {
         "mean_rul_days": round(mean_rul, 2),
         "uncertainty_days": round(std_rul, 2),
@@ -959,6 +990,7 @@ def predict_rul(
         "latency_ms": round(latency_ms, 1),
         "raw_input": dict(zip(FEATURE_NAMES, raw_values)),
         "agent_team": agent_team,
+        "physics_guided": physics_guided,
     }
     return bg, gauge, badge, rec, histogram, radar, trend, power_curve, stats, payload
 

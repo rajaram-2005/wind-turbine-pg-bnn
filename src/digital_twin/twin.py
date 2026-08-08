@@ -64,6 +64,7 @@ class WindTurbineDigitalTwin:
         asset_id: str,
         spec: TurbineSpec,
         serving_model=None,
+        physics_guided_model=None,
         *,
         max_history: int = DEFAULT_MAX_HISTORY,
     ):
@@ -78,6 +79,7 @@ class WindTurbineDigitalTwin:
         # Raw snapshot buffer feeding the advisory feature pipeline.
         self._telemetry_buffer: deque[dict[str, float]] = deque(maxlen=_ADVISORY_BUFFER_MAX)
         self.serving_model = None
+        self.physics_guided_model = physics_guided_model
         if serving_model is not None:
             self.attach_serving_model(serving_model)
 
@@ -216,6 +218,15 @@ class WindTurbineDigitalTwin:
         # Bridge to the advisory engine: model path when a serving model is
         # attached, else the incoming bnn_state block (previous behavior).
         advisory, advisory_source, advisory_error = self._compute_advisory(telemetry, bnn_state)
+        physics_guided = None
+        if self.physics_guided_model is not None:
+            physics_guided = self.physics_guided_model.evaluate(
+                telemetry,
+                {
+                    "gearbox_ratio": self.spec.gearbox_ratio,
+                    "rated_power_kw": self.spec.rated_power_mw * 1000.0,
+                },
+            )
         team_rul = advisory.get("predicted_rul_days") if advisory else None
         team_uncertainty = advisory.get("epistemic_std", 0.0) if advisory else 0.0
         if team_rul is None and bnn_state is not None:
@@ -241,6 +252,7 @@ class WindTurbineDigitalTwin:
             "advisory": advisory,
             "advisory_source": advisory_source,
             "advisory_error": advisory_error,
+            "physics_guided": physics_guided,
             "agent_team": agent_team,
         }
         self.state_history.append(state_record)

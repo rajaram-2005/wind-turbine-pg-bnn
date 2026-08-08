@@ -101,6 +101,17 @@ def _format_agent_team_markdown(team: dict | None) -> str:
     )
 
 
+def _format_physics_guided_text(result: dict | None) -> str:
+    """Render optional framework posterior without presenting it as RUL."""
+    if not result:
+        return "  (not configured for this advisory)"
+    return (
+        f"  {result.get('target_name', 'physics-guided target')}: "
+        f"{float(result.get('target_mean', 0.0)):.4f} ± {float(result.get('total_std', 0.0)):.4f} "
+        "(supplementary posterior; see feature provenance in JSON)"
+    )
+
+
 def format_advisory_text(rec: dict) -> str:
     """Plain-text report for a single advisory record."""
     violations = rec.get("physics_violations") or []
@@ -123,6 +134,7 @@ def format_advisory_text(rec: dict) -> str:
         f"Physics violations:\n{viol_block}\n\n"
         f"Rationale:\n  {rec.get('rationale', '').strip()}\n\n"
         f"Connected evidence:\n{_format_agent_team_text(rec.get('agent_team'))}\n\n"
+        f"Physics-guided posterior:\n{_format_physics_guided_text(rec.get('physics_guided'))}\n\n"
         f"Disclaimer:\n  {rec.get('disclaimer', '').strip()}\n"
     )
 
@@ -157,6 +169,7 @@ def format_advisory_markdown(rec: dict) -> str:
         f"## Physics violations\n\n{viol_block}\n\n"
         f"## Rationale\n\n{rec.get('rationale', '').strip()}\n\n"
         f"## Connected evidence\n\n{_format_agent_team_markdown(rec.get('agent_team'))}\n\n"
+        f"## Physics-guided posterior\n\n{_format_physics_guided_text(rec.get('physics_guided'))}\n\n"
         f"## Disclaimer\n\n{rec.get('disclaimer', '').strip()}\n"
     )
 

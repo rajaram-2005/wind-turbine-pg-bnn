@@ -172,8 +172,10 @@ the physics-guided framework: set `AV_PHYSICS_GUIDED_MODEL_PATH` to a
 relabelled as RUL unless the checkpoint was trained and validated for that
 target. The adapter accepts measured wind/power in `physics_guided_context`; it
 uses explicitly labelled load-based estimates for legacy five-signal clients.
-Use `python -m src physics train ...` (or evaluate/export/active-sample/explain)
-to access framework actions from the unified CLI.
+The same checkpoint is passed into new digital-twin instances, retained in
+state history, and included in live fleet reports. Use `python -m src physics
+train ...` (or evaluate/export/active-sample/explain) to access framework
+actions from the unified CLI.
 
 ## Installation
 
