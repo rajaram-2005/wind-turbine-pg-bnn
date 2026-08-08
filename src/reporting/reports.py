@@ -17,9 +17,9 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.agents.evidence import connect_advisory_evidence
 from src.eval.calibration import expected_asset_utilization
 from src.models.predictor import run_advisory
-from src.utils.safety import enforce_safety_contract
 from src.utils.schema import BNNState, Telemetry, TurbinePayload
 
 # Column groups understood by the fleet loaders.
@@ -61,8 +61,7 @@ def advisories_from_dataframe(df: pd.DataFrame) -> list[dict]:
             telemetry=Telemetry(**{c: float(row[c]) for c in TELEMETRY_COLUMNS}),
             bnn_state=BNNState(**{c: float(row[c]) for c in BNN_COLUMNS}),
         )
-        rec = run_advisory(payload)
-        enforce_safety_contract(rec)
+        rec = connect_advisory_evidence(payload, run_advisory(payload))
         records.append(rec)
     return records
 
@@ -75,6 +74,33 @@ def advisories_from_csv(path: str) -> list[dict]:
 # --------------------------------------------------------------------------- #
 # Single-asset formatters                                                     #
 # --------------------------------------------------------------------------- #
+def _format_agent_team_text(team: dict | None) -> str:
+    """Render the optional canonical evidence brief for terminal reports."""
+    if not team:
+        return "  (not attached)"
+    sources = ", ".join(str(source) for source in team.get("connected_sources", [])) or "none"
+    risk = team.get("risk_level", "n/a")
+    review = team.get("review_window_days", "n/a")
+    return f"  Risk: {risk}; human review within: {review} days; sources: {sources}"
+
+
+def _format_agent_team_markdown(team: dict | None) -> str:
+    """Render the same evidence brief in Markdown without inventing findings."""
+    if not team:
+        return "_No connected evidence brief was attached._"
+    sources = ", ".join(f"`{source}`" for source in team.get("connected_sources", [])) or "_none_"
+    agents = team.get("agents", {})
+    mika = agents.get("mika", {}).get("finding", "n/a")
+    kai = agents.get("kai", {}).get("finding", "n/a")
+    return (
+        f"- Risk state: **{team.get('risk_level', 'n/a')}**\n"
+        f"- Human review window: **{team.get('review_window_days', 'n/a')} days**\n"
+        f"- Sources: {sources}\n"
+        f"- MIKA: {mika}\n"
+        f"- KAI: {kai}"
+    )
+
+
 def format_advisory_text(rec: dict) -> str:
     """Plain-text report for a single advisory record."""
     violations = rec.get("physics_violations") or []
@@ -96,6 +122,7 @@ def format_advisory_text(rec: dict) -> str:
         f"Suggested inspection window: {rec['suggested_inspection_window_days']:.1f} days\n\n"
         f"Physics violations:\n{viol_block}\n\n"
         f"Rationale:\n  {rec.get('rationale', '').strip()}\n\n"
+        f"Connected evidence:\n{_format_agent_team_text(rec.get('agent_team'))}\n\n"
         f"Disclaimer:\n  {rec.get('disclaimer', '').strip()}\n"
     )
 
@@ -129,6 +156,7 @@ def format_advisory_markdown(rec: dict) -> str:
         f"\n"
         f"## Physics violations\n\n{viol_block}\n\n"
         f"## Rationale\n\n{rec.get('rationale', '').strip()}\n\n"
+        f"## Connected evidence\n\n{_format_agent_team_markdown(rec.get('agent_team'))}\n\n"
         f"## Disclaimer\n\n{rec.get('disclaimer', '').strip()}\n"
     )
 

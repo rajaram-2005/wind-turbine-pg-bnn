@@ -154,6 +154,17 @@ simplified steady Navier–Stokes residual:
 R(u) = u ∂u/∂x + v ∂u/∂y − ν ∇²u − f
 ```
 
+## Connected operator workflow
+
+Every advisory surface now uses the same deterministic evidence bridge. A SCADA
+snapshot is evaluated by the PG-BNN and physics checks, then receives one MIKA +
+KAI evidence brief before it reaches the API, command line, fleet CSV report,
+or dashboard. The brief preserves the original model outputs and records its
+source trail (`telemetry`, `pg_bnn`, physics constraints where available, and
+the safety contract), so an operator sees the same advisory context regardless
+of entry point. Digital-twin updates add their wear and ISO 281 evidence to the
+same advisory-only evidence mesh.
+
 ## Installation
 
 **Pip (local)**

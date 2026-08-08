@@ -30,7 +30,7 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.agents.cyber_team import build_cyber_team_brief
+from src.agents.evidence import connect_advisory_evidence
 from src.api.schemas import (
     AdvisoryRequest,
     AdvisoryResponse,
@@ -87,16 +87,8 @@ def _advisory_or_422(payload: TurbinePayload, serving=None, window_df=None) -> d
 
 
 def _connect_agent_team(payload: TurbinePayload, recommendation: dict) -> dict:
-    """Attach the same MIKA + KAI brief used by twin and dashboard surfaces."""
-    enriched = dict(recommendation)
-    enriched["agent_team"] = build_cyber_team_brief(
-        asset_id=payload.asset_id,
-        predicted_rul_days=recommendation.get("predicted_rul_days"),
-        epistemic_std=recommendation.get("epistemic_std", 0.0),
-        physics_violations=recommendation.get("physics_violations", []),
-        telemetry=payload.telemetry.model_dump(),
-    )
-    return enforce_safety_contract(enriched)
+    """Compatibility wrapper for the shared advisory-evidence bridge."""
+    return connect_advisory_evidence(payload, recommendation)
 
 
 def create_app() -> FastAPI:

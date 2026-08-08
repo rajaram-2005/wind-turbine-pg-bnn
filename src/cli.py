@@ -39,6 +39,7 @@ from src.cli_twin import (
     run_simulate,
     run_status,
 )
+from src.agents.evidence import connect_advisory_evidence
 from src.models.predictor import run_advisory
 from src.reporting.reports import (
     advisories_from_csv,
@@ -46,7 +47,6 @@ from src.reporting.reports import (
     format_advisory_markdown,
 )
 from src.utils.encoding import configure_utf8_stdio
-from src.utils.safety import enforce_safety_contract
 from src.utils.schema import TurbinePayload
 
 
@@ -83,7 +83,7 @@ def cmd_advisory(args: argparse.Namespace) -> None:
     else:
         # Backward-compatible path: pre-computed bnn_state in the payload.
         rec = run_advisory(payload)
-    enforce_safety_contract(rec)
+    rec = connect_advisory_evidence(payload, rec)
     _emit(json.dumps(rec, indent=2), args.output)
 
 
@@ -102,8 +102,7 @@ def cmd_report(args: argparse.Namespace) -> None:
         out = build_fleet_report(records, title=args.title)
     else:
         payload = TurbinePayload(**json.loads(_read_text(args.payload)))
-        rec = run_advisory(payload)
-        enforce_safety_contract(rec)
+        rec = connect_advisory_evidence(payload, run_advisory(payload))
         out = format_advisory_markdown(rec)
     _emit(out, args.output)
 
