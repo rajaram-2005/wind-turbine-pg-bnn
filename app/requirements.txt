@@ -1,0 +1,2 @@
+# The app reuses the repository's operational API and model packages.
+-e ..[api]

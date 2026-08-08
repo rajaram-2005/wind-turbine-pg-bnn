@@ -436,14 +436,19 @@ of the global installed fleet.
 
 AeroVigil now runs as **one project on one port**. The operator dashboard,
 advisory engine, fleet reporting, digital twin, AeroZip telemetry, and raw PG-BNN
-inference API all share the same process and deployment boundary:
+inference API all share the same process and deployment boundary. A lightweight,
+separately deployable browser application is also available in [`app/`](app/):
 
 ```bash
 pip install -e ".[api,demo]"
 uvicorn src.unified_app:app --host 0.0.0.0 --port 8000
+
+# Or run the standalone browser app (UI + /api on port 8080).
+uvicorn app.server:app --host 0.0.0.0 --port 8080
 ```
 
-Open <http://localhost:8000> for the dashboard. The connected service surfaces
+Open <http://localhost:8000> for the dashboard, or <http://localhost:8080> for
+the standalone web app. The connected service surfaces
 are available without starting any other server:
 
 | Surface | Path |

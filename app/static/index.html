@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AeroVigil | Operator Console</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div><p class="eyebrow">AEROVIGIL / OPERATOR WEB APP</p><h1>Evidence-led turbine health</h1></div>
+      <span class="pill">ADVISORY ONLY</span>
+    </header>
+    <section class="intro"><p>Run the connected PG-BNN, physics checks, MIKA + KAI evidence bridge, and optional physics-guided checkpoint from one browser app.</p><a href="/api/docs" target="_blank" rel="noreferrer">API documentation ↗</a></section>
+    <div class="grid">
+      <section class="panel form-panel">
+        <h2>Assess an asset</h2><p class="muted">Enter a SCADA snapshot. Wind and power are optional framework inputs.</p>
+        <form id="advisory-form">
+          <label>Asset ID<input name="asset_id" value="WTG-042" required /></label>
+          <div class="two"><label>Vibration, mm/s<input name="vibration_mms" type="number" step="0.1" value="4.8" required /></label><label>Temperature, °C<input name="temperature_c" type="number" step="0.1" value="82" required /></label></div>
+          <div class="two"><label>High-speed RPM<input name="rpm" type="number" step="1" value="1780" required /></label><label>Oil viscosity, cSt<input name="oil_viscosity_cst" type="number" step="0.1" value="12" required /></label></div>
+          <label>Load, %<input name="load_pct" type="number" step="0.1" value="95" required /></label>
+          <details><summary>RUL model state (required unless a serving model is configured)</summary><div class="two"><label>Predicted RUL, days<input name="predicted_rul_days" type="number" step="0.1" value="14.2" /></label><label>Epistemic uncertainty<input name="epistemic_uncertainty" type="number" step="0.01" value="0.04" /></label></div><label>Aleatoric uncertainty<input name="aleatoric_uncertainty" type="number" step="0.01" value="0.12" /></label></details>
+          <details><summary>Physics-guided context (optional)</summary><div class="two"><label>Wind speed, m/s<input name="wind_speed_ms" type="number" step="0.1" value="" /></label><label>Power, kW<input name="power_output_kw" type="number" step="1" value="" /></label></div></details>
+          <button id="submit" type="submit">Run advisory <span>→</span></button>
+        </form>
+      </section>
+      <section class="panel result-panel" aria-live="polite">
+        <div id="empty"><h2>Ready for evidence</h2><p>Submit a snapshot to see the connected advisory.</p></div>
+        <div id="result" hidden>
+          <div class="result-head"><div><p class="eyebrow">ASSET ADVISORY</p><h2 id="result-asset"></h2></div><span id="risk" class="risk"></span></div>
+          <div class="metrics"><div><span>Predicted RUL</span><strong id="rul"></strong></div><div><span>Inspection window</span><strong id="inspection"></strong></div><div><span>Epistemic σ</span><strong id="uncertainty"></strong></div></div>
+          <section><h3>Connected evidence</h3><p id="summary"></p><ul id="sources"></ul></section>
+          <section id="physics-section" hidden><h3>Physics-guided posterior</h3><p id="physics"></p><small id="provenance"></small></section>
+          <section><h3>Rationale</h3><p id="rationale"></p></section>
+          <p class="disclaimer">Decision-support only. A qualified operator must review all findings against OEM guidance.</p>
+        </div>
+        <p id="error" class="error" hidden></p>
+      </section>
+    </div>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
