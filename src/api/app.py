@@ -235,6 +235,15 @@ def create_app() -> FastAPI:
             summary=summary,
         )
 
+    @app.post("/hardware/stream")
+    def hardware_stream(payload: dict) -> dict:
+        """Gateway ingestion point for normalized edge telemetry."""
+        telemetry = payload.get("telemetry", {})
+        required = {"vibration_mms", "temperature_c", "rpm", "oil_viscosity_cst", "load_pct"}
+        if not payload.get("asset_id") or not required.issubset(telemetry):
+            raise HTTPException(status_code=422, detail="normalized asset_id and five telemetry channels required")
+        return {"accepted": True, "asset_id": payload["asset_id"], "advisory_only": True}
+
     # ------------------------------------------------------------------ #
     # Hardware / cloud telemetry intake                                  #
     # ------------------------------------------------------------------ #

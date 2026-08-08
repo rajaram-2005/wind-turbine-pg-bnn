@@ -14,7 +14,11 @@ from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
+from app.jobs import JobManager
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -29,6 +33,7 @@ STATIC_DIR = APP_DIR / "static"
 def create_app() -> FastAPI:
     """Create the separately deployable web UI plus operations API."""
     operations_api = create_operations_api()
+    jobs = JobManager()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -44,6 +49,27 @@ def create_app() -> FastAPI:
         description="Standalone operator web application; advisory-only.",
         lifespan=lifespan,
     )
+
+    application.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+    class JobRequest(BaseModel):
+        args: list[str] = []
+
+    @application.post("/api/jobs/{job_type}")
+    def submit_job(job_type: str, request: JobRequest) -> dict:
+        try: return {"job_id": jobs.submit(job_type, request.args), "status": "Pending"}
+        except ValueError as exc: raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @application.get("/api/jobs/{job_id}")
+    def job_status(job_id: str) -> dict:
+        job = jobs.jobs.get(job_id)
+        if not job: raise HTTPException(status_code=404, detail="job not found")
+        return {"job_id": job_id, "status": job.status, "logs": job.logs[-100:]}
+
+    @application.get("/api/model-api/{path:path}", include_in_schema=False)
+    def model_redirect(path: str):
+        suffix = f"/{path}" if path else ""
+        return RedirectResponse(url=f"/api/model{suffix}", status_code=308)
 
     @application.get("/health")
     def health() -> dict:
