@@ -40,6 +40,11 @@
         <p id="error" class="error" hidden></p>
       </section>
     </div>
+    <section class="panel operations">
+      <div><p class="eyebrow">CONNECTED OPERATIONS</p><h2>Digital twin, fleet report, and telemetry services</h2><p class="muted">All operator features stay under this one AeroVigilAI web path. Advanced AeroZip telemetry tools remain available in the integrated API documentation.</p></div>
+      <div class="operation-controls"><label>Twin model<select id="twin-model"><option>GE-1.5</option><option>Vestas-V90</option><option>Siemens-SWT-2.3</option></select></label><label>Scenario<select id="twin-profile"><option value="nominal">Nominal</option><option value="overload">Overload</option><option value="derated">Derated</option><option value="viscosity_loss">Viscosity loss</option></select></label><label>Hours<input id="twin-hours" type="number" min="1" value="24" /></label><button id="twin-status" type="button">View twin</button><button id="twin-simulate" type="button">Simulate</button><button id="fleet-report" type="button">Load fleet report</button></div>
+      <pre id="operations-output">Choose an operation to load connected evidence.</pre>
+    </section>
   </main>
   <script src="/static/app.js"></script>
 </body>

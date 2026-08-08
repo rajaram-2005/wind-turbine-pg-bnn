@@ -56,6 +56,20 @@ document.querySelector('#cloud-import').addEventListener('click', async () => {
   await importHardware({source: 'cloud', cloud_url: cloudUrl});
 });
 
+async function operation(path, options = {}) {
+  const out = document.querySelector('#operations-output'); out.textContent = 'Loading connected operation…';
+  try {
+    const response = await fetch(`/api${path}`, options);
+    const text = await response.text();
+    if (!response.ok) throw new Error(text);
+    try { out.textContent = JSON.stringify(JSON.parse(text), null, 2); } catch (_) { out.textContent = text; }
+  } catch (error) { out.textContent = `Operation failed: ${error.message}`; }
+}
+const twinAsset = () => encodeURIComponent(value(form, 'asset_id'));
+document.querySelector('#twin-status').addEventListener('click', () => operation(`/twin/status?asset_id=${twinAsset()}&model=${encodeURIComponent(document.querySelector('#twin-model').value)}`));
+document.querySelector('#twin-simulate').addEventListener('click', () => operation('/twin/simulate', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({asset_id: value(form, 'asset_id'), model: document.querySelector('#twin-model').value, profile: document.querySelector('#twin-profile').value, hours: Number(document.querySelector('#twin-hours').value)})}));
+document.querySelector('#fleet-report').addEventListener('click', () => operation('/fleet/report'));
+
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
   submit.disabled = true; submit.textContent = 'Assessing…';

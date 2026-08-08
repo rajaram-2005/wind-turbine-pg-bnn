@@ -30,5 +30,12 @@ export AV_PHYSICS_GUIDED_MODEL_PATH=artifacts/pg_bnn.pt
 uvicorn app.server:app --host 0.0.0.0 --port 8080
 ```
 
+## One operator path
+
+The browser app keeps asset advisory, USB/cloud hardware intake, physics-guided
+evidence, digital-twin status/scenarios, and fleet reports in one UI at `/`.
+The integrated API remains below the single `/api` namespace; use `/api/docs`
+for AeroZip compression/restore and integration endpoints.
+
 All outputs are decision support only; this application issues no turbine
 commands.
