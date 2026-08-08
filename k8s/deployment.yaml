@@ -23,7 +23,7 @@ spec:
         version: v1
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "8000"
+        prometheus.io/port: "8080"
         prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: aerovigil-sa
@@ -37,7 +37,7 @@ spec:
           imagePullPolicy: Always
           ports:
             - name: http
-              containerPort: 8000
+              containerPort: 8080
               protocol: TCP
           envFrom:
             - configMapRef:
@@ -76,10 +76,14 @@ spec:
               mountPath: /tmp
             - name: cache
               mountPath: /app/.cache
+            - name: artifacts
+              mountPath: /app/artifacts
       volumes:
         - name: tmp
           emptyDir: {}
         - name: cache
+          emptyDir: {}
+        - name: artifacts
           emptyDir: {}
       affinity:
         podAntiAffinity:

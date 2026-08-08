@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 
 /// Offline data ingestion: USB/CSV file upload and signed HTTPS cloud URL
 /// import. Both record the import in the durable store with provenance.
+/// Now also shows import log table + system stats.
 class DataIngestionScreen extends StatefulWidget {
   const DataIngestionScreen({super.key, required this.api});
   final ApiService api;
@@ -17,18 +18,39 @@ class _DataIngestionScreenState extends State<DataIngestionScreen> {
   double? _progress;
   String? _status;
   String? _selectedName;
-  bool _busy = false;
 
   final _urlController = TextEditingController(
     text: 'https://bucket.example.com/scada/wtg-042.csv?X-Amz-Signature=…',
   );
   String? _cloudStatus;
   bool _cloudError = false;
+  bool _busy = false;
+
+  List<Map<String, dynamic>> _imports = [];
+  Map<String, dynamic> _sysStats = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMeta();
+  }
 
   @override
   void dispose() {
     _urlController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadMeta() async {
+    try {
+      final imports = await widget.api.getImports(limit: 25);
+      final stats = await widget.api.getSystemStats();
+      if (!mounted) return;
+      setState(() {
+        _imports = ((imports['imports'] as List?) ?? []).whereType<Map>().map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _sysStats = stats;
+      });
+    } catch (_) {}
   }
 
   Future<void> _pickAndUpload() async {
@@ -55,7 +77,8 @@ class _DataIngestionScreenState extends State<DataIngestionScreen> {
         bytes: bytes,
         onProgress: (p) => setState(() => _progress = p),
       );
-      setState(() => _status = 'Uploaded (import #${resp['import_id']}): ${resp.toString()}');
+      setState(() => _status = 'Uploaded (import #${resp['import_id']}): ${resp['filename']} ${resp['bytes']} bytes source=${resp['source']}');
+      await _loadMeta();
     } catch (e) {
       setState(() => _status = 'Failed: $e');
     } finally {
@@ -74,9 +97,9 @@ class _DataIngestionScreenState extends State<DataIngestionScreen> {
     try {
       final resp = await widget.api.importCloudUrl(url: url);
       setState(() {
-        _cloudStatus = 'Imported: ${resp['filename']} (${resp['bytes']} bytes, '
-            'import #${resp['import_id']}, source ${resp['source']})';
+        _cloudStatus = 'Imported: ${resp['filename']} (${resp['bytes']} bytes, import #${resp['import_id']}, source ${resp['source']})';
       });
+      await _loadMeta();
     } catch (e) {
       setState(() {
         _cloudError = true;
@@ -96,8 +119,7 @@ class _DataIngestionScreenState extends State<DataIngestionScreen> {
         children: [
           Text('Data Ingestion', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
-          const Text('Import SCADA exports from USB media, or point the server at a '
-              'signed HTTPS cloud URL it can fetch and record.'),
+          const Text('Import SCADA exports from USB media, or point the server at a signed HTTPS cloud URL it can fetch and record. All imports are durable in SQLite.'),
           const SizedBox(height: 24),
           Card(
             child: Padding(
@@ -111,10 +133,7 @@ class _DataIngestionScreenState extends State<DataIngestionScreen> {
                     children: [
                       const Icon(Icons.usb, color: Color(0xFF2DD4BF)),
                       const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(_selectedName ?? 'No file selected',
-                            overflow: TextOverflow.ellipsis),
-                      ),
+                      Expanded(child: Text(_selectedName ?? 'No file selected', overflow: TextOverflow.ellipsis)),
                       FilledButton.icon(
                         onPressed: _progress == null ? _pickAndUpload : null,
                         icon: const Icon(Icons.folder_open),
@@ -144,19 +163,13 @@ class _DataIngestionScreenState extends State<DataIngestionScreen> {
                   Text('Signed cloud URL', style: Theme.of(context).textTheme.titleSmall),
                   const SizedBox(height: 6),
                   const Text(
-                    'Paste a signed HTTPS URL (pre-signed S3/GCS/Azure SAS or any '
-                    'gateway-download link). The server fetches the object '
-                    'server-side and records the import as source=cloud.',
+                    'Paste a signed HTTPS URL (pre-signed S3/GCS/Azure SAS). The server fetches server-side and records the import as source=cloud.',
                     style: TextStyle(fontSize: 13, color: Colors.white60),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _urlController,
-                    decoration: const InputDecoration(
-                      labelText: 'Signed HTTPS object URL',
-                      border: OutlineInputBorder(),
-                      hintText: 'https://…',
-                    ),
+                    decoration: const InputDecoration(labelText: 'Signed HTTPS object URL', border: OutlineInputBorder(), hintText: 'https://…'),
                     keyboardType: TextInputType.url,
                   ),
                   const SizedBox(height: 14),
@@ -164,11 +177,7 @@ class _DataIngestionScreenState extends State<DataIngestionScreen> {
                     children: [
                       FilledButton.icon(
                         onPressed: _busy ? null : _importCloudUrl,
-                        icon: _busy
-                            ? const SizedBox(
-                                width: 16, height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.cloud_download),
+                        icon: _busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.cloud_download),
                         label: const Text('Import from URL'),
                       ),
                       const SizedBox(width: 12),
@@ -176,14 +185,69 @@ class _DataIngestionScreenState extends State<DataIngestionScreen> {
                         Expanded(
                           child: SelectableText(
                             _cloudStatus!,
-                            style: TextStyle(
-                              color: _cloudError ? const Color(0xFFEF4444) : null,
-                              fontSize: 13,
-                            ),
+                            style: TextStyle(color: _cloudError ? const Color(0xFFEF4444) : null, fontSize: 13),
                           ),
                         ),
                     ],
                   ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text('Recent Imports', style: Theme.of(context).textTheme.titleSmall),
+                      const Spacer(),
+                      IconButton(onPressed: _loadMeta, icon: const Icon(Icons.refresh)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (_imports.isEmpty)
+                    const Text('No imports yet – upload a file or import a signed URL.', style: TextStyle(color: Colors.white54))
+                  else
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        columns: const [
+                          DataColumn(label: Text('ID')),
+                          DataColumn(label: Text('Filename')),
+                          DataColumn(label: Text('Source')),
+                          DataColumn(label: Text('Bytes')),
+                          DataColumn(label: Text('Type')),
+                        ],
+                        rows: [
+                          for (final r in _imports.take(15))
+                            DataRow(cells: [
+                              DataCell(Text('${r['id'] ?? '-'}')),
+                              DataCell(Text('${r['filename'] ?? '-'}')),
+                              DataCell(Chip(label: Text('${r['source'] ?? '-'}'), visualDensity: VisualDensity.compact)),
+                              DataCell(Text('${r['size_bytes'] ?? '-'}')),
+                              DataCell(Text('${r['content_type'] ?? '-'}')),
+                            ]),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('System Stats – durable store', style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 12),
+                  SelectableText(_sysStats.isEmpty ? 'Loading…' : _sysStats.toString(), style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
                 ],
               ),
             ),

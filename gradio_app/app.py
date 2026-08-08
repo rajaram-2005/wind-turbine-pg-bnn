@@ -1,15 +1,11 @@
-"""AeroVigil EPIC — mind-blowing wind turbine health dashboard.
+"""AeroVigil legacy Gradio entry point – now a redirect notice.
 
-A completely redesigned Gradio app with:
-- Animated wind turbine SVG backgrounds with spinning blades
-- Particle wind effects
-- Tabbed interface: Dashboard, Predict, Fleet View, Trends, Digital Twin
-- Animated gauges with reactive risk-level colors
-- Fleet overview with multiple turbine cards
-- Historical degradation trend charts
-- Power curve visualization
-- Multi-axis radar health charts
-"""
+The EPIC dashboard code is preserved as :func:`build_epic_interface` for
+reference. The canonical :func:`build_interface` now returns the lightweight
+deprecation notice from :mod:`gradio_app.deprecated` which redirects operators
+to the unified AeroVigilAI console at http://localhost:8080/. The headless
+prediction API (api_name='predict' / 'predict_rul') remains registered for
+backwards compatibility."""
 
 from __future__ import annotations
 
@@ -1049,9 +1045,10 @@ APP_CSS += CYBER_TWIN_CSS
 # ── Build the app ─────────────────────────────────────────────────
 
 
-def build_interface() -> gr.Blocks:
+def build_epic_interface() -> gr.Blocks:
+    """Legacy EPIC dashboard retained for reference; use build_interface which now returns the redirect notice."""
     with gr.Blocks(
-        title="AeroVigil EPIC — Wind Turbine Health Intelligence",
+        title="AeroVigil EPIC — Wind Turbine Health Intelligence (legacy)",
     ) as demo:
         # Hidden background element
         bg_html = gr.HTML(value=animated_background("LOW"), visible=True)
@@ -1436,6 +1433,25 @@ def build_interface() -> gr.Blocks:
         )
 
     return demo
+
+
+def build_interface() -> gr.Blocks:
+    """Canonical entry point – now returns the redirect notice.
+
+    The legacy EPIC dashboard is retained as :func:`build_epic_interface` and
+    can be launched with ``AEROVIGIL_GRADIO_LEGACY=1 python gradio_app/app.py``.
+    By default the visible UI is only a deprecation notice that redirects to
+    the unified AeroVigilAI console at http://localhost:8080/. The headless
+    prediction API (api_name='predict') is still registered via deprecated.py.
+    """
+    # When explicitly requested, expose the EPIC dashboard for reference.
+    if os.environ.get("AEROVIGIL_GRADIO_LEGACY") == "1":
+        return build_epic_interface()
+    try:
+        from .deprecated import build_deprecated_interface as _build_dep
+    except ImportError:
+        from gradio_app.deprecated import build_deprecated_interface as _build_dep
+    return _build_dep()
 
 
 # ── Additional chart generators for tabs ──────────────────────────

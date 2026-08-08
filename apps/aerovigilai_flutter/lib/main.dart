@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'services/api_service.dart';
+import 'screens/dashboard_screen.dart';
 import 'screens/data_ingestion_screen.dart';
 import 'screens/digital_twin_screen.dart';
 import 'screens/fleet_reports_screen.dart';
@@ -29,7 +30,7 @@ class AeroVigilApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
         scaffoldBackgroundColor: const Color(0xFF05121A),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: const Color(0xFF0C2029),
           elevation: 2,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -58,17 +59,18 @@ class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
   late final List<_NavItem> _items = [
+    _NavItem('Dashboard', Icons.dashboard, (api) => DashboardScreen(api: api)),
     _NavItem('Digital Twin', Icons.speed, (api) => DigitalTwinScreen(api: api)),
-    _NavItem('Ingestion', Icons.upload_file, (api) => DataIngestionScreen(api: api)),
     _NavItem('Fleet', Icons.table_chart, (api) => FleetReportsScreen(api: api)),
     _NavItem('AeroZip', Icons.compress, (api) => AeroZipTelemetryScreen(api: api)),
+    _NavItem('Ingestion', Icons.upload_file, (api) => DataIngestionScreen(api: api)),
     _NavItem('Jobs', Icons.play_circle, (api) => JobsScreen(api: api)),
     _NavItem('Inference', Icons.code, (api) => LowLevelInferenceScreen(api: api)),
   ];
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width >= 720;
+    final isWide = MediaQuery.of(context).size.width >= 900;
     final body = _items[_index].builder(_api);
 
     if (isWide) {
