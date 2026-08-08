@@ -57,6 +57,19 @@ class PhysicsConfig(BaseModel):
     gearbox: GearboxPhysicsConfig = Field(default_factory=GearboxPhysicsConfig)
     generator: GeneratorPhysicsConfig = Field(default_factory=GeneratorPhysicsConfig)
 
+    # Physics-guided loss weights and plant parameters (src/physics/*).
+    lambda_aero: float = 0.1
+    lambda_drive: float = 0.1
+    lambda_thermal: float = 0.1
+    air_density: float = 1.225
+    rotor_radius: float = 60.0
+    gear_ratio: float = 97.0
+    gearbox_efficiency: float = 0.97
+    wake_decay: float = 0.075
+    winding_resistance_ohm: float = 0.02
+    thermal_resistance_k_w: float = 0.02
+    thermal_capacitance_j_k: float = 5.0e4
+
 
 # --------------------------------------------------------------------------- #
 # BNN                                                                          #
@@ -193,12 +206,126 @@ class SafetyConfig(BaseModel):
 # --------------------------------------------------------------------------- #
 # Root config                                                                  #
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# Physics-Guided AI framework additions (main.py / src.models.bayesian_nn,     #
+# src.active_learning, src.explainability, src.federated, src.deployment).     #
+# --------------------------------------------------------------------------- #
+class PinoConfig(BaseModel):
+    """Fourier Neural Operator / PINO settings (src/models/pino_operator.py)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    in_channels: int = 3
+    out_channels: int = 1
+    width: int = 32
+    modes1: int = 12
+    modes2: int = 12
+    num_blocks: int = 4
+    viscosity: float = 1.5e-2
+    lambda_pde: float = 0.1
+
+
+class ModelConfig(BaseModel):
+    """PG-BNN architecture settings (src/models/bayesian_nn.py)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    in_features: int = 6
+    hidden_dims: list[int] = Field(default_factory=lambda: [128, 128, 64])
+    out_features: int = 1
+    dropout: float = 0.1
+    prior_sigma: float = 1.0
+    pino: PinoConfig = Field(default_factory=PinoConfig)
+
+
+class TrainingConfig(BaseModel):
+    """Training loop settings for the physics-guided objective."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    lr: float = 1.0e-3
+    epochs: int = 100
+    batch_size: int = 256
+    beta_kl: float = 1.0e-3
+    num_mc_samples: int = 2
+    predict_mc_samples: int = 64
+    grad_clip: float = 10.0
+    seed: int = 0
+    device: str = "auto"
+
+
+class ActiveLearningConfig(BaseModel):
+    """Uncertainty-sampling settings (src/active_learning/)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    uncertainty_threshold: float = 0.5
+    sample_budget: int = 64
+    num_mc_samples: int = 32
+    use_mc_dropout: bool = True
+    alert_log_path: str = "artifacts/maintenance_alerts.json"
+
+
+class ExplainabilityConfig(BaseModel):
+    """Physics-SHAP settings (src/explainability/)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    background_samples: int = 128
+    feature_names: list[str] = Field(
+        default_factory=lambda: [
+            "wind_speed",
+            "rotor_speed",
+            "generator_temp",
+            "vibration_rms",
+            "oil_viscosity",
+            "power_output",
+        ]
+    )
+
+
+class FederatedConfigModel(BaseModel):
+    """Federated fleet-training settings (src/federated/)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    num_rounds: int = 20
+    min_clients: int = 2
+    local_epochs: int = 1
+    server_address: str = "0.0.0.0:8080"
+    physics_aware_aggregation: bool = True
+
+
+class EdgeDeploymentConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    num_threads: int = 1
+
+
+class DeploymentConfig(BaseModel):
+    """ONNX export / edge inference settings (src/deployment/)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    onnx_opset: int = 17
+    onnx_path: str = "artifacts/pg_bnn.onnx"
+    quantize: bool = False
+    validate_export: bool = True
+    edge: EdgeDeploymentConfig = Field(default_factory=EdgeDeploymentConfig)
+
+
 class AppConfig(BaseModel):
     """Typed mirror of ``configs/default.yaml`` (plus eval/ui conveniences)."""
 
     model_config = ConfigDict(extra="forbid")
 
     physics: PhysicsConfig = Field(default_factory=PhysicsConfig)
+    model: ModelConfig = Field(default_factory=ModelConfig)
+    training: TrainingConfig = Field(default_factory=TrainingConfig)
+    active_learning: ActiveLearningConfig = Field(default_factory=ActiveLearningConfig)
+    explainability: ExplainabilityConfig = Field(default_factory=ExplainabilityConfig)
+    federated: FederatedConfigModel = Field(default_factory=FederatedConfigModel)
+    deployment: DeploymentConfig = Field(default_factory=DeploymentConfig)
     bnn: BnnConfig = Field(default_factory=BnnConfig)
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
     meta: MetaConfig = Field(default_factory=MetaConfig)

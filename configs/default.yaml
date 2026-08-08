@@ -2,6 +2,18 @@
 # All values are research-grade defaults; replace with site/OEM parameters for deployment.
 
 physics:
+  # ── Physics-guided loss weights and plant parameters (src/physics/) ──
+  lambda_aero: 0.1          # weight of the aerodynamic physics loss
+  lambda_drive: 0.1         # weight of the drivetrain physics loss
+  lambda_thermal: 0.1       # weight of the thermal physics loss
+  air_density: 1.225        # kg/m^3
+  rotor_radius: 60.0        # m (blade length ≈ rotor radius)
+  gear_ratio: 97.0          # gearbox speed-up ratio
+  gearbox_efficiency: 0.97
+  wake_decay: 0.075         # Jensen wake decay constant (onshore)
+  winding_resistance_ohm: 0.02
+  thermal_resistance_k_w: 0.02
+  thermal_capacitance_j_k: 5.0e4
   gearbox:
     vibration_limit_mms: 4.5
     temperature_limit_c: 80.0
@@ -65,3 +77,69 @@ ui:
 safety:
   mode: advisory_only    # MUST remain "advisory_only"
   allow_actuation: false # MUST remain false
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Physics-Guided AI framework additions (src/models, src/active_learning,
+# src/federated, src/deployment, src/explainability) — used by main.py.
+# ═══════════════════════════════════════════════════════════════════════
+
+model:
+  in_features: 6            # SCADA features fed to the PG-BNN
+  hidden_dims: [128, 128, 64]
+  out_features: 1           # e.g. remaining useful life (days) or power (W)
+  dropout: 0.1              # also enables MC-dropout at inference
+  prior_sigma: 1.0          # std of the N(0, sigma^2) weight prior
+  # PINO wake-field operator (src/models/pino_operator.py)
+  pino:
+    in_channels: 3          # inflow u, inflow v, actuator-disk forcing
+    out_channels: 1         # wake streamwise velocity
+    width: 32
+    modes1: 12
+    modes2: 12
+    num_blocks: 4
+    viscosity: 1.5e-2       # effective turbulent kinematic viscosity
+    lambda_pde: 0.1         # weight of the Navier-Stokes residual loss
+
+training:
+  lr: 1.0e-3
+  epochs: 100
+  batch_size: 256
+  beta_kl: 1.0e-3           # KL weight in L = NLL + beta*KL + lambda*L_phys
+  num_mc_samples: 2         # MC weight samples per training step
+  predict_mc_samples: 64    # MC samples for predictive uncertainty
+  grad_clip: 10.0
+  seed: 0
+  device: auto              # auto | cpu | cuda
+
+active_learning:
+  uncertainty_threshold: 0.5   # epistemic std above which samples are flagged
+  sample_budget: 64            # max samples flagged per query round
+  num_mc_samples: 32
+  use_mc_dropout: true
+  alert_log_path: artifacts/maintenance_alerts.json
+
+explainability:
+  background_samples: 128      # baseline set size for SHAP
+  feature_names:
+    - wind_speed
+    - rotor_speed
+    - generator_temp
+    - vibration_rms
+    - oil_viscosity
+    - power_output
+
+federated:
+  num_rounds: 20
+  min_clients: 2
+  local_epochs: 1
+  server_address: "0.0.0.0:8080"
+  physics_aware_aggregation: true  # server weights clients by physics loss
+
+deployment:
+  onnx_opset: 17
+  onnx_path: artifacts/pg_bnn.onnx
+  quantize: false           # optional INT8 dynamic quantisation for edge
+  validate_export: true
+  edge:
+    num_threads: 1          # ONNX Runtime intra-op threads on edge devices

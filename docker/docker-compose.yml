@@ -1,0 +1,54 @@
+# Cloud training + monitoring stack for the Physics-Guided AI framework.
+#
+#   docker compose -f docker/docker-compose.yml up --build
+#
+# Services:
+#   trainer     — GPU training of the PG-BNN (docker/Dockerfile.cloud)
+#   fed-server  — Flower federated-learning server for multi-farm fleets
+#   tensorboard — training metric monitoring
+#   edge        — smoke-test of the exported ONNX model (Dockerfile.edge)
+
+services:
+  trainer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cloud
+    command: python main.py train --config configs/default.yaml
+    volumes:
+      - ../artifacts:/app/artifacts
+      - ../runs:/app/runs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  fed-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cloud
+    command: >
+      python -c "import flwr as fl;
+      fl.server.start_server(server_address='0.0.0.0:8080',
+      config=fl.server.ServerConfig(num_rounds=20))"
+    ports:
+      - "8080:8080"
+
+  tensorboard:
+    image: tensorflow/tensorflow:2.16.1
+    command: tensorboard --logdir /runs --host 0.0.0.0 --port 6006
+    volumes:
+      - ../runs:/runs
+    ports:
+      - "6006:6006"
+
+  edge:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edge
+    volumes:
+      - ../artifacts:/models
+    depends_on:
+      - trainer

@@ -19,13 +19,12 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
-from huggingface_hub import hf_hub_download
 from pydantic import BaseModel, Field
 
 from .model import PhysicsGuidedBNN
 
 # ─── CONFIGURATION ─────────────────────────────────────────────
-DEFAULT_REPO_ID = "AerovigilAI/wind-turbine-pg-bnn"
+DEFAULT_ARTIFACT_DIR = Path(__file__).resolve().parents[2] / "artifacts" / "pg_bnn_demo"
 
 # Input bounds for validation (physical constraints)
 BOUNDS = {
@@ -245,9 +244,9 @@ def _load_model() -> tuple[PhysicsGuidedBNN, dict, Optional[np.ndarray], Optiona
             except Exception as e:
                 print(f"⚠️ Warning: Could not load scaler from {scaler_path}: {e}")
     else:
-        # Download from Hugging Face
-        config_p = hf_hub_download(repo_id=DEFAULT_REPO_ID, filename="config.json")
-        model_p = hf_hub_download(repo_id=DEFAULT_REPO_ID, filename="bnn_demo.pt")
+        # Fall back to the artifacts bundled with the repository
+        config_p = DEFAULT_ARTIFACT_DIR / "config.json"
+        model_p = DEFAULT_ARTIFACT_DIR / "bnn_demo.pt"
 
         with open(config_p) as f:
             config = json.load(f)
@@ -257,7 +256,7 @@ def _load_model() -> tuple[PhysicsGuidedBNN, dict, Optional[np.ndarray], Optiona
 
         mean, std = None, None
         try:
-            scaler_p = hf_hub_download(repo_id=DEFAULT_REPO_ID, filename="scaler.npz")
+            scaler_p = DEFAULT_ARTIFACT_DIR / "scaler.npz"
             scaler_data = np.load(scaler_p)
             mean = scaler_data["mean"].astype(np.float32)
             std = scaler_data["std"].astype(np.float32)
@@ -308,7 +307,7 @@ app = FastAPI(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://aerovigil.abacusai.app", "https://huggingface.co"],
+    allow_origins=["https://aerovigil.abacusai.app"],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],

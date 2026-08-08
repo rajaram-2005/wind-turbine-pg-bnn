@@ -26,7 +26,6 @@ import gradio as gr
 import numpy as np
 import plotly.graph_objects as go
 import torch
-from huggingface_hub import hf_hub_download
 
 if __package__:
     from .colors import hex_to_rgba
@@ -177,14 +176,14 @@ def load_bundle() -> LoadedBundle:
                     preprocess = True
                 return LoadedBundle(model, config, mean, std, label, preprocess)
 
-    repo_id = "AerovigilAI/wind-turbine-pg-bnn"
-    config_path = Path(hf_hub_download(repo_id=repo_id, filename="config.json"))
-    weights_path = Path(hf_hub_download(repo_id=repo_id, filename="bnn_demo.pt"))
+    artifact_dir = Path(__file__).resolve().parents[1] / "artifacts" / "pg_bnn_demo"
+    config_path = artifact_dir / "config.json"
+    weights_path = artifact_dir / "bnn_demo.pt"
     config = _load_json(config_path)
     model = PhysicsGuidedBNN(config)
     model.load_state_dict(torch.load(weights_path, map_location="cpu", weights_only=True))
     model.eval()
-    return LoadedBundle(model, config, None, None, "Hugging Face Hub (raw inputs)", False)
+    return LoadedBundle(model, config, None, None, "Bundled artifacts (raw inputs)", False)
 
 
 # ── Core logic ────────────────────────────────────────────────────
@@ -1391,9 +1390,7 @@ def build_interface() -> gr.Blocks:
           <p style="color:rgba(160,180,200,0.4);font-size:11px;margin:6px 0 0;">
             AeroVigil EPIC · Physics-Guided Bayesian Neural Network ·
             <a href="https://github.com/rajaram-2005/wind-turbine-pg-bnn" target="_blank"
-               style="color:rgba(0,184,212,0.6);">GitHub</a> ·
-            <a href="https://huggingface.co/AerovigilAI/wind-turbine-pg-bnn" target="_blank"
-               style="color:rgba(0,184,212,0.6);">Hugging Face</a>
+               style="color:rgba(0,184,212,0.6);">GitHub</a>
           </p>
         </div>
         """)

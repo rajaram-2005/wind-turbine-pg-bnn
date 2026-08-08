@@ -24,7 +24,6 @@ honest estimate of how certain it is.
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch 2.0+](https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c.svg)](https://pytorch.org/)
-[![Hugging Face Model](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-ffd21e.svg)](https://huggingface.co/AerovigilAI/wind-turbine-pg-bnn)
 [![Live Demo](https://img.shields.io/badge/demo-live-22c55e.svg)](https://aerovigil.abacusai.app)
 
 > ### 📊 AeroVigil in numbers
@@ -39,6 +38,256 @@ honest estimate of how certain it is.
 > *Demo numbers from a deterministic 500-asset synthetic campaign. Validate on real site data before operations depend on them.*
 
 ![AeroVigil social card](https://raw.githubusercontent.com/rajaram-2005/wind-turbine-pg-bnn/arena%2F019fd767-wind-turbine-pg-bnn/docs/assets/social-card.png)
+
+# 🧭 Physics-Guided AI Framework (v2 extension)
+
+[![Physics-Guided](https://img.shields.io/badge/Physics--Guided-AI-0ea5e9.svg)](#-physics-guided-ai-framework-v2-extension)
+[![ONNX Export](https://img.shields.io/badge/ONNX-Edge%20Ready-8b5cf6.svg)](#edge-deployment-guide)
+[![Federated Learning](https://img.shields.io/badge/Federated-Flower-f97316.svg)](#federated-learning-setup-guide)
+[![Uncertainty](https://img.shields.io/badge/Uncertainty-Aleatoric%20%2B%20Epistemic-22c55e.svg)](#mathematical-formulations)
+
+The repository now ships a full **Physics-Guided AI framework** for wind-turbine
+predictive maintenance, layered on top of the original AeroVigil PG-BNN:
+first-principles physics losses (aerodynamics, drivetrain, thermal), a
+Bayes-by-Backprop BNN with decomposed uncertainty, a Fourier Neural Operator
+(PINO) for wake fields, uncertainty-driven active learning, physics-grounded
+SHAP explainability, federated fleet training, and ONNX/C++ edge deployment.
+
+## Architecture overview
+
+```
+wind-turbine-pg-bnn/
+├── main.py                     # Unified CLI: train | evaluate | export | active-sample | explain
+├── configs/
+│   └── default.yaml            # model / physics / training / active_learning / federated / deployment
+├── src/
+│   ├── physics/
+│   │   ├── aerodynamics.py     # Cp(β,λ) via Heier, Betz limit, rotor power, Jensen wake, aero loss
+│   │   ├── drivetrain.py       # Gearbox torque transfer, L10 bearing life, vibration energy, loss
+│   │   ├── thermal.py          # Copper+iron losses, lumped thermal network, temperature ODE, loss
+│   │   └── constraints.py      # (legacy) soft PG-BNN constraints
+│   ├── models/
+│   │   ├── bayesian_nn.py      # BayesianLinear (Bayes-by-Backprop), PG-BNN, combined loss
+│   │   ├── pino_operator.py    # SpectralConv2d, FNO, PINO with Navier–Stokes residual
+│   │   └── bnn.py / ...        # (legacy) original PG-BNN modules
+│   ├── active_learning/
+│   │   └── uncertainty_sampler.py  # MC-dropout epistemic sampling → JSON maintenance alerts
+│   ├── explainability/
+│   │   └── physics_shap.py     # SHAP attributions mapped to physics residuals / root causes
+│   ├── federated/
+│   │   └── fed_client.py       # Flower NumPyClient with physics-aware evaluation metrics
+│   └── deployment/
+│       ├── export_onnx.py      # ONNX export with mean + variance heads, validation
+│       └── cpp_inference/      # C++17 ONNX Runtime engine (inference.h/.cpp, CMakeLists.txt)
+├── docker/
+│   ├── Dockerfile.cloud        # CUDA + PyTorch training image
+│   ├── Dockerfile.edge         # ONNX-Runtime-only edge image
+│   └── docker-compose.yml      # trainer + fed-server + tensorboard + edge
+├── .devcontainer/
+│   └── cuda/devcontainer.json  # VS Code devcontainer (CUDA + PyTorch)
+└── tests/
+    ├── test_physics_guided.py  # Betz bounds, torque conservation, thermal steady state, gradients
+    └── test_models.py          # BNN shapes, OOD uncertainty growth, FNO shapes, ONNX validity
+```
+
+**Data flow:** SCADA features → PG-BNN (physics-regularised) → predictive mean
++ aleatoric/epistemic uncertainty → (a) active-learning alerts when epistemic
+uncertainty spikes, (b) physics-SHAP root-cause reports, (c) ONNX export for
+edge gateways. Fleet-wide, farms train locally and share only weights via
+Flower federated rounds.
+
+## Mathematical formulations
+
+**Combined physics-guided objective**
+
+```
+L_total = L_NLL + β · KL[q(w) ‖ p(w)] + λ_physics · L_physics
+```
+
+- `L_NLL = ½ Σ [ log σ²(x) + (y − μ(x))² / σ²(x) ]` — heteroscedastic Gaussian
+  negative log-likelihood; trains the **aleatoric** noise head `σ²(x)`.
+- `KL[q(w)‖p(w)]` — closed-form KL between the factorised Gaussian posterior
+  `q(w)=N(μ_w, σ_w²)` (with `σ_w = softplus(ρ)`) and the prior `N(0, σ_p²)`
+  (Bayes-by-Backprop). **Epistemic** uncertainty = variance of MC predictions
+  across weight samples.
+
+**Aerodynamics (`src/physics/aerodynamics.py`)**
+
+```
+Cp(λ, β) = c₁ (c₂/λᵢ − c₃β − c₄) e^(−c₅/λᵢ) + c₆λ        (Heier)
+1/λᵢ     = 1/(λ + 0.08β) − 0.035/(β³ + 1)
+P        = ½ ρ π R² v³ · Cp,     0 ≤ Cp ≤ 16/27 (Betz limit)
+Δv/v     = (1 − √(1 − Ct)) / (1 + k·x/R)²                 (Jensen wake)
+```
+
+`L_aero` penalises (i) deviation of predicted power from `½ρAv³Cp` and
+(ii) any prediction exceeding the Betz-limited available power.
+
+**Drivetrain (`src/physics/drivetrain.py`)**
+
+```
+T_hss  = η · T_rotor / n                                   (torque transfer)
+L10h   = (10⁶ / 60N) · (C/P)^p,  p = 3 (ball) or 10/3 (roller)   (ISO 281)
+E_vib  ∝ ½ m v_rms²                                        (vibration energy)
+```
+
+`L_drive` enforces torque transfer consistency, irreversible wear
+(`dD/dt ≥ 0`), and vibration/wear coherence.
+
+**Thermal (`src/physics/thermal.py`)**
+
+```
+Q       = m I² R + k_fe ω^1.6                              (copper + iron losses)
+C dT/dt = Q − (T_w − T_cool)/R_th                          (lumped network ODE)
+T_w,ss  = T_cool + R_th · Q                                (steady state)
+```
+
+`L_thermal` matches predictions to the steady-state solution, forbids
+`T_w < T_cool` while heat is generated, and softly penalises insulation-limit
+violations.
+
+**PINO wake operator (`src/models/pino_operator.py`)** — FNO layers act in
+Fourier space (`ŷ = F⁻¹(W · F(x))` on the lowest modes) and training adds a
+simplified steady Navier–Stokes residual:
+
+```
+R(u) = u ∂u/∂x + v ∂u/∂y − ν ∇²u − f
+```
+
+## Installation
+
+**Pip (local)**
+
+```bash
+git clone https://github.com/rajaram-2005/wind-turbine-pg-bnn.git
+cd wind-turbine-pg-bnn
+pip install -e ".[dev]"
+pip install onnx onnxruntime shap flwr   # framework extras
+```
+
+**Docker**
+
+```bash
+docker build -f docker/Dockerfile.cloud -t pg-ai-cloud .   # cloud training (CUDA)
+docker build -f docker/Dockerfile.edge  -t pg-ai-edge  .   # edge inference (ONNX only)
+docker compose -f docker/docker-compose.yml up --build     # full stack
+```
+
+**VS Code devcontainer** — open the repo in VS Code → “Reopen in Container”
+and pick **PG-AI CUDA + PyTorch** (`.devcontainer/cuda/`). The default
+universal container remains available.
+
+## Usage — unified CLI
+
+```bash
+# 1. Train the PG-BNN with the combined physics+data loss
+python main.py train --config configs/default.yaml --epochs 100
+
+# 2. Evaluate: RMSE, aleatoric/epistemic uncertainty, 95 % CI coverage
+python main.py evaluate --checkpoint artifacts/pg_bnn.pt
+
+# 3. Export to ONNX (mean + variance heads, validated vs PyTorch)
+python main.py export --checkpoint artifacts/pg_bnn.pt --out artifacts/pg_bnn.onnx
+
+# 4. Active learning: flag high-epistemic-uncertainty SCADA samples
+python main.py active-sample --checkpoint artifacts/pg_bnn.pt --out artifacts/maintenance_alerts.json
+
+# 5. Physics-grounded SHAP explanation report
+python main.py explain --checkpoint artifacts/pg_bnn.pt --out artifacts/explain_report.json
+```
+
+## Configuration guide
+
+All knobs live in `configs/default.yaml` (validated by
+`src/utils/config.py`):
+
+| Section | Key knobs | Purpose |
+|---|---|---|
+| `model` | `in_features`, `hidden_dims`, `dropout`, `prior_sigma`, `pino.*` | BNN & FNO architecture |
+| `physics` | `lambda_aero`, `lambda_drive`, `lambda_thermal`, `air_density`, `rotor_radius`, `gear_ratio` | physics-loss weights & plant parameters |
+| `training` | `lr`, `epochs`, `batch_size`, `beta_kl`, `num_mc_samples`, `predict_mc_samples` | optimiser & ELBO settings |
+| `active_learning` | `uncertainty_threshold`, `sample_budget`, `use_mc_dropout` | query strategy |
+| `federated` | `num_rounds`, `min_clients`, `server_address` | fleet training |
+| `deployment` | `onnx_opset`, `onnx_path`, `quantize`, `edge.num_threads` | export & edge |
+
+## API reference summary
+
+| Module | Key symbols |
+|---|---|
+| `src.physics.aerodynamics` | `power_coefficient`, `rotor_mechanical_power`, `jensen_wake_deficit`, `aerodynamic_physics_loss`, `BETZ_LIMIT` |
+| `src.physics.drivetrain` | `gearbox_torque_transfer`, `bearing_l10_life_hours`, `vibration_stress_energy`, `drivetrain_physics_loss` |
+| `src.physics.thermal` | `generator_heat_dissipation`, `simulate_winding_temperature`, `thermal_physics_loss` |
+| `src.models.bayesian_nn` | `BayesianLinear`, `PhysicsGuidedBNN` (`.predict()` → mean/aleatoric/epistemic/total std), `PGBNNLoss`, `train_step` |
+| `src.models.pino_operator` | `SpectralConv2d`, `FourierNeuralOperator`, `PINO` (`.pde_residual()`, `.loss()`) |
+| `src.active_learning` | `UncertaintySampler` (`.query()`, `.write_alert_log()`), `MaintenanceAlert` |
+| `src.explainability` | `PhysicsSHAP` (`.explain()` → root cause ∈ {mechanical_wear, thermal_overheating, sensor_drift, aerodynamic_anomaly}) |
+| `src.federated` | `FlowerFederatedClient`, `FederatedConfig`, `start_client` |
+| `src.deployment` | `export_bnn_to_onnx`, `validate_onnx_export` |
+
+## Federated learning setup guide
+
+Raw SCADA never leaves a farm — only weights do.
+
+```bash
+# 1. Server (cloud) — or use the compose service `fed-server`
+python -c "import flwr as fl; fl.server.start_server(
+    server_address='0.0.0.0:8080',
+    config=fl.server.ServerConfig(num_rounds=20))"
+```
+
+```python
+# 2. Each farm (client)
+from src.federated import FederatedConfig, FlowerFederatedClient, start_client
+from src.models.bayesian_nn import PhysicsGuidedBNN
+
+model = PhysicsGuidedBNN(in_features=6)
+client = FlowerFederatedClient(
+    model,
+    train_data=(x_train, y_train),   # local SCADA tensors
+    val_data=(x_val, y_val),
+    config=FederatedConfig(server_address="fleet-server:8080"),
+)
+start_client(client)
+```
+
+Each client reports `physics_loss` in its evaluation metrics, so a custom
+Flower strategy can perform **physics-aware aggregation** (down-weighting
+updates that violate the shared turbine physics).
+
+## Edge deployment guide
+
+1. **Export:** `python main.py export --checkpoint artifacts/pg_bnn.pt`
+   → `artifacts/pg_bnn.onnx` with `mean` and `variance` outputs (Bayesian
+   layers fixed to posterior means; validated against PyTorch).
+2. **Python edge:** `docker run -v $PWD/artifacts:/models pg-ai-edge`
+   (ONNX Runtime only, no PyTorch).
+3. **C++ edge:** build the static library in `src/deployment/cpp_inference/`:
+
+```bash
+cd src/deployment/cpp_inference
+cmake -B build -DONNXRUNTIME_ROOT=/opt/onnxruntime
+cmake --build build --config Release
+```
+
+```cpp
+pgbnn::OnnxInferenceEngine engine("pg_bnn.onnx");
+auto result = engine.Run({7.4f, 1.5f, 62.5f, 2.4f, 33.f, 810.f});
+float mean = result.mean[0], std = std::sqrt(result.variance[0]);
+```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short: fork → feature branch →
+`make lint test` → PR. New physics terms must ship with unit tests proving
+bounds (e.g. Betz limit) and gradient flow; new model heads must keep the
+uncertainty decomposition intact.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+---
+
 
 ## What is this? (30-second read)
 
@@ -477,9 +726,8 @@ This creates the following artifacts in `artifacts/pg_bnn_demo/`:
 | `scaler.npz` | Feature normalization parameters |
 
 > The Gradio app uses these local weights by default, so the demo works
-> **offline** after this step. If you skip training, the app will download
-> pre-trained weights from [Hugging Face](https://huggingface.co/AerovigilAI/wind-turbine-pg-bnn)
-> instead (requires internet).
+> **offline** after this step. If you skip training, the app falls back to
+> the pre-trained demo weights bundled in `artifacts/pg_bnn_demo/`.
 
 ---
 
@@ -545,8 +793,8 @@ curl -X POST "http://localhost:8000/predict?n_mcmc_samples=100" -H "Content-Type
 import torch
 from aerovigil_pg_bnn import MonteCarloVI, PhysicsGuidedBNN
 
-# Downloads config.json and bnn_demo.pt from the Hugging Face model repo.
-model = PhysicsGuidedBNN.from_pretrained("AerovigilAI/wind-turbine-pg-bnn")
+# Loads config.json and bnn_demo.pt from the bundled artifacts directory.
+model = PhysicsGuidedBNN.from_pretrained("artifacts/pg_bnn_demo")
 
 vi = MonteCarloVI(model, num_samples=100)
 result = vi.predict_single([1.5, 45.0, 60.0, 2000.0, 9.0, 1000.0])
@@ -741,12 +989,11 @@ Run the evaluation locally: `python scripts/eval_accuracy.py`.
 ```python
 import json
 import torch
-from huggingface_hub import hf_hub_download
 from aerovigil_pg_bnn import PhysicsGuidedBNN
 
-repo_id = "AerovigilAI/wind-turbine-pg-bnn"
-config_path = hf_hub_download(repo_id=repo_id, filename="config.json")
-model_path = hf_hub_download(repo_id=repo_id, filename="bnn_demo.pt")
+# Weights are bundled with the repository
+config_path = "artifacts/pg_bnn_demo/config.json"
+model_path = "artifacts/pg_bnn_demo/bnn_demo.pt"
 
 with open(config_path) as f:
     config = json.load(f)
@@ -1005,15 +1252,14 @@ If you use this model in your research, please cite:
   author = {Aerovigil AI},
   title = {Physics-Guided Bayesian Neural Network for Wind Turbine RUL Prediction},
   year = {2026},
-  url = {https://huggingface.co/AerovigilAI/wind-turbine-pg-bnn}
+  url = {https://github.com/rajaram-2005/wind-turbine-pg-bnn}
 }
 ```
 
 ## Model Card Contact
 
-- **Organization**: [Aerovigil AI](https://huggingface.co/AerovigilAI)
+- **Organization**: Aerovigil AI
 - **Repository Issues**: [github.com/rajaram-2005/wind-turbine-pg-bnn/issues](https://github.com/rajaram-2005/wind-turbine-pg-bnn/issues)
-- **Hugging Face Hub**: [huggingface.co/AerovigilAI/wind-turbine-pg-bnn](https://huggingface.co/AerovigilAI/wind-turbine-pg-bnn)
 
 ---
 
