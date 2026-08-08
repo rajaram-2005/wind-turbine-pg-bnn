@@ -20,12 +20,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import sqlite3
-import sys
 import time
 import uuid
-from collections import deque
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from enum import Enum
@@ -35,6 +34,8 @@ from typing import Any, Optional
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_DB = _REPO_ROOT / "artifacts" / "jobs.sqlite3"
 _MAX_LOG_LINES = 500
+
+logger = logging.getLogger("jobs.manager")
 
 
 class JobStatus(str, Enum):
@@ -51,6 +52,7 @@ class JobStatus(str, Enum):
 ALLOWED_JOB_TYPES: dict[str, list[str]] = {
     "physics": ["train"],
     "train": ["train"],
+    "evaluate": ["evaluate"],
     "federated": ["federated"],
     "export": ["export"],
     "active-learning": ["active-sample"],
@@ -85,7 +87,10 @@ class JobManager:
     """Schedule and track framework jobs on the running event loop."""
 
     def __init__(self, db_path: Optional[Path | str] = None) -> None:
-        self._db_path = Path(db_path) if db_path else _DEFAULT_DB
+        if db_path is None:
+            override = os.environ.get("AV_JOB_DB")
+            db_path = Path(override) if override else _DEFAULT_DB
+        self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._jobs: dict[str, JobRecord] = {}
         self._tasks: dict[str, asyncio.Task] = {}
@@ -114,6 +119,12 @@ class JobManager:
                 )
                 """
             )
+            # Migration: columns used by the durable multi-process worker.
+            existing = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)")}
+            if "claimed_by" not in existing:
+                conn.execute("ALTER TABLE jobs ADD COLUMN claimed_by TEXT")
+            if "attempts" not in existing:
+                conn.execute("ALTER TABLE jobs ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0")
 
     def _persist(self, rec: JobRecord) -> None:
         with self._connect() as conn:
@@ -160,8 +171,18 @@ class JobManager:
         """Return whether ``job_type`` is a queueable framework job."""
         return job_type in ALLOWED_JOB_TYPES
 
+    @staticmethod
+    def _inline_execution_enabled() -> bool:
+        """Whether this process executes jobs itself (default) or only
+        enqueues them for a standalone worker (``AV_JOB_MODE=worker``)."""
+        return os.environ.get("AV_JOB_MODE", "inline") != "worker"
+
     async def queue(self, job_type: str, extra_args: Optional[Sequence[str]] = None) -> str:
         """Queue a job and return its unique ``job_id``.
+
+        The Pending row is persisted *before* anything runs, so the queue is
+        durable: in ``AV_JOB_MODE=worker`` a standalone worker process claims
+        and executes it; otherwise it is executed inline on this event loop.
 
         Raises :class:`ValueError` for unknown job types.
         """
@@ -182,16 +203,75 @@ class JobManager:
         async with self._lock:
             self._jobs[job_id] = rec
             self._persist(rec)
-            self._tasks[job_id] = asyncio.create_task(self._run(job_id))
+            if self._inline_execution_enabled():
+                self._tasks[job_id] = asyncio.create_task(self._run(job_id))
+            else:
+                self._notify_workers(job_id)
         return job_id
+
+    def _notify_workers(self, job_id: str) -> None:
+        """Fan out to a Redis broker when configured (best-effort)."""
+        broker_url = os.environ.get("AV_JOB_BROKER")
+        if not broker_url:
+            return
+        try:
+            from src.jobs.broker import JobBroker
+
+            async def _publish() -> None:
+                broker = JobBroker(broker_url)
+                await broker.connect()
+                await broker.publish(job_id)
+
+            asyncio.create_task(_publish())
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("broker publish failed for %s: %s", job_id, exc)
 
     def get(self, job_id: str) -> Optional[JobRecord]:
         """Return the current record for ``job_id`` (memory first, then SQLite)."""
         return self._jobs.get(job_id) or self._load(job_id)
 
-    def list_jobs(self) -> list[JobRecord]:
-        """Return all in-memory job records, newest first."""
-        return sorted(self._jobs.values(), key=lambda r: r.created_at, reverse=True)
+    def list_jobs(self, limit: int = 25) -> list[JobRecord]:
+        """Return the most recent job records, newest first (DB-backed)."""
+        limit = max(1, min(int(limit), 200))
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT job_id FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)
+            ).fetchall()
+        out: list[JobRecord] = []
+        for row in rows:
+            rec = self._jobs.get(row["job_id"]) or self._load(row["job_id"])
+            if rec is not None:
+                out.append(rec)
+        return out
+
+    def claim_pending(self, worker_id: str, limit: int = 1) -> list[JobRecord]:
+        """Atomically claim up to ``limit`` Pending jobs for a worker process.
+
+        Claimed rows transition to ``Running`` with ``claimed_by``/``attempts``
+        recorded, so a crashed worker's jobs are visible and never double-run
+        by two workers at once.
+        """
+        limit = max(1, int(limit))
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            rows = conn.execute(
+                "SELECT job_id FROM jobs WHERE status = ? ORDER BY created_at ASC LIMIT ?",
+                (JobStatus.PENDING.value, limit),
+            ).fetchall()
+            now = time.time()
+            for row in rows:
+                conn.execute(
+                    "UPDATE jobs SET status = ?, updated_at = ?, claimed_by = ?,"
+                    " attempts = attempts + 1 WHERE job_id = ?",
+                    (JobStatus.RUNNING.value, now, worker_id, row["job_id"]),
+                )
+        records: list[JobRecord] = []
+        for row in rows:
+            rec = self._load(row["job_id"])
+            if rec is not None:
+                self._jobs[rec.job_id] = rec
+                records.append(rec)
+        return records
 
     # -------------------------------------------------------------- worker
     def _touch(self, rec: JobRecord, status: Optional[JobStatus] = None) -> None:
@@ -203,33 +283,24 @@ class JobManager:
     async def _run(self, job_id: str) -> None:
         rec = self._jobs[job_id]
         self._touch(rec, JobStatus.RUNNING)
-        cmd = [sys.executable, str(_REPO_ROOT / "main.py"), *rec.args]
-        rec.logs.append(f"$ {' '.join(cmd)}")
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                cwd=str(_REPO_ROOT),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                env={**os.environ, "PYTHONUNBUFFERED": "1"},
-            )
-            assert proc.stdout is not None
-            async for raw in proc.stdout:
-                line = raw.decode(errors="replace").rstrip()
-                rec.logs.append(line)
-                if len(rec.logs) % 5 == 0:
-                    self._touch(rec)
-            code = await proc.wait()
-            if code == 0:
-                rec.result = {"exit_code": 0}
-                self._touch(rec, JobStatus.COMPLETED)
-            else:
-                rec.result = {"exit_code": code}
-                self._touch(rec, JobStatus.FAILED)
-        except Exception as exc:  # pragma: no cover - defensive
-            rec.logs.append(f"[job-manager] fatal: {exc!r}")
-            rec.result = {"error": str(exc)}
-            self._touch(rec, JobStatus.FAILED)
+        from src.jobs.executor import run_job_subprocess
+
+        result, code = await run_job_subprocess(
+            rec.args,
+            repo_root=_REPO_ROOT,
+            log_sink=lambda line: self._append_log(rec, line),
+        )
+        rec.result = result
+        self._touch(rec, JobStatus.COMPLETED if code == 0 else JobStatus.FAILED)
+
+    def _append_log(self, rec: JobRecord, line: str) -> None:
+        """Append a log line, persisting periodically for live status polls."""
+        rec.logs.append(line)
+        if len(rec.logs) % 5 == 0:
+            try:
+                self._touch(rec)
+            except Exception:  # pragma: no cover - defensive
+                pass
 
 
 _SINGLETON: Optional[JobManager] = None
@@ -241,3 +312,9 @@ def get_job_manager() -> JobManager:
     if _SINGLETON is None:
         _SINGLETON = JobManager()
     return _SINGLETON
+
+
+def reset_job_manager() -> None:
+    """Drop the cached singleton (test isolation; next get re-reads env)."""
+    global _SINGLETON
+    _SINGLETON = None

@@ -459,8 +459,48 @@ curl localhost:8080/api/jobs/<job_id>       # -> Pending | Running | Completed |
 ```
 
 Each job type maps to a `python main.py <subcommand>` invocation:
-`physics`/`train`, `federated`, `export`, `active-learning`/`active-sample`,
-`shap`/`explain`.
+`physics`/`train`, `evaluate`, `federated`, `export`,
+`active-learning`/`active-sample`, `shap`/`explain`.
+
+**Durable multi-process worker.** The queue is a durable SQLite table
+(`artifacts/jobs.sqlite3`) with Pending → Running → Completed/Failed state
+transitions, `claimed_by`/`attempts` columns for atomic claiming, and a Redis
+fan-out channel (optional). Run the API in enqueue-only mode and let one or
+more standalone workers execute the jobs:
+
+```bash
+# terminal 1 – API process enqueues only, never executes jobs
+AV_JOB_MODE=worker uvicorn src.unified_app:app --port 8080
+
+# terminal 2 – worker processes drain the durable queue
+python -m src.jobs.worker --workers 2 --db artifacts/jobs.sqlite3
+# optional Redis broker for instant wake-ups:
+python -m src.jobs.worker --broker redis://localhost:6379/0
+
+# list recent jobs from the console
+curl localhost:8080/api/jobs
+```
+
+### Durable operational store
+
+Telemetry, assets, twin states, reports, imports and jobs persist to one
+SQLite database (`artifacts/aerovigil.sqlite3`, override with `AV_STORE_DB`).
+Hardware streams now *process* instead of just validating: readings are
+persisted, the affected digital twins are updated (advisories from the serving
+PG-BNN, or a clearly-labeled stream heuristic when no model is configured),
+fleet-health rows are upserted, and the fleet report is regenerated. Console
+surface for the store:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/hardware/latest` | persisted readings read-back |
+| `GET /api/fleet/summary` | fleet aggregate from the durable assets table |
+| `GET /api/imports` | offline import log (USB / cloud / API) |
+| `POST /api/telemetry/import` | import a SCADA export from a signed HTTPS URL |
+| `GET /api/system/stats` | durable-store row counts |
+
+The native Flutter console and the browser console both expose these
+surfaces (cloud-import workflow, job submission + live logs).
 
 ### Industrial hardware gateway agent
 
@@ -473,6 +513,27 @@ network is down (store-and-forward), and streams to `POST /api/hardware/stream`:
 ```bash
 python hardware_agent.py --connector https --server http://localhost:8080 \
        --gateway-id gw-alpha --turbine-id WTG-042 --interval 5
+```
+
+Real protocol wiring (simulated only when a driver/device is missing):
+
+```bash
+# MQTT – credentials, TLS, topic subscriptions and topic→signal mapping
+python hardware_agent.py --connector mqtt --host broker.example.com \
+       --mqtt-username turbine --mqtt-password secret \
+       --mqtt-topics "aerovigil/gw-alpha/#" \
+       --mqtt-topic-map "aerovigil/gw-alpha/gen_rpm=generator_rpm"
+
+# Modbus/TCP – register map with address:count:scale:unit, unit id, reconnect
+python hardware_agent.py --connector modbus --host 192.168.10.4 \
+       --modbus-unit 1 \
+       --modbus-register-map "gen_rpm@1000:1:0.1:rpm,gbx_temp@1002:1:0.1:C,vib@1004:1:0.01:mm/s"
+
+# OPC-UA – node map, user/password and security-string authentication
+python hardware_agent.py --connector opcua --endpoint opc.tcp://10.0.0.5:4840 \
+       --opcua-user operator --opcua-password secret \
+       --opcua-security "Basic256Sha256,SignAndEncrypt,cert.der,key.pem" \
+       --opcua-nodes "generator_rpm=ns=2;s=gen_rpm,gearbox_temp=ns=2;s=gbx_temp"
 ```
 
 The command line is unified the same way — one tool for every operator task,

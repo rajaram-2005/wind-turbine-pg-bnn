@@ -23,6 +23,7 @@ without a trained feature-extraction pipeline).
 
 from __future__ import annotations
 
+import contextlib
 import os
 from collections import OrderedDict
 
@@ -98,6 +99,56 @@ def _connect_agent_team(payload: TurbinePayload, recommendation: dict) -> dict:
     )
     return enforce_safety_contract(enriched)
 
+
+
+def get_or_create_twin(state, asset_id: str, model_key: str = "GE-1.5"):
+    """Shared, LRU-bounded digital-twin registry accessor.
+
+    Used both by the advisory API routes and by the gateway router
+    (:mod:`src.api.gateway_routes`) so hardware-stream ingestion updates the
+    same twin registry that ``/api/twin/status`` reads from.
+    """
+    from src.digital_twin.specs import get_spec
+    from src.digital_twin.twin import WindTurbineDigitalTwin
+
+    twins: OrderedDict = state.twins
+    twin = twins.get(asset_id)
+    if twin is None:
+        if len(twins) >= state.twin_max_assets:
+            # Evict the least recently used twin to honor the registry cap.
+            twins.popitem(last=False)
+        try:
+            spec = get_spec(model_key)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        twin = WindTurbineDigitalTwin(asset_id, spec, serving_model=state.serving)
+        # Seed with the spec's nominal operating point so status/prompt
+        # are meaningful from the first call. A bad seed must not leave a
+        # half-initialized twin in the registry.
+        from src.utils.schema import Telemetry as _Tel
+
+        vib = spec.vibration_limit_mms * 0.6
+        try:
+            twin.update_state(
+                _Tel(
+                    vibration_mms=vib,
+                    temperature_c=spec.temperature_limit_c * 0.75,
+                    rpm=spec.rpm_limit_hss * 0.85,
+                    oil_viscosity_cst=(spec.viscosity_min_cst + spec.viscosity_max_cst) / 2.0,
+                    load_pct=75.0,
+                ),
+                None,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422, detail=f"cannot seed twin {asset_id}: {exc}"
+            ) from exc
+        twins[asset_id] = twin
+    else:
+        twins.move_to_end(asset_id)  # LRU touch
+        if state.serving is not None and twin.serving_model is None:
+            twin.attach_serving_model(state.serving)
+    return twin
 
 def create_app() -> FastAPI:
     """Application factory. Creates a fresh FastAPI instance each call."""
@@ -277,46 +328,10 @@ def create_app() -> FastAPI:
         The registry is LRU-bounded: when the cap is reached the least
         recently used twin is evicted before a new asset is admitted.
         """
-        from src.digital_twin.specs import get_spec
-        from src.digital_twin.twin import WindTurbineDigitalTwin
+        return get_or_create_twin(app.state, asset_id, model_key)
 
-        twin = app.state.twins.get(asset_id)
-        if twin is None:
-            if len(app.state.twins) >= app.state.twin_max_assets:
-                # Evict the least recently used twin to honor the registry cap.
-                app.state.twins.popitem(last=False)
-            try:
-                spec = get_spec(model_key)
-            except KeyError as exc:
-                raise HTTPException(status_code=404, detail=str(exc)) from exc
-            twin = WindTurbineDigitalTwin(asset_id, spec, serving_model=app.state.serving)
-            # Seed with the spec's nominal operating point so status/prompt
-            # are meaningful from the first call. A bad seed must not leave a
-            # half-initialized twin in the registry.
-            from src.utils.schema import Telemetry as _Tel
 
-            vib = spec.vibration_limit_mms * 0.6
-            try:
-                twin.update_state(
-                    _Tel(
-                        vibration_mms=vib,
-                        temperature_c=spec.temperature_limit_c * 0.75,
-                        rpm=spec.rpm_limit_hss * 0.85,
-                        oil_viscosity_cst=(spec.viscosity_min_cst + spec.viscosity_max_cst) / 2.0,
-                        load_pct=75.0,
-                    ),
-                    None,
-                )
-            except ValueError as exc:
-                raise HTTPException(
-                    status_code=422, detail=f"cannot seed twin {asset_id}: {exc}"
-                ) from exc
-            app.state.twins[asset_id] = twin
-        else:
-            app.state.twins.move_to_end(asset_id)  # LRU touch
-            if app.state.serving is not None and twin.serving_model is None:
-                twin.attach_serving_model(app.state.serving)
-        return twin
+
 
     def _twin_status_payload(twin) -> dict:
         last = twin.state_history[-1] if twin.state_history else None
@@ -353,6 +368,13 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         advisories = [r["advisory"] for r in records if r.get("advisory")]
+        # Durable: persist the final simulated twin state snapshot.
+        try:
+            from src.data.store import get_store
+
+            get_store().record_twin_state(twin.asset_id, records[-1])
+        except Exception:  # noqa: BLE001 - persistence must never break simulation
+            pass
         body = {
             "asset_id": twin.asset_id,
             "profile": req.profile,
@@ -397,6 +419,7 @@ def create_app() -> FastAPI:
         """
         from fastapi.responses import PlainTextResponse
 
+        from src.data.store import get_store
         from src.reporting.reports import build_fleet_report
 
         records = []
@@ -421,10 +444,20 @@ def create_app() -> FastAPI:
 
         for rec in records:
             enforce_safety_contract(rec)
-        return PlainTextResponse(
-            content=build_fleet_report(records, title=title),
-            media_type="text/markdown",
-        )
+        body = build_fleet_report(records, title=title)
+        # Durable: keep the latest generated report in the store as well.
+        with contextlib.suppress(Exception):  # persistence must never break the report
+            get_store().record_report(
+                "fleet",
+                body,
+                title=title,
+                meta={
+                    "n_assets": len(records),
+                    "generated_by": "fleet_report",
+                    "source": "twin-registry" if any(app.state.twins.values()) else "example-csv",
+                },
+            )
+        return PlainTextResponse(content=body, media_type="text/markdown")
 
     return app
 
