@@ -102,11 +102,15 @@ def _connect_agent_team(payload: TurbinePayload, recommendation: dict) -> dict:
 
 
 def get_or_create_twin(state, asset_id: str, model_key: str = "GE-1.5"):
-    """Shared, LRU-bounded digital-twin registry accessor.
+    """Shared, LRU-bounded digital-twin registry accessor with durable hydration.
 
     Used both by the advisory API routes and by the gateway router
     (:mod:`src.api.gateway_routes`) so hardware-stream ingestion updates the
     same twin registry that ``/api/twin/status`` reads from.
+
+    If the twin is not in memory but has prior snapshots in the durable SQLite
+    store, its state_history is hydrated from the latest persisted record so
+    fleet dashboards can resume after a restart.
     """
     from src.digital_twin.specs import get_spec
     from src.digital_twin.twin import WindTurbineDigitalTwin
@@ -122,33 +126,50 @@ def get_or_create_twin(state, asset_id: str, model_key: str = "GE-1.5"):
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         twin = WindTurbineDigitalTwin(asset_id, spec, serving_model=state.serving)
-        # Seed with the spec's nominal operating point so status/prompt
-        # are meaningful from the first call. A bad seed must not leave a
-        # half-initialized twin in the registry.
-        from src.utils.schema import Telemetry as _Tel
-
-        vib = spec.vibration_limit_mms * 0.6
+        # Hydrate from durable store first; if nothing persisted, seed with
+        # the spec's nominal operating point so status/prompt are meaningful.
+        hydrated = False
         try:
-            twin.update_state(
-                _Tel(
-                    vibration_mms=vib,
-                    temperature_c=spec.temperature_limit_c * 0.75,
-                    rpm=spec.rpm_limit_hss * 0.85,
-                    oil_viscosity_cst=(spec.viscosity_min_cst + spec.viscosity_max_cst) / 2.0,
-                    load_pct=75.0,
-                ),
-                None,
-            )
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=422, detail=f"cannot seed twin {asset_id}: {exc}"
-            ) from exc
+            from src.data.store import get_store
+
+            latest = get_store().latest_twin_state(asset_id)
+            if latest:
+                twin.state_history.append(latest)
+                if isinstance(latest.get("cumulative_wear"), (int, float)):
+                    twin.cumulative_wear = float(latest["cumulative_wear"])
+                hydrated = True
+        except Exception:  # noqa: BLE001 - hydration is best-effort
+            hydrated = False
+
+        if not hydrated:
+            # Seed with the spec's nominal operating point so status/prompt
+            # are meaningful from the first call. A bad seed must not leave a
+            # half-initialized twin in the registry.
+            from src.utils.schema import Telemetry as _Tel
+
+            vib = spec.vibration_limit_mms * 0.6
+            try:
+                twin.update_state(
+                    _Tel(
+                        vibration_mms=vib,
+                        temperature_c=spec.temperature_limit_c * 0.75,
+                        rpm=spec.rpm_limit_hss * 0.85,
+                        oil_viscosity_cst=(spec.viscosity_min_cst + spec.viscosity_max_cst) / 2.0,
+                        load_pct=75.0,
+                    ),
+                    None,
+                )
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=422, detail=f"cannot seed twin {asset_id}: {exc}"
+                ) from exc
         twins[asset_id] = twin
     else:
         twins.move_to_end(asset_id)  # LRU touch
         if state.serving is not None and twin.serving_model is None:
             twin.attach_serving_model(state.serving)
     return twin
+
 
 def create_app() -> FastAPI:
     """Application factory. Creates a fresh FastAPI instance each call."""
@@ -209,6 +230,7 @@ def create_app() -> FastAPI:
                 "/advisory",
                 "/advisory/fleet",
                 "/twin/status",
+                "/twin/history",
                 "/twin/simulate",
                 "/twin/prompt",
                 "/telemetry/compress",
@@ -408,6 +430,22 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------ #
     # Reporting                                                           #
     # ------------------------------------------------------------------ #
+    @app.get("/twin/history")
+    def twin_history(asset_id: str = "WTG-001", limit: int = 50) -> dict:
+        """Durable twin-state history from the SQLite store (persisted snapshots)."""
+        from src.data.store import get_store
+
+        limit = max(1, min(int(limit), 500))
+        history = get_store().twin_history(asset_id, limit=limit)
+        body = {
+            "asset_id": asset_id,
+            "count": len(history),
+            "history": history,
+            "advisory_only": True,
+        }
+        enforce_safety_contract(body)
+        return body
+
     @app.get("/fleet/report")
     def fleet_report(title: str = "Fleet RUL advisory report"):
         """Markdown fleet report (text/markdown) via build_fleet_report.

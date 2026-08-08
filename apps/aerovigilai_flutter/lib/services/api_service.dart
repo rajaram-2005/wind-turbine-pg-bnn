@@ -23,6 +23,8 @@ class ApiService {
         'Accept': 'application/json',
       };
 
+  // ── ingestion ─────────────────────────────────────────────────────────
+
   /// Upload an offline USB/CSV file to the ingestion endpoint over HTTPS.
   Future<Map<String, dynamic>> uploadDataFile({
     required String filename,
@@ -44,10 +46,6 @@ class ApiService {
   }
 
   /// Import a SCADA export by signed HTTPS cloud URL.
-  ///
-  /// The server parses the signed URL, fetches the object server-side and
-  /// records the import with `source=cloud`. URLs must be https (or
-  /// localhost for development).
   Future<Map<String, dynamic>> importCloudUrl({
     required String url,
     void Function(double progress)? onProgress,
@@ -68,26 +66,90 @@ class ApiService {
     return _handle(resp);
   }
 
-  /// Fetch the live digital-twin state (RPM, temperatures, sim metrics).
-  Future<Map<String, dynamic>> getDigitalTwinState() async {
-    final resp = await http.get(_uri('/api/twin/status'), headers: _jsonHeaders);
-    return _handle(resp);
-  }
+  // ── twin ──────────────────────────────────────────────────────────────
 
-  /// Fetch a page of aggregate fleet-health rows.
-  Future<Map<String, dynamic>> getFleetReports({int page = 1, int pageSize = 10}) async {
+  /// Fetch the live digital-twin state (RPM, temperatures, sim metrics).
+  Future<Map<String, dynamic>> getDigitalTwinState({String assetId = 'WTG-001'}) async {
     final resp = await http.get(
-      _uri('/api/fleet/report?page=$page&page_size=$pageSize'),
+      _uri('/api/twin/status?asset_id=$assetId'),
       headers: _jsonHeaders,
     );
     return _handle(resp);
   }
 
-  /// Fetch AeroZip compression / bandwidth / restoration telemetry.
-  Future<Map<String, dynamic>> getAeroZipTelemetry() async {
-    final resp = await http.get(_uri('/api/hardware/latest?limit=50'), headers: _jsonHeaders);
+  /// Fleet report markdown (GET /api/fleet/report returns text/markdown).
+  Future<String> getFleetReportMarkdown() async {
+    final resp = await http.get(_uri('/api/fleet/report'), headers: {'Accept': 'text/markdown'});
+    if (resp.statusCode >= 200 && resp.statusCode < 300) return resp.body;
+    throw ApiException('Fleet report failed (${resp.statusCode})', resp.body);
+  }
+
+  // ── fleet ─────────────────────────────────────────────────────────────
+
+  /// Fetch a page of aggregate fleet-health rows (legacy report endpoint).
+  Future<Map<String, dynamic>> getFleetReports({int page = 1, int pageSize = 10}) async {
+    final resp = await http.get(
+      _uri('/api/fleet/report?page=$page&page_size=$pageSize'),
+      headers: _jsonHeaders,
+    );
+    // This endpoint returns markdown when Accept is missing; try JSON fallback to summary
+    try {
+      final map = _safeJson(resp.body, fallback: {});
+      if (map.containsKey('turbines') || map.containsKey('rows') || map.containsKey('data')) {
+        return map;
+      }
+    } catch (_) {}
+    // Fall back to durable summary which is always JSON
+    return getFleetSummary();
+  }
+
+  /// Durable fleet summary from SQLite (GET /api/fleet/summary) – authoritative.
+  Future<Map<String, dynamic>> getFleetSummary() async {
+    final resp = await http.get(_uri('/api/fleet/summary'), headers: _jsonHeaders);
     return _handle(resp);
   }
+
+  /// System stats: row counts + DB location (GET /api/system/stats).
+  Future<Map<String, dynamic>> getSystemStats() async {
+    final resp = await http.get(_uri('/api/system/stats'), headers: _jsonHeaders);
+    return _handle(resp);
+  }
+
+  /// Durable twin-state history (GET /api/twin/history).
+  Future<Map<String, dynamic>> getTwinHistory({String assetId = 'WTG-001', int limit = 30}) async {
+    final resp = await http.get(_uri('/api/twin/history?asset_id=$assetId&limit=$limit'), headers: _jsonHeaders);
+    return _handle(resp);
+  }
+
+  /// List persisted reports (GET /api/reports).
+  Future<Map<String, dynamic>> getReports({String? kind, int limit = 20}) async {
+    final qp = kind != null ? '?kind=$kind&limit=$limit' : '?limit=$limit';
+    final resp = await http.get(_uri('/api/reports$qp'), headers: _jsonHeaders);
+    return _handle(resp);
+  }
+
+  // ── hardware / AeroZip ────────────────────────────────────────────────
+
+  /// Fetch AeroZip compression / bandwidth / restoration telemetry.
+  /// Returns latest persisted readings for dashboards.
+  Future<Map<String, dynamic>> getAeroZipTelemetry({int limit = 80}) async {
+    final resp = await http.get(
+      _uri('/api/hardware/latest?limit=$limit'),
+      headers: _jsonHeaders,
+    );
+    return _handle(resp);
+  }
+
+  /// Alias: latest hardware readings for table views.
+  Future<Map<String, dynamic>> getHardwareLatest({int limit = 100}) async {
+    final resp = await http.get(
+      _uri('/api/hardware/latest?limit=$limit'),
+      headers: _jsonHeaders,
+    );
+    return _handle(resp);
+  }
+
+  // ── model ─────────────────────────────────────────────────────────────
 
   /// Submit a manual JSON payload directly to the canonical model endpoint.
   Future<Map<String, dynamic>> postModelInference(Map<String, dynamic> payload) async {
@@ -98,6 +160,8 @@ class ApiService {
     );
     return _handle(resp);
   }
+
+  // ── jobs ──────────────────────────────────────────────────────────────
 
   /// Queue a framework job (train/evaluate/export/federated/active-learning/explain).
   Future<Map<String, dynamic>> queueJob(String jobType, {List<String>? args}) async {

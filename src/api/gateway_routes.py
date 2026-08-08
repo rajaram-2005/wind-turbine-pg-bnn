@@ -524,3 +524,39 @@ async def system_stats() -> dict[str, Any]:
     except Exception:  # noqa: BLE001 - jobs stats are best-effort
         stats["jobs"] = None
     return stats
+
+
+@router.get("/reports", tags=["system"])
+async def list_reports(kind: str | None = None, limit: int = 20) -> dict[str, Any]:
+    """List persisted fleet/advisory reports (durable store)."""
+    from src.data.store import get_store
+
+    limit = max(1, min(int(limit), 200))
+    items = get_store().list_reports(kind=kind, limit=limit)
+    return {"count": len(items), "reports": items}
+
+
+@router.get("/reports/latest", tags=["system"])
+async def latest_report(kind: str = "fleet") -> dict[str, Any]:
+    """Return the most recent persisted report of a given kind."""
+    from fastapi import HTTPException
+    from src.data.store import get_store
+
+    rec = get_store().latest_report(kind)
+    if rec is None:
+        raise HTTPException(status_code=404, detail=f"No report found for kind={kind!r}")
+    return rec
+
+
+@router.get("/twin/history", tags=["twin"])
+async def twin_history(asset_id: str = "WTG-001", limit: int = 50) -> dict[str, Any]:
+    """Durable twin-state history (gateway alias for /api/twin/history).
+
+    Keeps both the operations API and the gateway router exposing the same
+    durable history so Flutter/Web console can fetch it from a single base.
+    """
+    from src.data.store import get_store
+
+    limit = max(1, min(int(limit), 500))
+    history = get_store().twin_history(asset_id, limit=limit)
+    return {"asset_id": asset_id, "count": len(history), "history": history, "advisory_only": True}

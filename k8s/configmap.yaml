@@ -4,7 +4,11 @@ metadata:
   name: aerovigil-config
   namespace: aerovigil
 data:
-  SERVICE_MODE: "api"
-  PORT: "8000"
+  SERVICE_MODE: "all"
+  PORT: "8080"
+  AEROVIGIL_PORT: "8080"
   LOG_LEVEL: "info"
   MAX_WORKERS: "4"
+  AEROVIGIL_STORE_DB: "/app/artifacts/aerovigil.sqlite3"
+  AV_JOB_DB: "/app/artifacts/jobs.sqlite3"
+  AV_STREAM_HEURISTIC: "1"
