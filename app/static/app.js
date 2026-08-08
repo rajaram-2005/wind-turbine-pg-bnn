@@ -34,6 +34,28 @@ function render(data) {
     document.querySelector('#provenance').textContent = `Feature provenance: ${Object.entries(physics.feature_sources).map(([k,v]) => `${k} (${v})`).join(' · ')}`;
   }
 }
+async function importHardware(payload) {
+  const status = document.querySelector('#hardware-status');
+  status.textContent = 'Validating hardware telemetry…';
+  try {
+    const response = await fetch('/api/hardware/ingest', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
+    for (const [key, value] of Object.entries(data.latest_telemetry)) form.elements[key].value = value;
+    status.textContent = `${data.rows_imported} rows imported from ${data.source}; latest SCADA snapshot applied.`;
+  } catch (error) { status.textContent = `Import failed: ${error.message}`; }
+}
+document.querySelector('#usb-import').addEventListener('click', async () => {
+  const file = document.querySelector('#hardware-file').files[0];
+  if (!file) return document.querySelector('#hardware-status').textContent = 'Select a CSV file first.';
+  await importHardware({source: 'usb', csv_text: await file.text()});
+});
+document.querySelector('#cloud-import').addEventListener('click', async () => {
+  const cloudUrl = document.querySelector('#cloud-url').value.trim();
+  if (!cloudUrl) return document.querySelector('#hardware-status').textContent = 'Enter a signed HTTPS CSV URL first.';
+  await importHardware({source: 'cloud', cloud_url: cloudUrl});
+});
+
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
   submit.disabled = true; submit.textContent = 'Assessing…';

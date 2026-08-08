@@ -38,6 +38,8 @@ from src.api.schemas import (
     FleetResponse,
     FleetSummary,
     HealthResponse,
+    HardwareIngestRequest,
+    HardwareIngestResponse,
     TelemetryCompressRequest,
     TelemetryCompressResponse,
     TelemetryRestoreRequest,
@@ -171,6 +173,7 @@ def create_app() -> FastAPI:
                 "/twin/status",
                 "/twin/simulate",
                 "/twin/prompt",
+                "/hardware/ingest",
                 "/telemetry/compress",
                 "/telemetry/restore",
                 "/fleet/report",
@@ -231,6 +234,27 @@ def create_app() -> FastAPI:
             assets=[AdvisoryResponse(**r) for r in records],
             summary=summary,
         )
+
+    # ------------------------------------------------------------------ #
+    # Hardware / cloud telemetry intake                                  #
+    # ------------------------------------------------------------------ #
+    @app.post("/hardware/ingest", response_model=HardwareIngestResponse)
+    def hardware_ingest(req: HardwareIngestRequest) -> HardwareIngestResponse:
+        """Validate a USB-selected or signed-cloud hardware CSV.
+
+        USB clients submit the selected file contents, never a server-side
+        file path. Cloud imports are HTTPS-only and block local/private hosts.
+        The response is a preview; no raw telemetry is persisted by default.
+        """
+        from src.hardware.ingest import import_hardware_telemetry
+
+        try:
+            imported = import_hardware_telemetry(
+                source=req.source, csv_text=req.csv_text, cloud_url=req.cloud_url
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return HardwareIngestResponse(**imported)
 
     # ------------------------------------------------------------------ #
     # AeroZip telemetry pipeline                                          #

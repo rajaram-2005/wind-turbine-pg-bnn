@@ -25,6 +25,7 @@
           <details><summary>Physics-guided context (optional)</summary><div class="two"><label>Wind speed, m/s<input name="wind_speed_ms" type="number" step="0.1" value="" /></label><label>Power, kW<input name="power_output_kw" type="number" step="1" value="" /></label></div></details>
           <button id="submit" type="submit">Run advisory <span>→</span></button>
         </form>
+        <details class="hardware"><summary>Import hardware telemetry</summary><p>Choose a USB-mounted CSV or provide a signed HTTPS cloud CSV URL. The latest validated row fills the SCADA fields.</p><input id="hardware-file" type="file" accept=".csv,text/csv" /><button id="usb-import" type="button">Import USB CSV</button><label>Signed cloud CSV URL<input id="cloud-url" type="url" placeholder="https://storage.example.com/telemetry.csv" /></label><button id="cloud-import" type="button">Import cloud CSV</button><p id="hardware-status" class="muted"></p></details>
       </section>
       <section class="panel result-panel" aria-live="polite">
         <div id="empty"><h2>Ready for evidence</h2><p>Submit a snapshot to see the connected advisory.</p></div>

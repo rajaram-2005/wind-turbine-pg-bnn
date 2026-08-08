@@ -29,6 +29,8 @@ __all__ = [
     "FleetResponse",
     "FleetSummary",
     "HealthResponse",
+    "HardwareIngestRequest",
+    "HardwareIngestResponse",
     "PhysicsGuidedContext",
     "Telemetry",
     "TelemetryCompressRequest",
@@ -112,6 +114,26 @@ class TelemetryRestoreResponse(BaseModel):
     n_samples: int
     anomaly_score: float
     bypass: bool
+    advisory_only: bool = True
+
+
+class HardwareIngestRequest(BaseModel):
+    """Hardware CSV submitted from a USB-selected file or signed cloud URL."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: str = Field(..., pattern="^(usb|cloud)$")
+    csv_text: str | None = Field(default=None, max_length=5 * 1024 * 1024)
+    cloud_url: str | None = Field(default=None, max_length=2_048)
+
+
+class HardwareIngestResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source: str
+    rows_imported: int
+    columns: list[str]
+    latest_telemetry: dict[str, float]
     advisory_only: bool = True
 
 

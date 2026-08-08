@@ -432,6 +432,29 @@ of the global installed fleet.
   the engineers who act on them. AeroVigil's physics guidance and uncertainty
   estimates are designed to close that trust gap.
 
+## Hardware and cloud telemetry intake
+
+AeroVigilAI can validate field hardware data before it enters an advisory.
+`POST /api/hardware/ingest` supports two deliberately separate routes:
+
+| Source | How it works | Safety boundary |
+|---|---|---|
+| USB / local export | The browser reads a user-selected CSV and submits its text. | The server never accepts or reads an arbitrary local filesystem path. |
+| Cloud export | Submit a signed public HTTPS CSV URL. | HTTPS is required; private, loopback, link-local, and reserved addresses are rejected to prevent server-side request forgery. |
+
+The CSV must contain `vibration_mms`, `temperature_c`, `rpm`,
+`oil_viscosity_cst`, and `load_pct`. The endpoint validates at most 100,000
+rows / 5 MB, returns the latest valid snapshot, and does not persist raw data
+by default. The standalone browser app exposes **Import hardware telemetry**;
+its latest validated row populates the advisory form. Send the resulting
+snapshot to `/api/advisory` for the normal advisory-only evaluation.
+
+```bash
+curl -X POST http://localhost:8080/api/hardware/ingest \
+  -H 'Content-Type: application/json' \
+  -d '{"source":"cloud","cloud_url":"https://storage.example.com/signed-telemetry.csv"}'
+```
+
 ## AeroVigilAI client applications
 
 The product-facing application name is **AeroVigilAI**. Client experiences are
