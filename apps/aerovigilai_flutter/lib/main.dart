@@ -6,6 +6,7 @@ import 'screens/digital_twin_screen.dart';
 import 'screens/fleet_reports_screen.dart';
 import 'screens/aerozip_telemetry_screen.dart';
 import 'screens/low_level_inference_screen.dart';
+import 'screens/jobs_screen.dart';
 
 void main() => runApp(const AeroVigilApp());
 
@@ -61,6 +62,7 @@ class _HomeShellState extends State<HomeShell> {
     _NavItem('Ingestion', Icons.upload_file, (api) => DataIngestionScreen(api: api)),
     _NavItem('Fleet', Icons.table_chart, (api) => FleetReportsScreen(api: api)),
     _NavItem('AeroZip', Icons.compress, (api) => AeroZipTelemetryScreen(api: api)),
+    _NavItem('Jobs', Icons.play_circle, (api) => JobsScreen(api: api)),
     _NavItem('Inference', Icons.code, (api) => LowLevelInferenceScreen(api: api)),
   ];
 

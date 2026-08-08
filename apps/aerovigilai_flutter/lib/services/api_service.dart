@@ -30,6 +30,7 @@ class ApiService {
     void Function(double progress)? onProgress,
   }) async {
     final request = http.MultipartRequest('POST', _uri('/api/telemetry/upload'))
+      ..fields['source'] = 'usb'
       ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
     onProgress?.call(0.1);
     final streamed = await request.send();
@@ -40,6 +41,31 @@ class ApiService {
       return _safeJson(body, fallback: {'status': 'ok', 'filename': filename});
     }
     throw ApiException('Upload failed (${streamed.statusCode})', body);
+  }
+
+  /// Import a SCADA export by signed HTTPS cloud URL.
+  ///
+  /// The server parses the signed URL, fetches the object server-side and
+  /// records the import with `source=cloud`. URLs must be https (or
+  /// localhost for development).
+  Future<Map<String, dynamic>> importCloudUrl({
+    required String url,
+    void Function(double progress)? onProgress,
+  }) async {
+    onProgress?.call(0.3);
+    final resp = await http.post(
+      _uri('/api/telemetry/import'),
+      headers: _jsonHeaders,
+      body: jsonEncode({'url': url}),
+    );
+    onProgress?.call(1.0);
+    return _handle(resp);
+  }
+
+  /// List recent offline imports (USB / cloud / API provenance).
+  Future<Map<String, dynamic>> getImports({int limit = 25}) async {
+    final resp = await http.get(_uri('/api/imports?limit=$limit'), headers: _jsonHeaders);
+    return _handle(resp);
   }
 
   /// Fetch the live digital-twin state (RPM, temperatures, sim metrics).
@@ -73,7 +99,7 @@ class ApiService {
     return _handle(resp);
   }
 
-  /// Queue a framework job (physics/federated/export/active-learning/shap).
+  /// Queue a framework job (train/evaluate/export/federated/active-learning/explain).
   Future<Map<String, dynamic>> queueJob(String jobType, {List<String>? args}) async {
     final resp = await http.post(
       _uri('/api/jobs/$jobType'),
@@ -86,6 +112,12 @@ class ApiService {
   /// Poll a queued job's status and recent logs.
   Future<Map<String, dynamic>> getJobStatus(String jobId) async {
     final resp = await http.get(_uri('/api/jobs/$jobId'), headers: _jsonHeaders);
+    return _handle(resp);
+  }
+
+  /// List recently queued jobs (newest first) for the jobs dashboard.
+  Future<Map<String, dynamic>> listJobs({int limit = 25}) async {
+    final resp = await http.get(_uri('/api/jobs?limit=$limit'), headers: _jsonHeaders);
     return _handle(resp);
   }
 
