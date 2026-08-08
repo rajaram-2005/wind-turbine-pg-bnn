@@ -6,8 +6,9 @@ Subcommands
 ``fleet``      Compute advisories for a fleet CSV and emit a report.
 ``report``     Render a markdown report from a single payload or a fleet CSV.
 ``twin``       Digital twin operations: ``status``, ``simulate``, ``prompt``.
+``physics``    Physics-guided framework: train, evaluate, export, sample, explain.
 
-All output is ADVISORY-ONLY.
+All operational output is ADVISORY-ONLY.
 
 The twin commands are shared with the standalone ``twin-status`` /
 ``twin-simulate`` / ``twin-prompt`` entrypoints (``src/cli_twin.py``) — one
@@ -110,6 +111,20 @@ def cmd_report(args: argparse.Namespace) -> None:
 # --------------------------------------------------------------------------- #
 # Digital twin subcommands                                                     #
 # --------------------------------------------------------------------------- #
+def cmd_physics(args: argparse.Namespace) -> None:
+    """Forward framework actions through the same top-level CLI.
+
+    ``main.py`` remains importable for backwards compatibility, while this
+    command gives operators one entry point for training, export, uncertainty
+    sampling, and explanations.
+    """
+    from main import main as physics_main
+
+    rc = physics_main(args.physics_args)
+    if rc != 0:
+        raise SystemExit(rc)
+
+
 def cmd_twin(args: argparse.Namespace) -> None:
     """Dispatch to the digital-twin command selected by the twin subparser."""
     if args.twin_command == "status":
@@ -218,6 +233,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_twin_subparsers(pt)
     pt.set_defaults(func=cmd_twin)
+
+    pp = sub.add_parser(
+        "physics",
+        help="Physics-guided framework actions (train, evaluate, export, active-sample, explain).",
+        description="Pass a Physics-Guided AI framework command after `physics`.",
+    )
+    pp.add_argument("physics_args", nargs=argparse.REMAINDER, metavar="COMMAND")
+    pp.set_defaults(func=cmd_physics)
 
     return p
 

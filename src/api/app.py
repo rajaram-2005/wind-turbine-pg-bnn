@@ -52,6 +52,8 @@ from src.version import APP_VERSION as VERSION
 from src.version import PRODUCT, SAFETY_BANNER, WEBSITE
 
 ENV_MODEL_PATH = "AV_MODEL_PATH"
+# ``main.py`` physics-guided checkpoint. It augments, never replaces, RUL advice.
+ENV_PHYSICS_GUIDED_MODEL_PATH = "AV_PHYSICS_GUIDED_MODEL_PATH"
 # Memory bound for the in-memory twin registry (LRU-evicted). Overridable per
 # deployment; the default comfortably covers fleet-scale demos.
 ENV_TWIN_MAX_ASSETS = "AV_TWIN_MAX_ASSETS"
@@ -114,6 +116,23 @@ def create_app() -> FastAPI:
                 f"Failed to load serving model from {app.state.serving_model_path}: {exc}"
             ) from exc
 
+    # Optional PhysicsGuidedBNN from the framework CLI (`main.py`).  Its
+    # posterior is returned as supplementary evidence, never coerced into RUL.
+    app.state.physics_guided = None
+    app.state.physics_guided_model_path = os.environ.get(ENV_PHYSICS_GUIDED_MODEL_PATH)
+    if app.state.physics_guided_model_path:
+        from src.integrations.physics_guided import PhysicsGuidedServingModel
+
+        try:
+            app.state.physics_guided = PhysicsGuidedServingModel.load(
+                app.state.physics_guided_model_path
+            )
+        except (FileNotFoundError, KeyError, RuntimeError, TypeError, ValueError) as exc:
+            raise RuntimeError(
+                "Failed to load physics-guided model from "
+                f"{app.state.physics_guided_model_path}: {exc}"
+            ) from exc
+
     # In-memory digital-twin registry (Phase 4): per-process, advisory-only.
     # LRU-bounded so a long-running deployment cannot leak memory on unbounded
     # asset ids. `AV_TWIN_MAX_ASSETS` overrides the default cap.
@@ -172,6 +191,16 @@ def create_app() -> FastAPI:
             serving_model_loaded=app.state.serving is not None,
         )
 
+    def _attach_physics_guided(payload: AdvisoryRequest, rec: dict) -> dict:
+        """Attach framework-model evidence when configured for this deployment."""
+        if app.state.physics_guided is None:
+            return rec
+        enriched = dict(rec)
+        physics_context = getattr(payload, "physics_guided_context", None)
+        context = physics_context.model_dump(exclude_none=True) if physics_context else None
+        enriched["physics_guided"] = app.state.physics_guided.evaluate(payload.telemetry, context)
+        return enforce_safety_contract(enriched)
+
     @app.post("/advisory", response_model=AdvisoryResponse)
     def advisory(payload: AdvisoryRequest) -> AdvisoryResponse:
         # Model-serving path requires BOTH a loaded model and a raw window.
@@ -180,12 +209,15 @@ def create_app() -> FastAPI:
         if payload.telemetry_window is not None:
             window_df = pd.DataFrame(payload.telemetry_window.model_dump())
         rec = _advisory_or_422(payload, serving=app.state.serving, window_df=window_df)
-        rec = _connect_agent_team(payload, rec)
+        rec = _attach_physics_guided(payload, _connect_agent_team(payload, rec))
         return AdvisoryResponse(**rec)
 
     @app.post("/advisory/fleet", response_model=FleetResponse)
     def advisory_fleet(req: FleetRequest) -> FleetResponse:
-        records = [_connect_agent_team(p, _advisory_or_422(p)) for p in req.assets]
+        records = [
+            _attach_physics_guided(p, _connect_agent_team(p, _advisory_or_422(p)))
+            for p in req.assets
+        ]
         for r in records:
             enforce_safety_contract(r)
         util = expected_asset_utilization([r["predicted_rul_days"] for r in records])

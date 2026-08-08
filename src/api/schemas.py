@@ -29,6 +29,7 @@ __all__ = [
     "FleetResponse",
     "FleetSummary",
     "HealthResponse",
+    "PhysicsGuidedContext",
     "Telemetry",
     "TelemetryCompressRequest",
     "TelemetryCompressResponse",
@@ -114,6 +115,22 @@ class TelemetryRestoreResponse(BaseModel):
     advisory_only: bool = True
 
 
+class PhysicsGuidedContext(BaseModel):
+    """Optional measured inputs for the six-signal physics-guided adapter.
+
+    When wind or power are absent, the adapter uses explicitly labelled,
+    load-based estimates so existing five-signal AeroVigil clients remain
+    compatible. Measured values are preferred for production validation.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    wind_speed_ms: float | None = Field(default=None, ge=0.0, le=80.0)
+    power_output_kw: float | None = Field(default=None, ge=0.0, le=50_000.0)
+    gearbox_ratio: float | None = Field(default=None, gt=0.0, le=1_000.0)
+    rated_power_kw: float | None = Field(default=None, gt=0.0, le=50_000.0)
+
+
 class AdvisoryRequest(TurbinePayload):
     """``TurbinePayload`` + optional raw telemetry window.
 
@@ -123,6 +140,7 @@ class AdvisoryRequest(TurbinePayload):
     """
 
     telemetry_window: TelemetryWindow | None = None
+    physics_guided_context: PhysicsGuidedContext | None = None
 
 
 class AdvisoryResponse(BaseModel):
@@ -146,6 +164,7 @@ class AdvisoryResponse(BaseModel):
     warning_horizon_days: float = 45.0
     rationale: str
     agent_team: dict[str, Any] | None = None
+    physics_guided: dict[str, Any] | None = None
     advisory_only: bool = True
     generated_at: str
     disclaimer: str

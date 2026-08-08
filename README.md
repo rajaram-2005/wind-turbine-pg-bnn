@@ -165,6 +165,16 @@ the safety contract), so an operator sees the same advisory context regardless
 of entry point. Digital-twin updates add their wear and ISO 281 evidence to the
 same advisory-only evidence mesh.
 
+The operational application can also attach an optional checkpoint produced by
+the physics-guided framework: set `AV_PHYSICS_GUIDED_MODEL_PATH` to a
+`main.py train` checkpoint. `POST /api/advisory` then returns a labelled
+`physics_guided` posterior alongside the RUL advisory. It is intentionally not
+relabelled as RUL unless the checkpoint was trained and validated for that
+target. The adapter accepts measured wind/power in `physics_guided_context`; it
+uses explicitly labelled load-based estimates for legacy five-signal clients.
+Use `python -m src physics train ...` (or evaluate/export/active-sample/explain)
+to access framework actions from the unified CLI.
+
 ## Installation
 
 **Pip (local)**
