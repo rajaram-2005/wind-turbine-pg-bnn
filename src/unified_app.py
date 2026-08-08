@@ -1,48 +1,80 @@
-"""Single-process AeroVigil application.
+"""Single-process AeroVigil application – the one canonical deployment.
 
-This is the canonical deployment boundary for the project.  It exposes the
-operator dashboard, the advisory/digital-twin/telemetry API, and the low-level
-PG-BNN inference API on one host and one port::
+This module is THE deployment boundary for the project. It connects every
+previously separate surface behind one host and one port (default ``8080``)::
 
-    uvicorn src.unified_app:app --host 0.0.0.0 --port 8000
+    uvicorn src.unified_app:app --host 0.0.0.0 --port 8080
 
 Routes
 ------
 ``/``
-    Gradio operator dashboard.
+    Static AeroVigilAI browser console (compiled web assets).
 ``/api``
-    Integrated advisory API (fleet, twin, AeroZip, reports).
+    Integrated advisory API (fleet, twin, AeroZip, reports) plus the canonical
+    gateway routes:
+
+    * ``POST /api/model``            canonical PG-BNN inference endpoint.
+    * ``ANY  /api/model-api``        308 permanent redirect to ``/api/model``.
+    * ``POST /api/jobs/{job_type}``  queue a framework job -> ``job_id``.
+    * ``GET  /api/jobs/{job_id}``    job status + recent logs.
+    * ``POST /api/hardware/stream``  gateway telemetry ingestion.
 ``/model-api``
-    Low-level six-signal PG-BNN prediction API.
+    Low-level six-signal PG-BNN prediction API (retained for compatibility).
+``/legacy``
+    Deprecated Gradio dashboard (redirect notice only; headless API retained).
 ``/health``
     Health and route discovery for the complete application.
 
-The sub-applications remain importable for backwards compatibility, but new
-installations should run this module so operators never have to coordinate
-multiple servers or ports.
+CORS is configured so the native Flutter console (Windows/macOS/Android/iOS)
+can reach the ``/api`` routes from any localhost/app origin.
 """
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from src.aerovigil_pg_bnn.api import app as model_api
 from src.api.app import create_app as create_operations_api
+from src.api.gateway_routes import router as gateway_router
 from src.version import APP_VERSION as VERSION
 from src.version import PRODUCT
+
+# Location of the compiled browser-console assets served at ``/``.
+_CONSOLE_DIR = Path(__file__).resolve().parents[1] / "web_console" / "dist"
+
+# Default deployment port for the unified application.
+DEFAULT_PORT = 8080
+
+# Origins allowed to call the /api surface from the native Flutter clients.
+_CORS_ORIGINS = [
+    "http://localhost",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://localhost:3000",
+    "capacitor://localhost",
+    "ionic://localhost",
+    "https://aerovigil.abacusai.app",
+]
 
 
 def create_app(*, include_dashboard: bool = True) -> FastAPI:
     """Build the unified ASGI application.
 
-    ``include_dashboard=False`` is useful for lightweight probes and tests on
-    machines that installed only the ``api`` optional dependency.
+    ``include_dashboard=False`` skips mounting the deprecated Gradio UI (useful
+    for lightweight probes and tests on machines that installed only the
+    ``api`` optional dependency).
     """
 
     operations_api = create_operations_api()
+    # Attach the canonical gateway routes onto the /api surface.
+    operations_api.include_router(gateway_router)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -58,11 +90,22 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
         title="AeroVigil unified application",
         version=VERSION,
         description=(
-            "One deployment boundary for the dashboard, advisory engine, "
-            "digital twin, telemetry pipeline, reporting, and PG-BNN model API. "
+            "One deployment boundary for the browser console, advisory engine, "
+            "digital twin, telemetry pipeline, reporting, async job queue, "
+            "hardware gateway ingestion, and PG-BNN model API. "
             "Decision-support only."
         ),
         lifespan=lifespan,
+    )
+
+    # Cross-origin access for the native Flutter clients.
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=_CORS_ORIGINS,
+        allow_origin_regex=r"^http://(localhost|127\.0\.0\.1)(:\d+)?$",
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
     )
 
     @application.get("/health", tags=["system"])
@@ -72,12 +115,17 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
             "product": PRODUCT,
             "version": VERSION,
             "advisory_only": True,
+            "port": DEFAULT_PORT,
             "services": {
-                "dashboard": "/" if include_dashboard else None,
+                "console": "/",
                 "operations_api": "/api",
                 "operations_docs": "/api/docs",
+                "model_inference": "/api/model",
                 "model_api": "/model-api",
                 "model_docs": "/model-api/docs",
+                "jobs": "/api/jobs/{job_type}",
+                "hardware_stream": "/api/hardware/stream",
+                "legacy_dashboard": "/legacy" if include_dashboard else None,
             },
             "digital_twin": {
                 "assets_tracked": len(operations_api.state.twins),
@@ -91,40 +139,44 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
             },
         }
 
-    # Mount APIs before the catch-all dashboard route.
+    # Mount APIs before the catch-all static console.
     application.mount("/api", operations_api, name="operations-api")
     application.mount("/model-api", model_api, name="model-api")
 
+    # Deprecated Gradio dashboard – visible UI is a redirect notice only, but
+    # the headless prediction routes remain wired for legacy scripts.
     if include_dashboard:
         try:
             import gradio as gr
 
-            from gradio_app.app import APP_CSS, build_interface
-        except ImportError as exc:  # clear install guidance instead of a partial app
-            raise RuntimeError(
-                "The unified dashboard requires demo dependencies; "
-                "install with `pip install -e '.[api,demo]'`."
-            ) from exc
+            from gradio_app.deprecated import DEPRECATED_CSS, build_deprecated_interface
 
-        dashboard = build_interface()
-        application = gr.mount_gradio_app(
-            application,
-            dashboard,
-            path="/",
-            allowed_paths=None,
-            theme=gr.themes.Soft(primary_hue="teal", secondary_hue="cyan", neutral_hue="slate"),
-            css=APP_CSS,
+            legacy = build_deprecated_interface()
+            application = gr.mount_gradio_app(
+                application,
+                legacy,
+                path="/legacy",
+                css=DEPRECATED_CSS,
+            )
+        except ImportError:
+            # Demo deps not installed: skip the legacy mount silently.
+            pass
+
+    # Root path serves the compiled AeroVigilAI browser console.
+    if _CONSOLE_DIR.is_dir():
+        application.mount(
+            "/", StaticFiles(directory=str(_CONSOLE_DIR), html=True), name="console"
         )
-    else:
+    else:  # pragma: no cover - console assets absent in minimal installs
 
         @application.get("/", tags=["system"])
         def index() -> dict:
             return {
                 "product": "AeroVigil",
-                "message": "Unified API mode (dashboard disabled)",
+                "message": "Browser console assets not compiled; API mode active",
                 "health": "/health",
                 "operations_api": "/api",
-                "model_api": "/model-api",
+                "model_inference": "/api/model",
                 "advisory_only": True,
             }
 
@@ -132,3 +184,10 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
 
 
 app = create_app()
+
+
+if __name__ == "__main__":  # pragma: no cover - manual launch helper
+    import uvicorn
+
+    port = int(os.environ.get("AEROVIGIL_PORT", DEFAULT_PORT))
+    uvicorn.run("src.unified_app:app", host="0.0.0.0", port=port, reload=False)

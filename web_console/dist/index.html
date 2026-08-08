@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AeroVigilAI Console</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(1200px 600px at 70% -10%, #0e3a3a 0%, #071b22 45%, #05121a 100%);
+      color: #e6f2f2; min-height: 100vh;
+    }
+    header { padding: 22px 28px; display: flex; align-items: center; gap: 14px;
+      border-bottom: 1px solid rgba(255,255,255,.06); }
+    .logo { width: 40px; height: 40px; border-radius: 10px;
+      background: linear-gradient(135deg,#0d9488,#06b6d4); box-shadow: 0 8px 24px rgba(13,148,136,.4); }
+    h1 { font-size: 1.15rem; margin: 0; letter-spacing: .3px; }
+    .sub { color: #7fd7d0; font-size: .8rem; }
+    main { max-width: 1080px; margin: 0 auto; padding: 40px 24px 80px; }
+    .hero h2 { font-size: 2rem; margin: 0 0 10px; }
+    .hero p { color: #a9c6c6; max-width: 640px; line-height: 1.6; }
+    .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); margin-top: 34px; }
+    .card { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07);
+      border-radius: 14px; padding: 20px; transition: transform .15s, border-color .15s; }
+    .card:hover { transform: translateY(-3px); border-color: rgba(13,148,136,.6); }
+    .card h3 { margin: 0 0 6px; font-size: 1rem; }
+    .card p { margin: 0; color: #9fbdbd; font-size: .85rem; line-height: 1.5; }
+    .badge { display:inline-block; margin-top:14px; font-size:.72rem; color:#7fd7d0;
+      border:1px solid rgba(127,215,208,.35); padding:3px 8px; border-radius:999px; }
+    footer { text-align:center; color:#6f9494; font-size:.78rem; padding: 20px; }
+    code { background: rgba(255,255,255,.08); padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo"></div>
+    <div>
+      <h1>AeroVigilAI &mdash; Unified Console</h1>
+      <div class="sub">Physics-Guided Bayesian Predictive Maintenance &bull; Decision-support only</div>
+    </div>
+  </header>
+  <main>
+    <section class="hero">
+      <h2>One canonical deployment, port 8080</h2>
+      <p>This is the compiled entry point for the AeroVigilAI browser console. The native
+         Flutter clients and this web console both talk to the same API surface under
+         <code>/api</code>. Model inference is served at <code>POST /api/model</code>.</p>
+    </section>
+    <section class="grid" id="cards"></section>
+  </main>
+  <footer>AeroVigilAI &copy; <span id="y"></span> &bull; Advisory-only — not a safety instrumented system.</footer>
+  <script>
+    document.getElementById('y').textContent = new Date().getFullYear();
+    const cards = [
+      ['Model Inference', 'Canonical PG-BNN inference with mean + epistemic/aleatoric heads.', 'POST /api/model'],
+      ['Digital Twin', 'Live generator RPM, gearbox temperature and simulation metrics.', 'GET /api/twin/status'],
+      ['Fleet Reports', 'Aggregate fleet health across farms, paginated.', 'GET /api/fleet/report'],
+      ['AeroZip Telemetry', 'Compression ratio, bandwidth reduction and restoration status.', 'POST /api/telemetry/compress'],
+      ['Async Jobs', 'Queue physics / federated / export / active-learning / SHAP jobs.', 'POST /api/jobs/{type}'],
+      ['Hardware Stream', 'Normalized gateway telemetry ingestion (MQTT/Modbus/OPC-UA).', 'POST /api/hardware/stream'],
+    ];
+    const el = document.getElementById('cards');
+    for (const [t, d, e] of cards) {
+      const c = document.createElement('div');
+      c.className = 'card';
+      c.innerHTML = `<h3>${t}</h3><p>${d}</p><span class="badge">${e}</span>`;
+      el.appendChild(c);
+    }
+    fetch('/health').then(r => r.json()).then(h => {
+      const c = document.createElement('div');
+      c.className = 'card';
+      c.innerHTML = `<h3>System</h3><p>Status: ${h.status} &bull; v${h.version}</p><span class="badge">GET /health</span>`;
+      el.appendChild(c);
+    }).catch(() => {});
+  </script>
+</body>
+</html>
