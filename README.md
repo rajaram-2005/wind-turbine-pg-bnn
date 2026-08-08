@@ -432,6 +432,21 @@ of the global installed fleet.
   the engineers who act on them. AeroVigil's physics guidance and uncertainty
   estimates are designed to close that trust gap.
 
+## AeroVigilAI client applications
+
+The product-facing application name is **AeroVigilAI**. Client experiences are
+kept separate rather than forcing a browser layout onto desktop or field users:
+
+| Client | Folder | Platforms | Connection |
+|---|---|---|---|
+| Browser operator console | [`app/`](app/) | Any modern browser | Same-origin `/api` service |
+| Native operator app | [`apps/aerovigilai_flutter/`](apps/aerovigilai_flutter/) | Windows, macOS, iOS, Android | Localhost emulator aliases or an explicit LAN/deployment URL |
+
+The native app’s README documents the correct backend address for Windows,
+macOS, Android Emulator, iOS Simulator, and physical mobile devices. It uses a
+wide desktop workspace on Windows/macOS and a compact mobile assessment flow on
+iOS/Android.
+
 ## One connected application — dashboard + every API
 
 AeroVigil now runs as **one project on one port**. The operator dashboard,

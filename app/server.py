@@ -1,4 +1,4 @@
-"""Standalone AeroVigil web application.
+"""Standalone AeroVigilAI web application.
 
 Run from the repository root::
 
@@ -37,7 +37,7 @@ def create_app() -> FastAPI:
             yield
 
     application = FastAPI(
-        title=f"{PRODUCT} Web App",
+        title="AeroVigilAI Web App",
         version=APP_VERSION,
         description="Standalone operator web application; advisory-only.",
         lifespan=lifespan,

@@ -1,6 +1,6 @@
-# AeroVigil Web App
+# AeroVigilAI Web App
 
-A separately deployable browser application for the AeroVigil advisory engine.
+A separately deployable browser application for the AeroVigilAI advisory engine.
 It serves the UI and the operations API from one origin, avoiding browser-side
 `localhost` calls and CORS configuration.
 
