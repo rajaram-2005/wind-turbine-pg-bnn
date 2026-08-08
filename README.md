@@ -453,12 +453,49 @@ are available without starting any other server:
 | Advisory, fleet, twin, telemetry, reports | `/api` (`/api/docs`) |
 | Low-level PG-BNN prediction | `/model-api` (`/model-api/docs`) |
 
+### Attach the physics-guided framework
+
+The operations application can load a checkpoint emitted by `main.py train` and
+carry its posterior through the API, dashboard, digital twin, and live fleet
+reporting. It augments the operational RUL advisory; it is **not** silently
+interpreted as RUL unless that checkpoint was explicitly trained and validated
+for RUL.
+
+```bash
+# Train a framework checkpoint, then start the single-port application.
+python main.py train --config configs/default.yaml --checkpoint artifacts/pg_bnn.pt
+export AV_PHYSICS_GUIDED_MODEL_PATH=artifacts/pg_bnn.pt
+uvicorn src.unified_app:app --host 0.0.0.0 --port 8000
+```
+
+`POST /api/advisory` accepts an optional `physics_guided_context` object. Supply
+measured `wind_speed_ms` and `power_output_kw` whenever available. The adapter
+otherwise derives labelled, load-based estimates to preserve compatibility with
+existing five-signal clients. It also accepts optional `gearbox_ratio` and
+`rated_power_kw` overrides.
+
+```json
+{
+  "physics_guided_context": {
+    "wind_speed_ms": 9.8,
+    "power_output_kw": 1450,
+    "gearbox_ratio": 91,
+    "rated_power_kw": 2300
+  }
+}
+```
+
+The response adds `physics_guided.target_mean`, decomposed uncertainty, feature
+provenance, and an advisory-only interpretation. The dashboard’s Prediction
+Stats, digital-twin state history, and Markdown/text fleet reports display the
+same supplementary evidence when the environment variable is configured.
+
 Or run the complete container with `docker compose up aerovigil`; dashboard and
 APIs are all exposed on port 8000. The old standalone launch commands remain
 available only for backwards compatibility.
 
-The command line is unified the same way — one tool for every operator task,
-including the digital twin:
+The command line is unified the same way — one tool for every operator and
+framework task:
 
 ```bash
 python -m src advisory examples/payload.json
@@ -466,6 +503,12 @@ python -m src fleet examples/fleet.csv -o fleet_report.md
 python -m src twin status  --asset-id WTG-042 --model Vestas-V90
 python -m src twin simulate --profile overload --hours 12 -o sim.json
 python -m src twin prompt  --asset-id WTG-042
+
+# Physics-guided framework commands through the same entry point.
+python -m src physics train --config configs/default.yaml --epochs 100
+python -m src physics evaluate --checkpoint artifacts/pg_bnn.pt
+python -m src physics active-sample --checkpoint artifacts/pg_bnn.pt
+python -m src physics explain --checkpoint artifacts/pg_bnn.pt
 ```
 
 ## Try it right now — offline demo in 2 commands
