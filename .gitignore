@@ -24,6 +24,9 @@ artifacts/pg_bnn_demo/*
 !artifacts/pg_bnn_demo/config.json
 !artifacts/pg_bnn_demo/scaler.npz
 dist/
+# Keep the committed static operator console assets (served at / by unified_app)
+!web_console/dist/
+!web_console/dist/**
 .pypirc
 
 

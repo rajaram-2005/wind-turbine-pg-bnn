@@ -1941,13 +1941,22 @@ def make_timeline_chart():
 
 
 if __name__ == "__main__":
-    demo = build_interface()
+    # The rich Gradio dashboard is DEPRECATED in favour of the unified
+    # single-port console (Flutter app + FastAPI on :8080). Running this module
+    # now serves a lightweight deprecation notice that redirects operators to
+    # the canonical console, while the headless prediction API (api_name=
+    # "predict") remains registered for backwards compatibility. The full
+    # ``build_interface`` implementation is retained above for reference.
+    import os
+
+    from gradio_app.deprecated import DEPRECATED_CSS, build_deprecated_interface
+
+    demo = build_deprecated_interface()
     demo.queue(default_concurrency_limit=1).launch(
         server_name="0.0.0.0",
-        server_port=7860,
+        server_port=int(os.environ.get("GRADIO_PORT", "7860")),
         allowed_paths=[str(ROOT)],
         strict_cors=False,
         show_error=True,
-        theme=gr.themes.Soft(primary_hue="teal", secondary_hue="cyan", neutral_hue="slate"),
-        css=APP_CSS,
+        css=DEPRECATED_CSS,
     )

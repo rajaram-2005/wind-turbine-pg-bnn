@@ -411,28 +411,69 @@ of the global installed fleet.
 
 ## One connected application — dashboard + every API
 
-AeroVigil now runs as **one project on one port**. The operator dashboard,
-advisory engine, fleet reporting, digital twin, AeroZip telemetry, and raw PG-BNN
-inference API all share the same process and deployment boundary:
+AeroVigil now runs as **one project on one port**. The operator console,
+advisory engine, fleet reporting, digital twin, AeroZip telemetry, the framework
+job queue, hardware ingestion, and raw PG-BNN inference all share the same
+process and deployment boundary:
 
 ```bash
 pip install -e ".[api,demo]"
-uvicorn src.unified_app:app --host 0.0.0.0 --port 8000
+python -m src.unified_app                 # serves on :8080 (AEROVIGIL_PORT to override)
+# or: uvicorn src.unified_app:app --host 0.0.0.0 --port 8080
 ```
 
-Open <http://localhost:8000> for the dashboard. The connected service surfaces
+Open <http://localhost:8080> for the console. The connected service surfaces
 are available without starting any other server:
 
 | Surface | Path |
 |---|---|
-| Operator dashboard | `/` |
+| Static operator console (compiled Flutter/web assets) | `/` |
 | Unified health/discovery | `/health` |
 | Advisory, fleet, twin, telemetry, reports | `/api` (`/api/docs`) |
-| Low-level PG-BNN prediction | `/model-api` (`/model-api/docs`) |
+| **Canonical model inference** | `POST /api/model` |
+| Legacy inference alias (308 → `/api/model`) | `ANY /api/model-api` |
+| Framework job queue (train / federated / export / active-sample / explain) | `POST /api/jobs/{job_type}`, `GET /api/jobs/{job_id}` |
+| Hardware gateway ingestion + read-back | `POST /api/hardware/stream`, `GET /api/hardware/latest` |
+| Offline SCADA upload | `POST /api/telemetry/upload` |
+| Low-level PG-BNN prediction (sub-app) | `/model-api` (`/model-api/docs`) |
+| Deprecated Gradio dashboard (redirect notice) | `/legacy` |
 
-Or run the complete container with `docker compose up aerovigil`; dashboard and
-APIs are all exposed on port 8000. The old standalone launch commands remain
+CORS is configured so the native **AeroVigil console** (Flutter app in
+`apps/aerovigilai_flutter/`, targeting Windows, macOS, Android and iOS) can call
+every endpoint from any platform. Or run the complete container with
+`docker compose up aerovigil`. The old standalone launch commands remain
 available only for backwards compatibility.
+
+### Async framework job queue
+
+Long-running framework tasks are executed as background jobs by an in-process
+`asyncio` manager (no Celery/Redis dependency); status and logs are persisted to
+`artifacts/jobs.sqlite3` so a poll after a hiccup still works:
+
+```bash
+# queue a fleet-wide federated-averaging run and poll it
+curl -X POST localhost:8080/api/jobs/federated \
+     -H 'Content-Type: application/json' \
+     -d '{"args":["--rounds","3","--clients","2"]}'
+curl localhost:8080/api/jobs/<job_id>       # -> Pending | Running | Completed | Failed + logs
+```
+
+Each job type maps to a `python main.py <subcommand>` invocation:
+`physics`/`train`, `federated`, `export`, `active-learning`/`active-sample`,
+`shap`/`explain`.
+
+### Industrial hardware gateway agent
+
+`hardware_agent.py` is a standalone edge agent for on-site gateways. It speaks
+MQTT, Modbus/TCP, OPC-UA or HTTPS polling (auto-falling back to a simulated
+source when a driver or device is absent), normalizes every reading to a common
+JSON schema with a UTC timestamp, buffers to a local SQLite store when the
+network is down (store-and-forward), and streams to `POST /api/hardware/stream`:
+
+```bash
+python hardware_agent.py --connector https --server http://localhost:8080 \
+       --gateway-id gw-alpha --turbine-id WTG-042 --interval 5
+```
 
 The command line is unified the same way — one tool for every operator task,
 including the digital twin:
@@ -451,7 +492,7 @@ python -m src twin prompt  --asset-id WTG-042
 
 ```bash
 python scripts/train_pg_demo.py   # trains a small demo model (a few minutes)
-python gradio_app/app.py          # opens the demo UI in your browser
+python -m src.unified_app         # opens the unified console at http://localhost:8080
 ```
 
 The app prefers local weights from `artifacts/pg_bnn_demo/`, so the demo still
@@ -735,21 +776,24 @@ This creates the following artifacts in `artifacts/pg_bnn_demo/`:
 
 You can run AeroVigil in several ways. Pick the one that fits your needs.
 
-#### Option A: Gradio web UI (interactive demo)
+#### Option A: Unified operator console (recommended)
 
-This launches a browser-based interface where you can adjust turbine parameters
-with sliders and see real-time predictions.
+This launches the single-port application — static operator console plus every
+API (advisory, fleet, digital twin, telemetry, job queue, hardware ingestion and
+PG-BNN inference) on one host.
 
 ```bash
-python gradio_app/app.py
+python -m src.unified_app         # AEROVIGIL_PORT to override the default 8080
 ```
 
-Open your browser and go to **http://localhost:7860**. You will see:
+Open your browser and go to **http://localhost:8080**. The native cross-platform
+console (Flutter app in `apps/aerovigilai_flutter/`, for Windows / macOS /
+Android / iOS) talks to the same endpoints.
 
-- **Scenario presets** — pick Healthy / Warning / Critical
-- **Manual sliders** — fine-tune 6 SCADA telemetry inputs
-- **Gauge + histogram** — predicted remaining useful life with uncertainty
-- **Risk badge** — color-coded risk level and maintenance recommendation
+> **Note:** the old Gradio dashboard is **deprecated**. Running
+> `python gradio_app/app.py` now shows a deprecation notice that redirects to
+> the unified console; its headless prediction API (`api_name="predict"`) is
+> retained for backwards compatibility.
 
 #### Option B: REST API (programmatic access)
 

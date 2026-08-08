@@ -7,6 +7,7 @@ Subcommands:
     export         Export the trained BNN to ONNX (mean + variance heads).
     active-sample  Run uncertainty sampling on a SCADA batch, emit alerts.
     explain        Generate a physics-grounded SHAP explainability report.
+    federated      Fleet-wide federated-averaging simulation across farms.
 
 Examples:
     python main.py train --config configs/default.yaml --epochs 50
@@ -14,6 +15,7 @@ Examples:
     python main.py export --checkpoint artifacts/pg_bnn.pt --out artifacts/pg_bnn.onnx
     python main.py active-sample --checkpoint artifacts/pg_bnn.pt
     python main.py explain --checkpoint artifacts/pg_bnn.pt
+    python main.py federated --rounds 3 --clients 2
 """
 
 from __future__ import annotations
@@ -250,6 +252,101 @@ def cmd_explain(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_federated(args: argparse.Namespace) -> int:
+    """Run a local fleet-wide federated-averaging simulation.
+
+    Simulates ``--clients`` farms training locally for ``--local-epochs`` and
+    aggregating with FedAvg for ``--rounds`` rounds. This runs end-to-end
+    without a live Flower server so the job queue can exercise the federated
+    path; when ``flwr`` and a reachable ``--server`` are available it instead
+    connects a real Flower client via ``start_client``.
+    """
+    from src.federated.fed_client import FederatedConfig
+
+    cfg = load_yaml_config(args.config)
+    tr, ph = cfg.get("training", {}), cfg.get("physics", {})
+    device = resolve_device(str(tr.get("device", "auto")))
+    torch.manual_seed(int(tr.get("seed", 0)))
+
+    fed_cfg = FederatedConfig(
+        num_rounds=int(args.rounds),
+        min_clients=int(args.clients),
+        local_epochs=int(args.local_epochs),
+        lr=float(tr.get("lr", 1e-3)),
+        batch_size=int(tr.get("batch_size", 256)),
+        beta_kl=float(tr.get("beta_kl", 1e-3)),
+        lambda_physics=float(ph.get("lambda_aero", 0.1)),
+        server_address=str(args.server),
+    )
+
+    # Try a real Flower client only when explicitly pointed at a server.
+    if args.server and args.connect:
+        try:
+            from src.federated.fed_client import FlowerFederatedClient, start_client
+
+            model = build_model(cfg).to(device)
+            x, y = make_synthetic_scada(2048, model.in_features, seed=0)
+            split = x.shape[0] // 2
+            client = FlowerFederatedClient(
+                model,
+                (x[:split], y[:split]),
+                (x[split:], y[split:]),
+                config=fed_cfg,
+            )
+            logger.info("connecting to Flower server at %s", fed_cfg.server_address)
+            start_client(client)
+            return 0
+        except Exception as exc:  # pragma: no cover - needs live server/flwr
+            logger.warning("real federated client unavailable (%s); "
+                           "falling back to local simulation", exc)
+
+    # Local FedAvg simulation across synthetic farms (always runnable).
+    n_clients = max(int(args.clients), 1)
+    global_model = build_model(cfg).to(device)
+    farms = []
+    for c in range(n_clients):
+        xc, yc = make_synthetic_scada(1024, global_model.in_features, seed=c + 1)
+        farms.append((xc.to(device), yc.to(device)))
+
+    batch = fed_cfg.batch_size
+    for rnd in range(fed_cfg.num_rounds):
+        local_states = []
+        weights = []
+        for c, (xc, yc) in enumerate(farms):
+            local = build_model(cfg).to(device)
+            local.load_state_dict(global_model.state_dict())
+            num_batches = max(xc.shape[0] // batch, 1)
+            loss_fn = PGBNNLoss(fed_cfg.beta_kl, fed_cfg.lambda_physics, num_batches)
+            optimizer = torch.optim.Adam(local.parameters(), lr=fed_cfg.lr)
+            stats = {}
+            for _ in range(fed_cfg.local_epochs):
+                perm = torch.randperm(xc.shape[0], device=device)
+                for b in range(num_batches):
+                    idx = perm[b * batch : (b + 1) * batch]
+                    stats = train_step(local, loss_fn, optimizer, xc[idx], yc[idx])
+            local_states.append({k: v.detach().clone() for k, v in local.state_dict().items()})
+            weights.append(xc.shape[0])
+            logger.info("round %d farm %d local nll=%.4f", rnd + 1, c, stats.get("nll", float("nan")))
+
+        # Weighted FedAvg aggregation.
+        total = float(sum(weights))
+        agg = {}
+        for key in global_model.state_dict().keys():
+            acc = None
+            for w, state in zip(weights, local_states):
+                term = state[key].float() * (w / total)
+                acc = term if acc is None else acc + term
+            agg[key] = acc.to(global_model.state_dict()[key].dtype)
+        global_model.load_state_dict(agg)
+        logger.info("round %d/%d aggregated %d farms", rnd + 1, fed_cfg.num_rounds, n_clients)
+
+    out = Path(args.checkpoint)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    torch.save({"state_dict": global_model.state_dict(), "config": cfg.get("model", {})}, out)
+    logger.info("saved federated global model to %s", out)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Assemble the argparse CLI with all subcommands."""
     parser = argparse.ArgumentParser(
@@ -288,6 +385,16 @@ def build_parser() -> argparse.ArgumentParser:
     common(p_explain)
     p_explain.add_argument("--out", default=None, help="report output path")
     p_explain.set_defaults(func=cmd_explain)
+
+    p_fed = sub.add_parser("federated", help="fleet-wide federated FedAvg simulation")
+    common(p_fed)
+    p_fed.add_argument("--rounds", type=int, default=3, help="federated rounds")
+    p_fed.add_argument("--clients", type=int, default=2, help="number of farms")
+    p_fed.add_argument("--local-epochs", type=int, default=1, help="local epochs/round")
+    p_fed.add_argument("--server", default="", help="Flower server host:port")
+    p_fed.add_argument("--connect", action="store_true",
+                       help="connect to a live Flower server instead of simulating")
+    p_fed.set_defaults(func=cmd_federated)
     return parser
 
 
