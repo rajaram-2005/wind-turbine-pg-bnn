@@ -54,9 +54,10 @@ Thumbs.db
 *.key
 secrets/
 
-# Large files not needed in image
+# Large files not needed in image (keep demo checkpoint)
 *.pt
-!artifacts/bnn_demo.pt
+!artifacts/**/*.pt
+!artifacts/*.pt
 *.pth
 *.ckpt
 *.safetensors

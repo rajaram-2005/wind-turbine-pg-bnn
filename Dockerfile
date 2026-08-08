@@ -58,7 +58,7 @@ ENV APP_HOME=/app
 ENV MODEL_PATH=/app/artifacts/pg_bnn_demo/bnn_demo.pt
 ENV CONFIG_PATH=/app/artifacts/pg_bnn_demo/config.json
 ENV SCALER_PATH=/app/artifacts/pg_bnn_demo/scaler.npz
-ENV PORT=8000
+ENV PORT=8080
 
 # Install runtime system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -85,6 +85,7 @@ COPY configs/ ${APP_HOME}/configs/
 COPY examples/ ${APP_HOME}/examples/
 COPY config.json /app/config.json
 COPY artifacts/ ${APP_HOME}/artifacts/
+COPY web_console/ ${APP_HOME}/web_console/
 
 # Copy and set permissions for entrypoint
 COPY docker/entrypoint.sh /entrypoint.sh
@@ -118,7 +119,7 @@ ENV APP_HOME=/app
 ENV MODEL_PATH=/app/artifacts/pg_bnn_demo/bnn_demo.pt
 ENV CONFIG_PATH=/app/artifacts/pg_bnn_demo/config.json
 ENV SCALER_PATH=/app/artifacts/pg_bnn_demo/scaler.npz
-ENV PORT=8000
+ENV PORT=8080
 
 # Install Python and dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -148,6 +149,7 @@ COPY configs/ ${APP_HOME}/configs/
 COPY examples/ ${APP_HOME}/examples/
 COPY config.json /app/config.json
 COPY artifacts/ ${APP_HOME}/artifacts/
+COPY web_console/ ${APP_HOME}/web_console/
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

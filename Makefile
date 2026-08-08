@@ -12,7 +12,7 @@ PKG    := src/aerovigil_pg_bnn
 help: ## Show this help
 	@echo "Aerovigil PG-BNN — local CI targets (run 'make ci' for everything):"
 	@echo "  make ci           full pipeline: lint, format-check, typecheck, security, test, build"
-	@echo "  make serve        one-port dashboard + all APIs on http://localhost:8000"
+	@echo "  make serve        one-port dashboard + all APIs on http://localhost:8080"
 	@echo "  make lint         ruff check"
 	@echo "  make format       ruff format (writes)"
 	@echo "  make format-check ruff format --check"
@@ -30,7 +30,7 @@ dev: ## Install api + dev dependencies (lint, test, build, serve tools)
 install: dev ## Alias for dev
 
 serve: ## Run the complete application through one process and port
-	$(PYTHON) -m uvicorn src.unified_app:app --host 0.0.0.0 --port 8000
+	$(PYTHON) -m uvicorn src.unified_app:app --host 0.0.0.0 --port 8080
 
 lint: ## Lint with ruff
 	ruff check .
