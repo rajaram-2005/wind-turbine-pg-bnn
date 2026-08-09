@@ -9,6 +9,9 @@ Routes
 ------
 ``/``
     Static AeroVigilAI browser console (compiled web assets).
+``/download``
+    Cross-platform download site (Windows / macOS / Linux / Android / iOS /
+    web console), served from ``web_console/dist/download.html``.
 ``/api``
     The single integrated API: advisory engine, fleet, twin, AeroZip, reports,
     async job queue, hardware-gateway ingestion, and the PG-BNN model surface:
@@ -43,6 +46,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.aerovigil_pg_bnn.api import app as _model_app  # lifespan loads the model
@@ -151,6 +155,7 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
             "port": configured_port(),
             "services": {
                 "console": "/",
+                "downloads": "/download",
                 "operations_api": "/api",
                 "operations_docs": "/api/docs",
                 "model_inference": "/api/model",
@@ -172,6 +177,12 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
                 "evidence_path": ["SCADA", "PG-BNN", "ISO 281", "TWIN", "FLEET", "HUMAN"],
             },
         }
+
+    # Cross-platform download site. The page itself lives in the console bundle
+    # (download.html); this friendly route avoids the .html suffix in links.
+    @application.get("/download", include_in_schema=False)
+    def download_site() -> RedirectResponse:
+        return RedirectResponse(url="/download.html", status_code=308)
 
     # Mount the single API before the catch-all static console.
     application.mount("/api", operations_api, name="operations-api")

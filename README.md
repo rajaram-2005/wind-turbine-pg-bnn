@@ -446,6 +446,39 @@ every endpoint from any platform. Or run the complete container with
 `docker compose up aerovigil`. Legacy container service-mode names converge on
 the same unified process; they cannot open separate API or Gradio servers.
 
+### Native app downloads
+
+The unified app ships a cross-platform **download site** at
+[`/download`](http://localhost:8080/download) (also linked from the console
+hero and footer). It advertises the native console for every supported target
+and links the published binaries:
+
+| Platform | Binary | Published as |
+|----------|--------|--------------|
+| Windows 10/11 (x64) | Portable app | `aerovigil-windows-x64.zip` |
+| macOS 12+ (universal) | `.app` bundle | `aerovigil-macos-universal.zip` |
+| Linux (GTK) | Portable bundle | `aerovigil-linux-x64.tar.gz` |
+| Android 8+ | APK | `aerovigil-android.apk` |
+| iOS 15+ | TestFlight / App Store | signed distribution |
+| Any OS | Web console | served at `/` (no install) |
+
+Binaries are built and attached to a GitHub Release automatically by the
+release workflow in [`ci/release-apps.yml`](ci/release-apps.yml) whenever a
+version tag (`v…`) is pushed. **One-time activation** (requires push access
+with the `workflows` scope): copy it into the GitHub workflows directory —
+
+```bash
+mkdir -p .github/workflows
+cp ci/release-apps.yml .github/workflows/release-apps.yml
+git add .github/workflows/release-apps.yml && git commit -m "Enable release builds" && git push
+```
+
+— then tag a release (`git tag v1.0.0 && git push --tags`) and CI publishes
+the platform binaries. The download page detects each published asset via the
+GitHub Releases API and links it directly; until a tag is released it falls
+back to the releases page plus per-platform build instructions (Flutter
+`flutter build windows|macos|linux|apk`).
+
 ### Async framework job queue
 
 Long-running framework tasks are executed as background jobs by an in-process

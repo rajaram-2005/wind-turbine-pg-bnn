@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#06151d" />
+  <title>AeroVigilAI · Downloads</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #041119;
+      --surface: rgba(10, 32, 42, .82);
+      --surface-2: rgba(14, 42, 52, .72);
+      --line: rgba(151, 222, 221, .12);
+      --line-hot: rgba(45, 212, 191, .42);
+      --text: #e8f5f4;
+      --muted: #8dafaf;
+      --teal: #2dd4bf;
+      --cyan: #38bdf8;
+      --pink: #f0abfc;
+      --amber: #fbbf24;
+      --red: #fb7185;
+      --green: #4ade80;
+      --shadow: 0 18px 60px rgba(0, 0, 0, .25);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; min-height: 100vh; overflow-x: hidden;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(900px 520px at 82% -5%, rgba(8, 145, 137, .22), transparent 68%),
+        radial-gradient(700px 500px at 8% 20%, rgba(14, 116, 144, .13), transparent 70%),
+        linear-gradient(160deg, #061820 0%, var(--bg) 54%, #050e16 100%);
+    }
+    body::before {
+      content: ""; position: fixed; inset: 0; z-index: -1; opacity: .16; pointer-events: none;
+      background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: linear-gradient(to bottom, black, transparent 80%);
+    }
+    a { color: #74e8de; text-decoration: none; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    code { padding: 2px 7px; border-radius: 6px; color: #a7f3d0; background: rgba(45,212,191,.09); }
+    pre {
+      margin: 10px 0 0; padding: 13px 14px; overflow: auto; border: 1px solid var(--line);
+      border-radius: 10px; color: #b9d9d5; background: #031018; font-size: .74rem; line-height: 1.55;
+    }
+    header {
+      display: flex; align-items: center; gap: 14px;
+      padding: 18px clamp(18px, 4vw, 42px);
+      border-bottom: 1px solid var(--line);
+      background: rgba(3, 14, 21, .62); backdrop-filter: blur(18px);
+    }
+    .logo {
+      position: relative; width: 44px; height: 44px; flex: 0 0 auto;
+      border: 1px solid rgba(94,234,212,.5); border-radius: 13px;
+      background: linear-gradient(145deg, rgba(45,212,191,.33), rgba(14,116,144,.16));
+      box-shadow: 0 0 30px rgba(45,212,191,.18);
+    }
+    .logo::before, .logo::after { content: ""; position: absolute; background: #5eead4; border-radius: 999px; }
+    .logo::before { width: 4px; height: 29px; left: 20px; top: 7px; transform: rotate(24deg); }
+    .logo::after { width: 26px; height: 4px; left: 9px; top: 20px; transform: rotate(-24deg); }
+    .brand h1 { margin: 0; font-size: clamp(1rem, 2.5vw, 1.2rem); letter-spacing: .02em; }
+    .brand p { margin: 3px 0 0; color: #73cfc8; font: 700 .7rem/1.3 ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; }
+    .header-links { margin-left: auto; display: flex; gap: 8px; }
+    .link-button {
+      display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 8px 14px;
+      border-radius: 9px; border: 1px solid var(--line-hot); background: rgba(45,212,191,.06);
+      color: #bfe6e2; font-size: .76rem; font-weight: 700;
+    }
+    main { width: min(1180px, 100%); margin: 0 auto; padding: 26px 16px 80px; }
+    .hero { padding: clamp(18px, 3vw, 30px) 0 6px; text-align: center; }
+    .eyebrow { margin-bottom: 8px; color: var(--teal); font: 800 .7rem ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase; }
+    .hero h2 { margin: 0 auto; max-width: 860px; font-size: clamp(1.7rem, 4.5vw, 2.6rem); line-height: 1.08; letter-spacing: -.03em; }
+    .hero p { max-width: 760px; margin: 13px auto 0; color: #a4c1c1; line-height: 1.65; }
+    .release-pill {
+      display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; padding: 7px 14px;
+      border: 1px solid rgba(94,234,212,.25); border-radius: 999px; color: #88e7df;
+      font: 700 .72rem ui-monospace, monospace;
+    }
+    .release-pill .dot { width: 8px; height: 8px; border-radius: 99px; background: var(--green); box-shadow: 0 0 12px var(--green); }
+    .release-pill.pending .dot { background: var(--amber); box-shadow: 0 0 12px var(--amber); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 28px; }
+    .card {
+      position: relative; border: 1px solid var(--line); border-radius: 15px;
+      background: var(--surface); box-shadow: var(--shadow); padding: 22px;
+      transition: transform .18s ease, border-color .18s ease;
+    }
+    .card:hover { transform: translateY(-3px); border-color: var(--line-hot); }
+    .card.recommended { border-color: rgba(45,212,191,.55); box-shadow: 0 0 42px rgba(45,212,191,.12), var(--shadow); }
+    .reco-badge {
+      position: absolute; top: -10px; right: 16px; padding: 3px 10px; border-radius: 999px;
+      background: linear-gradient(135deg, var(--teal), #72e9ff); color: #06131f;
+      font: 800 .62rem ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase;
+    }
+    .card-head { display: flex; align-items: center; gap: 13px; }
+    .os-icon { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 12px; color: var(--teal); background: rgba(45,212,191,.1); }
+    .os-icon svg { width: 26px; height: 26px; fill: currentColor; }
+    .card-head h3 { margin: 0; font-size: 1.02rem; }
+    .card-head .sub { color: var(--muted); font-size: .72rem; margin-top: 3px; }
+    .card p.desc { margin: 13px 0 0; color: var(--muted); font-size: .8rem; line-height: 1.55; min-height: 56px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      min-height: 38px; padding: 9px 16px; border-radius: 9px; font-weight: 800; font-size: .76rem;
+      background: linear-gradient(135deg, #5eead4, #22d3ee); color: #03201e;
+      box-shadow: 0 7px 24px rgba(45,212,191,.16);
+    }
+    .btn.secondary { color: #bfe6e2; border: 1px solid var(--line-hot); background: rgba(45,212,191,.06); box-shadow: none; }
+    .btn.disabled { opacity: .55; cursor: not-allowed; }
+    .meta { margin-top: 12px; color: #709393; font-size: .68rem; line-height: 1.5; }
+    section.block { margin-top: 44px; }
+    section.block h2 { margin: 0; font-size: 1.35rem; letter-spacing: -.02em; }
+    section.block .lead { margin: 10px 0 0; color: #a4c1c1; line-height: 1.6; font-size: .85rem; max-width: 900px; }
+    .panel { border: 1px solid var(--line); border-radius: 15px; background: var(--surface); box-shadow: var(--shadow); padding: clamp(16px, 3vw, 22px); margin-top: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: .75rem; }
+    th { color: #8bafad; text-align: left; font-size: .67rem; text-transform: uppercase; letter-spacing: .06em; }
+    th, td { padding: 10px 9px; border-bottom: 1px solid rgba(255,255,255,.055); vertical-align: top; }
+    td { color: #c8dfdd; }
+    tr:last-child td { border-bottom: 0; }
+    .note { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; padding: 12px 14px; border-left: 2px solid var(--teal); background: rgba(45,212,191,.04); border-radius: 0 10px 10px 0; color: #a7c6c4; font-size: .76rem; line-height: 1.55; }
+    footer { padding: 25px 16px 34px; color: #648181; text-align: center; font-size: .72rem; }
+    @media (max-width: 760px) { .header-links { display: none; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo" aria-hidden="true"></div>
+    <div class="brand">
+      <h1>AeroVigilAI · Downloads</h1>
+      <p>Native operator console · every platform</p>
+    </div>
+    <div class="header-links">
+      <a class="link-button" href="/">← Console</a>
+      <a class="link-button" href="/api/docs">API docs</a>
+    </div>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div class="eyebrow">One codebase · every screen</div>
+      <h2>Get AeroVigilAI for your platform.</h2>
+      <p>The native operator console — digital twin, fleet intelligence, MIKA + KAI copilot, telemetry ingestion and PG-BNN inference — runs natively on Windows, macOS, Linux, Android and iOS, and in any browser. Advisory-only decision support; no turbine commands, ever.</p>
+      <div class="release-pill pending" id="release-pill"><span class="dot"></span><span id="release-text">Checking latest release…</span></div>
+    </div>
+
+    <div class="grid" id="platform-grid">
+      <!-- Windows -->
+      <article class="card" data-os="windows">
+        <div class="card-head">
+          <div class="os-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5 10.4 4.4v7.1H3V5.5Zm0 13 7.4 1.1v-7H3v6.9ZM11.4 4.2 21 3v8.5h-9.6V4.2Zm9.6 9.3V21l-9.6-1.3v-6.2H21Z"/></svg></div>
+          <div><h3>Windows</h3><div class="sub">Windows 10 / 11 · x64</div></div>
+        </div>
+        <p class="desc">Desktop console with the full navigation rail: dashboard, digital twin, fleet, AeroZip telemetry, ingestion, jobs and inference.</p>
+        <div class="actions">
+          <a class="btn" id="dl-windows" href="#" rel="noopener">Download for Windows</a>
+          <a class="btn secondary" href="#build">Build guide</a>
+        </div>
+        <div class="meta" id="meta-windows">Asset: <code>aerovigil-windows-x64.zip</code> · unzips to a portable app, no installer needed</div>
+      </article>
+
+      <!-- macOS -->
+      <article class="card" data-os="macos">
+        <div class="card-head">
+          <div class="os-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.7 12.9c0-2 1.7-3 1.7-3.1-1-1.4-2.4-1.6-2.9-1.6-1.3-.1-2.4.7-3 .7-.6 0-1.6-.7-2.7-.7-1.4 0-2.6.8-3.3 2-1.4 2.4-.4 6 1 8 .7 1 1.5 2.1 2.6 2 1-.1 1.4-.7 2.7-.7 1.2 0 1.6.7 2.7.6 1.1 0 1.8-1 2.5-2 .8-1.1 1.1-2.2 1.1-2.3 0 0-2.3-.9-2.4-2.9ZM14.6 6.6c.6-.7 1-1.7.9-2.6-.8 0-1.8.5-2.3 1.2-.5.6-1 1.6-.8 2.5.9.1 1.7-.4 2.2-1.1Z"/></svg></div>
+          <div><h3>macOS</h3><div class="sub">macOS 12+ · Apple Silicon &amp; Intel</div></div>
+        </div>
+        <p class="desc">Universal binary for Apple Silicon and Intel Macs. Same full console experience, native menu-bar integration.</p>
+        <div class="actions">
+          <a class="btn" id="dl-macos" href="#" rel="noopener">Download for macOS</a>
+          <a class="btn secondary" href="#build">Build guide</a>
+        </div>
+        <div class="meta" id="meta-macos">Asset: <code>aerovigil-macos-universal.zip</code> · drag the .app into Applications · unsigned builds: right-click → Open</div>
+      </article>
+
+      <!-- Linux -->
+      <article class="card" data-os="linux">
+        <div class="card-head">
+          <div class="os-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c-2.2 0-3.5 1.7-3.5 4.1 0 1.5.3 2.5-.4 3.8-.8 1.4-2.3 2.8-3.2 4.4-.9 1.7-1.3 3.4-.2 4.2.5.4 1.1.4 1.7.2 0 .9.4 1.7 1.3 2.2 1.2.6 2.6.5 3.6-.3.2.1.5.2.7.2.2 0 .5-.1.7-.2 1 .8 2.4.9 3.6.3.9-.5 1.3-1.3 1.3-2.2.6.2 1.2.2 1.7-.2 1.1-.8.7-2.5-.2-4.2-.9-1.6-2.4-3-3.2-4.4-.7-1.3-.4-2.3-.4-3.8C15.5 3.7 14.2 2 12 2Zm-1.6 4.2c.3 0 .6.3.6.6s-.3.6-.6.6-.6-.3-.6-.6.3-.6.6-.6Zm3.2 0c.3 0 .6.3.6.6s-.3.6-.6.6-.6-.3-.6-.6.3-.6.6-.6Z"/></svg></div>
+          <div><h3>Linux</h3><div class="sub">Ubuntu / Debian / Fedora · x64</div></div>
+        </div>
+        <p class="desc">Native GTK desktop build for every major distro. Ideal for control-room workstations and NOC dashboards.</p>
+        <div class="actions">
+          <a class="btn" id="dl-linux" href="#" rel="noopener">Download for Linux</a>
+          <a class="btn secondary" href="#build">Build guide</a>
+        </div>
+        <div class="meta" id="meta-linux">Asset: <code>aerovigil-linux-x64.tar.gz</code> · extract and run <code>aerovigilai_flutter</code></div>
+      </article>
+
+      <!-- Android -->
+      <article class="card" data-os="android">
+        <div class="card-head">
+          <div class="os-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.6 9.5 19 6.9c.1-.2 0-.4-.2-.5-.2-.1-.4 0-.5.2l-1.4 2.6C15.6 8.6 14.9 8.3 14 8.3s-1.6.3-2.9.9L9.7 6.6c-.1-.2-.3-.3-.5-.2-.2.1-.3.3-.2.5l1.4 2.6C7.6 10.9 6 13.2 6 16h16c0-2.8-1.6-5.1-4.4-6.5ZM11 13.5c-.4 0-.8-.3-.8-.8s.3-.8.8-.8.8.3.8.8-.4.8-.8.8Zm6 0c-.4 0-.8-.3-.8-.8s.3-.8.8-.8.8.3.8.8-.4.8-.8.8ZM6 17.5h12V21c0 .6-.4 1-1 1h-1c-.6 0-1-.4-1-1v-2h-1v2c0 .6-.4 1-1 1h-1c-.6 0-1-.4-1-1v-2H6v-3.5Z"/></svg></div>
+          <div><h3>Android</h3><div class="sub">Android 8.0+ · phone &amp; tablet</div></div>
+        </div>
+        <p class="desc">Field-ready console for technicians on the turbine floor. Adaptive bottom navigation on phones, rail on tablets.</p>
+        <div class="actions">
+          <a class="btn" id="dl-android" href="#" rel="noopener">Download APK</a>
+          <a class="btn secondary" href="#build">Build guide</a>
+        </div>
+        <div class="meta" id="meta-android">Asset: <code>aerovigil-android.apk</code> · enable “install unknown apps” · point it at your server URL on first run</div>
+      </article>
+
+      <!-- iOS -->
+      <article class="card" data-os="ios">
+        <div class="card-head">
+          <div class="os-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.7 12.9c0-2 1.7-3 1.7-3.1-1-1.4-2.4-1.6-2.9-1.6-1.3-.1-2.4.7-3 .7-.6 0-1.6-.7-2.7-.7-1.4 0-2.6.8-3.3 2-1.4 2.4-.4 6 1 8 .7 1 1.5 2.1 2.6 2 1-.1 1.4-.7 2.7-.7 1.2 0 1.6.7 2.7.6 1.1 0 1.8-1 2.5-2 .8-1.1 1.1-2.2 1.1-2.3 0 0-2.3-.9-2.4-2.9ZM14.6 6.6c.6-.7 1-1.7.9-2.6-.8 0-1.8.5-2.3 1.2-.5.6-1 1.6-.8 2.5.9.1 1.7-.4 2.2-1.1Z"/></svg></div>
+          <div><h3>iOS</h3><div class="sub">iOS 15+ · iPhone &amp; iPad</div></div>
+        </div>
+        <p class="desc">iPhone and iPad build distributed through TestFlight / the App Store (Apple requires signed distribution for iOS binaries).</p>
+        <div class="actions">
+          <a class="btn secondary" href="https://github.com/rajaram-2005/wind-turbine-pg-bnn/tree/main/apps/aerovigilai_flutter" target="_blank" rel="noopener">iOS source &amp; TestFlight notes</a>
+        </div>
+        <div class="meta">Until TestFlight is provisioned, use the browser console on iOS — it is fully responsive.</div>
+      </article>
+
+      <!-- Web -->
+      <article class="card" data-os="web">
+        <div class="card-head">
+          <div class="os-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm7.9 9h-3.4a15.6 15.6 0 0 0-1.2-5.3A8 8 0 0 1 19.9 11ZM12 4.1c.9 1.2 1.9 3.4 2.4 6.9H9.6c.5-3.5 1.5-5.7 2.4-6.9ZM8.7 5.7A15.6 15.6 0 0 0 7.5 11H4.1a8 8 0 0 1 4.6-5.3ZM4.1 13h3.4c.1 2.2.6 4.1 1.2 5.3A8 8 0 0 1 4.1 13Zm5.5 0h4.8c-.5 3.5-1.5 5.7-2.4 6.9-.9-1.2-1.9-3.4-2.4-6.9Zm5.7 5.3c.6-1.2 1.1-3.1 1.2-5.3h3.4a8 8 0 0 1-4.6 5.3Z"/></svg></div>
+          <div><h3>Web console</h3><div class="sub">Any OS · any modern browser</div></div>
+        </div>
+        <p class="desc">The zero-install option: the full operator console served by the AeroVigil unified app itself — charts, copilot, scenario lab and all.</p>
+        <div class="actions">
+          <a class="btn" href="/">Open the web console</a>
+          <a class="btn secondary" href="/api/docs">API explorer</a>
+        </div>
+        <div class="meta">Runs wherever the server runs: laptop, rack server, Docker, Kubernetes, or the cloud.</div>
+      </article>
+    </div>
+
+    <!-- Self-hosted server -->
+    <section class="block" id="server">
+      <h2>Run the AeroVigil server (any OS)</h2>
+      <p class="lead">Every console above talks to one canonical server on port 8080. Run it on Windows, macOS or Linux — whichever machine sits closest to your turbines.</p>
+      <div class="panel">
+        <table>
+          <thead><tr><th>Method</th><th>Command</th><th>Best for</th></tr></thead>
+          <tbody>
+            <tr><td>Python (pip)</td><td><code>pip install -e ".[api]" &amp;&amp; python -m src.unified_app</code></td><td>Workstations &amp; dev</td></tr>
+            <tr><td>Docker</td><td><code>docker compose up aerovigil</code></td><td>Linux servers, NAS, cloud VMs</td></tr>
+            <tr><td>Kubernetes</td><td><code>kubectl apply -k k8s/</code></td><td>Fleet / production clusters</td></tr>
+          </tbody>
+        </table>
+        <div class="note">🛡️&nbsp; AeroVigil is advisory-only by design: no actuation fields, no control commands. Put the server behind TLS (nginx / Caddy / Tailscale) before exposing it beyond your LAN.</div>
+      </div>
+    </section>
+
+    <!-- Build from source -->
+    <section class="block" id="build">
+      <h2>Build from source</h2>
+      <p class="lead">Binaries are published automatically to GitHub Releases when a version tag is pushed (CI matrix: Windows, macOS, Linux, Android). Until the first tag ships — or for a fully custom build — compile locally with Flutter ≥ 3.10:</p>
+      <div class="panel">
+<pre># One-time setup: generate the native platform runners
+cd apps/aerovigilai_flutter
+flutter create --platforms=windows,macos,linux,android,ios .
+flutter pub get
+
+# Desktop builds
+flutter build windows --release      # → build/windows/x64/runner/Release/
+flutter build macos --release        # → build/macos/Build/Products/Release/
+flutter build linux --release        # → build/linux/x64/release/bundle/
+
+# Mobile builds
+flutter build apk --release          # → build/app/outputs/flutter-apk/app-release.apk
+flutter build ipa --release          # → iOS (requires macOS + signing)</pre>
+        <div class="note">📦&nbsp; Point any console at your server with <code>--dart-define=API_BASE=http://&lt;host&gt;:8080</code> at build/run time (Android emulator: <code>http://10.0.2.2:8080</code>).</div>
+      </div>
+    </section>
+
+    <!-- Requirements -->
+    <section class="block" id="requirements">
+      <h2>System requirements</h2>
+      <div class="panel">
+        <table>
+          <thead><tr><th>Platform</th><th>Minimum</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Windows</td><td>Windows 10 1909+ · 4 GB RAM</td><td>x64 · no admin rights needed for the portable build</td></tr>
+            <tr><td>macOS</td><td>macOS 12 Monterey+ · Apple Silicon or Intel</td><td>Universal binary · Gatekeeper note for unsigned builds</td></tr>
+            <tr><td>Linux</td><td>GTK 3.22+ · 4 GB RAM</td><td>Ubuntu 20.04+, Debian 11+, Fedora 36+</td></tr>
+            <tr><td>Android</td><td>Android 8.0 (API 26)+</td><td>arm64-v8a recommended</td></tr>
+            <tr><td>iOS</td><td>iOS 15+</td><td>Via TestFlight once provisioned</td></tr>
+            <tr><td>Browser</td><td>Chrome / Edge / Firefox / Safari (last 2 versions)</td><td>No extensions, no plugins</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>AeroVigilAI · Advisory-only decision support · MIKA and KAI issue no turbine commands · © <span id="year"></span></footer>
+
+  <script>
+    'use strict';
+    const $ = (id) => document.getElementById(id);
+    $('year').textContent = new Date().getFullYear();
+
+    const REPO = 'rajaram-2005/wind-turbine-pg-bnn';
+    const RELEASES_URL = `https://github.com/${REPO}/releases`;
+    const ASSETS = {
+      windows: 'aerovigil-windows-x64.zip',
+      macos: 'aerovigil-macos-universal.zip',
+      linux: 'aerovigil-linux-x64.tar.gz',
+      android: 'aerovigil-android.apk',
+    };
+
+    // Highlight the card that matches the visitor's OS.
+    const ua = navigator.userAgent || '';
+    const detected = /Android/i.test(ua) ? 'android'
+      : /iPhone|iPad|iPod/i.test(ua) ? 'ios'
+      : /Windows/i.test(ua) ? 'windows'
+      : /Mac OS X/i.test(ua) ? 'macos'
+      : /Linux|X11/i.test(ua) ? 'linux' : 'web';
+    const recoCard = document.querySelector(`.card[data-os="${detected}"]`);
+    if (recoCard) {
+      recoCard.classList.add('recommended');
+      const badge = document.createElement('div');
+      badge.className = 'reco-badge';
+      badge.textContent = detected === 'web' ? 'You are on it' : 'Detected on this device';
+      recoCard.appendChild(badge);
+    }
+
+    // Wire the download buttons. When a published release asset exists it is
+    // linked directly; otherwise the button leads to the releases page where
+    // CI publishes every tagged build.
+    async function initDownloads() {
+      let release = null;
+      try {
+        const resp = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } });
+        if (resp.ok) release = await resp.json();
+      } catch (_) { /* offline or rate-limited: fall back gracefully */ }
+
+      const pill = $('release-pill'), text = $('release-text');
+      for (const [os, asset] of Object.entries(ASSETS)) {
+        const btn = $(`dl-${os}`);
+        const meta = $(`meta-${os}`);
+        const published = release && (release.assets || []).find((a) => a.name === asset);
+        if (published) {
+          btn.href = published.browser_download_url;
+          const sizeMb = (published.size / 1048576).toFixed(1);
+          if (meta) meta.innerHTML = `<code>${asset}</code> · ${sizeMb} MB · published ${new Date(published.created_at).toLocaleDateString()}`;
+        } else {
+          btn.href = `${RELEASES_URL}/latest`;
+          btn.classList.add('secondary');
+          btn.textContent = 'View releases page';
+        }
+      }
+      if (release && release.tag_name) {
+        pill.classList.remove('pending');
+        text.textContent = `Latest release ${release.tag_name} · ${new Date(release.published_at).toLocaleDateString()}`;
+      } else {
+        pill.classList.add('pending');
+        text.innerHTML = `First tagged release builds via CI automatically · <a href="${RELEASES_URL}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">view releases</a>`;
+      }
+    }
+    initDownloads();
+  </script>
+</body>
+</html>
