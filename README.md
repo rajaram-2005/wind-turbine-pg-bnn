@@ -463,9 +463,21 @@ and links the published binaries:
 | Any OS | Web console | served at `/` (no install) |
 
 Binaries are built and attached to a GitHub Release automatically by the
-release workflow in [`ci/release-apps.yml`](ci/release-apps.yml) whenever a
-version tag (`v…`) is pushed. **One-time activation** (requires push access
-with the `workflows` scope): copy it into the GitHub workflows directory —
+release workflow in [`ci/release-apps.yml`](ci/release-apps.yml). Two ways to
+run it once activated:
+
+1. **All platforms at once** — push a version tag:
+   `git tag v1.0.0 && git push origin v1.0.0`
+2. **One by one** — GitHub → *Actions* → *release-apps* → *Run workflow*,
+   then pick a single platform (`windows`, `macos`, `linux`, `android`) and
+   the release tag to publish to.
+
+Each build runs on its native GitHub-hosted runner (Windows binaries require a
+Windows runner, macOS/iOS require macOS runners — they cannot be
+cross-compiled from Linux). Binaries are attached to the release **and**
+uploaded as workflow artifacts. **One-time activation** (requires push access
+with the `workflows` scope): copy the workflow into the GitHub workflows
+directory —
 
 ```bash
 mkdir -p .github/workflows
@@ -473,10 +485,9 @@ cp ci/release-apps.yml .github/workflows/release-apps.yml
 git add .github/workflows/release-apps.yml && git commit -m "Enable release builds" && git push
 ```
 
-— then tag a release (`git tag v1.0.0 && git push --tags`) and CI publishes
-the platform binaries. The download page detects each published asset via the
-GitHub Releases API and links it directly; until a tag is released it falls
-back to the releases page plus per-platform build instructions (Flutter
+The download page detects each published asset via the GitHub Releases API and
+links it directly; until a tag is released it falls back to the releases page
+plus per-platform build instructions (Flutter
 `flutter build windows|macos|linux|apk`).
 
 ### Async framework job queue

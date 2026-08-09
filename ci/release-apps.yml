@@ -9,48 +9,78 @@
 #     git commit -m "Enable native-app release builds"
 #     git push
 #
-# Once active, pushing a version tag (v1.0.0, ...) builds the console for
-# Windows / macOS / Linux / Android and attaches the binaries to the release.
-# The download site at /download picks the assets up automatically.
+# Once active:
+#   • push a version tag (v1.0.0, ...)  → builds ALL platforms, publishes
+#     the binaries to that GitHub Release;
+#   • or use Actions → release-apps → “Run workflow” and pick ONE platform
+#     (windows / macos / linux / android) to build them one by one.
+# The download site at /download picks the published assets up automatically.
 # ─────────────────────────────────────────────────────────────────────────────
 name: release-apps
 
-# Builds the AeroVigilAI native console for every supported platform and
-# publishes the binaries to the GitHub Release for the pushed version tag.
-# The download site served at /download links these assets automatically.
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      platform:
+        description: "Platform to build (one by one)"
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - windows
+          - macos
+          - linux
+          - android
+      tag:
+        description: "Release tag to publish to (e.g. v1.0.0)"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: write
 
 jobs:
+  # Resolve the build matrix: every platform for tag pushes; a single
+  # selectable platform for manual one-by-one runs.
+  prepare:
+    name: Resolve build matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.setmatrix.outputs.matrix }}
+      publish_tag: ${{ steps.setmatrix.outputs.publish_tag }}
+    steps:
+      - id: setmatrix
+        run: |
+          ALL='[
+            {"os":"windows-latest","target":"windows","platforms":"windows","artifact":"aerovigil-windows-x64.zip"},
+            {"os":"macos-latest","target":"macos","platforms":"macos","artifact":"aerovigil-macos-universal.zip"},
+            {"os":"ubuntu-latest","target":"linux","platforms":"linux","artifact":"aerovigil-linux-x64.tar.gz"},
+            {"os":"ubuntu-latest","target":"android","platforms":"android","artifact":"aerovigil-android.apk"}
+          ]'
+          SEL="${{ inputs.platform }}"
+          if [ -z "$SEL" ] || [ "$SEL" = "all" ]; then
+            echo "matrix=$ALL" >> "$GITHUB_OUTPUT"
+          else
+            echo "matrix=$(echo "$ALL" | jq -c --arg t "$SEL" '[.[] | select(.target == $t)]')" >> "$GITHUB_OUTPUT"
+          fi
+          # Tag pushes publish to their own tag; manual runs need an explicit tag.
+          TAG="${{ inputs.tag }}"
+          if [ "${{ github.event_name }}" = "push" ]; then TAG="${{ github.ref_name }}"; fi
+          echo "publish_tag=$TAG" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build (${{ matrix.target }})
+    needs: prepare
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            target: windows
-            platforms: windows
-            artifact: aerovigil-windows-x64.zip
-          - os: macos-latest
-            target: macos
-            platforms: macos
-            artifact: aerovigil-macos-universal.zip
-          - os: ubuntu-latest
-            target: linux
-            platforms: linux
-            artifact: aerovigil-linux-x64.tar.gz
-          - os: ubuntu-latest
-            target: android
-            platforms: android
-            artifact: aerovigil-android.apk
+        include: ${{ fromJSON(needs.prepare.outputs.matrix) }}
 
     steps:
       - name: Checkout
@@ -105,28 +135,36 @@ jobs:
         shell: pwsh
         run: |
           Compress-Archive -Path apps/aerovigilai_flutter/build/windows/x64/runner/Release/* `
-            -DestinationPath ${{ matrix.artifact }}
+            -DestinationPath (Join-Path $env:GITHUB_WORKSPACE "${{ matrix.artifact }}")
 
       - name: Package (macOS)
         if: matrix.target == 'macos'
         working-directory: apps/aerovigilai_flutter/build/macos/Build/Products/Release
         run: |
-          ditto -c -k --sequesterRsrc --keepParent aerovigilai_flutter.app ../../../../../../${{ matrix.artifact }}
+          ditto -c -k --sequesterRsrc --keepParent aerovigilai_flutter.app "$GITHUB_WORKSPACE/${{ matrix.artifact }}"
 
       - name: Package (Linux)
         if: matrix.target == 'linux'
         working-directory: apps/aerovigilai_flutter/build/linux/x64/release
-        run: tar -czf ../../../../../${{ matrix.artifact }} bundle
+        run: tar -czf "$GITHUB_WORKSPACE/${{ matrix.artifact }}" bundle
 
       - name: Package (Android)
         if: matrix.target == 'android'
         working-directory: apps/aerovigilai_flutter/build/app/outputs/flutter-apk
-        run: cp app-release.apk ../../../../../${{ matrix.artifact }}
+        run: cp app-release.apk "$GITHUB_WORKSPACE/${{ matrix.artifact }}"
+
+      - name: Upload artifact (always available)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error
 
       - name: Publish to GitHub Release
+        if: needs.prepare.outputs.publish_tag != ''
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ needs.prepare.outputs.publish_tag }}
           files: ${{ matrix.artifact }}
           generate_release_notes: true
           draft: false
