@@ -28,6 +28,7 @@ from __future__ import annotations
 import contextlib
 import os
 from collections import OrderedDict
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -63,6 +64,25 @@ ENV_MODEL_PATH = "AV_MODEL_PATH"
 # deployment; the default comfortably covers fleet-scale demos.
 ENV_TWIN_MAX_ASSETS = "AV_TWIN_MAX_ASSETS"
 DEFAULT_TWIN_MAX_ASSETS = 1024
+
+
+def _swagger_asset_urls() -> tuple[str, str]:
+    """Self-hosted Swagger UI assets when bundled, else the public CDN.
+
+    The canonical deployment serves ``web_console/dist`` at ``/``, so the
+    bundled assets resolve at ``/vendor/swagger/...`` without any external
+    network access — important for air-gapped sites and sandboxed previews.
+    """
+    vendor = Path(__file__).resolve().parents[2] / "web_console" / "dist" / "vendor" / "swagger"
+    if (vendor / "swagger-ui-bundle.js").is_file() and (vendor / "swagger-ui.css").is_file():
+        return (
+            "/vendor/swagger/swagger-ui-bundle.js",
+            "/vendor/swagger/swagger-ui.css",
+        )
+    return (
+        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
+        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
+    )
 
 
 def _serving_model_path() -> str | None:
@@ -182,7 +202,22 @@ def create_app() -> FastAPI:
         title="AeroVigil advisory API (wind-turbine-pg-bnn) v1.0.0",
         version=VERSION,
         description=SAFETY_BANNER,
+        docs_url=None,
+        redoc_url=None,
     )
+
+    @app.get("/docs", include_in_schema=False)
+    def operations_docs() -> Any:
+        """Swagger UI served with self-hosted assets (no CDN dependency)."""
+        from fastapi.openapi.docs import get_swagger_ui_html
+
+        js_url, css_url = _swagger_asset_urls()
+        return get_swagger_ui_html(
+            openapi_url="openapi.json",
+            title="AeroVigil operations API — Swagger UI",
+            swagger_js_url=js_url,
+            swagger_css_url=css_url,
+        )
 
     # Optional model serving: load a trained PG-BNN bundle when configured.
     # Requests without a ``telemetry_window`` still take the bnn_state path

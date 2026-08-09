@@ -18,7 +18,7 @@ import torch
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .model import PhysicsGuidedBNN
@@ -298,10 +298,42 @@ app = FastAPI(
     title="Aerovigil PG-BNN API",
     description="Physics-Guided Bayesian Neural Network for Wind Turbine RUL Prediction",
     version="0.1.0",
-    docs_url="/docs",
+    docs_url=None,
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+
+def _swagger_asset_urls() -> tuple:
+    """Self-hosted Swagger UI assets when bundled, else the public CDN.
+
+    In the canonical deployment the browser console is served at ``/``, so the
+    bundled assets resolve at ``/vendor/swagger/...`` with no external access.
+    """
+    vendor = Path(__file__).resolve().parents[2] / "web_console" / "dist" / "vendor" / "swagger"
+    if (vendor / "swagger-ui-bundle.js").is_file() and (vendor / "swagger-ui.css").is_file():
+        return (
+            "/vendor/swagger/swagger-ui-bundle.js",
+            "/vendor/swagger/swagger-ui.css",
+        )
+    return (
+        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
+        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
+    )
+
+
+@app.get("/docs", include_in_schema=False)
+async def model_docs() -> HTMLResponse:
+    """Swagger UI served with self-hosted assets (no CDN dependency)."""
+    from fastapi.openapi.docs import get_swagger_ui_html
+
+    js_url, css_url = _swagger_asset_urls()
+    return get_swagger_ui_html(
+        openapi_url="openapi.json",
+        title="Aerovigil PG-BNN API — Swagger UI",
+        swagger_js_url=js_url,
+        swagger_css_url=css_url,
+    )
 
 # Middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
