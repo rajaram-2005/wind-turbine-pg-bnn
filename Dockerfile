@@ -156,8 +156,10 @@ RUN chmod +x /entrypoint.sh
 RUN chown -R aerovigil:aerovigil ${APP_HOME}
 USER aerovigil
 
+# Probe the same unified application boundary as the CPU image. CUDA
+# availability is an observability detail, not an application health check.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import torch; print(torch.cuda.is_available())" || exit 1
+    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/health')" || exit 1
 
 EXPOSE ${PORT}
 ENTRYPOINT ["/entrypoint.sh"]

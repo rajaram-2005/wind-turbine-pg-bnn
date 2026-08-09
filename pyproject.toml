@@ -66,6 +66,8 @@ dev = [
     "mypy>=1.5.0,<2.0",
     "bandit>=1.7.5",
     "build>=1.0.0",
+    # twine 7 requires packaging 26.1+; pin the compatible resolver floor.
+    "packaging>=26.1",
     "twine>=4.0.0",
     "httpx>=0.24",  # FastAPI TestClient for the src/api advisory tests
     "pre-commit>=3.3.0",

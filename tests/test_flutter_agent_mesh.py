@@ -6,7 +6,6 @@ API wiring and named widgets that the separately built native client relies on.
 
 from pathlib import Path
 
-
 FLUTTER_LIB = Path(__file__).resolve().parents[1] / "apps" / "aerovigilai_flutter" / "lib"
 
 

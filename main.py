@@ -136,14 +136,23 @@ def cmd_train(args: argparse.Namespace) -> int:
         for b in range(num_batches):
             idx = perm[b * batch : (b + 1) * batch]
             stats = train_step(
-                model, loss_fn, optimizer, x[idx], y[idx],
+                model,
+                loss_fn,
+                optimizer,
+                x[idx],
+                y[idx],
                 physics_fn=physics_fn,
                 num_mc_samples=int(tr.get("num_mc_samples", 2)),
             )
         if epoch % max(epochs // 10, 1) == 0 or epoch == epochs - 1:
             logger.info(
                 "epoch %3d/%d  total=%.4f nll=%.4f kl=%.2f physics=%.4f",
-                epoch + 1, epochs, stats["total"], stats["nll"], stats["kl"], stats["physics"],
+                epoch + 1,
+                epochs,
+                stats["total"],
+                stats["nll"],
+                stats["kl"],
+                stats["physics"],
             )
 
     out = Path(args.checkpoint)
@@ -194,7 +203,7 @@ def cmd_export(args: argparse.Namespace) -> int:
     out = export_bnn_to_onnx(
         model,
         args.out or str(dep.get("onnx_path", "artifacts/pg_bnn.onnx")),
-        opset=int(dep.get("onnx_opset", 17)),
+        opset=int(dep.get("onnx_opset", 18)),
         validate=bool(dep.get("validate_export", True)),
     )
     logger.info("ONNX model written to %s", out)
@@ -297,8 +306,9 @@ def cmd_federated(args: argparse.Namespace) -> int:
             start_client(client)
             return 0
         except Exception as exc:  # pragma: no cover - needs live server/flwr
-            logger.warning("real federated client unavailable (%s); "
-                           "falling back to local simulation", exc)
+            logger.warning(
+                "real federated client unavailable (%s); falling back to local simulation", exc
+            )
 
     # Local FedAvg simulation across synthetic farms (always runnable).
     n_clients = max(int(args.clients), 1)
@@ -326,7 +336,9 @@ def cmd_federated(args: argparse.Namespace) -> int:
                     stats = train_step(local, loss_fn, optimizer, xc[idx], yc[idx])
             local_states.append({k: v.detach().clone() for k, v in local.state_dict().items()})
             weights.append(xc.shape[0])
-            logger.info("round %d farm %d local nll=%.4f", rnd + 1, c, stats.get("nll", float("nan")))
+            logger.info(
+                "round %d farm %d local nll=%.4f", rnd + 1, c, stats.get("nll", float("nan"))
+            )
 
         # Weighted FedAvg aggregation.
         total = float(sum(weights))
@@ -358,9 +370,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     def common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--config", default="configs/default.yaml", help="YAML config path")
-        p.add_argument(
-            "--checkpoint", default="artifacts/pg_bnn.pt", help="model checkpoint path"
-        )
+        p.add_argument("--checkpoint", default="artifacts/pg_bnn.pt", help="model checkpoint path")
 
     p_train = sub.add_parser("train", help="train the PG-BNN")
     common(p_train)
@@ -392,8 +402,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_fed.add_argument("--clients", type=int, default=2, help="number of farms")
     p_fed.add_argument("--local-epochs", type=int, default=1, help="local epochs/round")
     p_fed.add_argument("--server", default="", help="Flower server host:port")
-    p_fed.add_argument("--connect", action="store_true",
-                       help="connect to a live Flower server instead of simulating")
+    p_fed.add_argument(
+        "--connect",
+        action="store_true",
+        help="connect to a live Flower server instead of simulating",
+    )
     p_fed.set_defaults(func=cmd_federated)
     return parser
 

@@ -53,6 +53,13 @@ def test_model_api_is_connected_and_initialized():
         assert body["model_loaded"] is True
 
 
+def test_legacy_dashboard_redirects_to_canonical_console():
+    with TestClient(create_app()) as client:
+        response = client.get("/legacy", follow_redirects=False)
+    assert response.status_code == 308
+    assert response.headers["location"] == "/"
+
+
 def test_root_serves_complete_eight_page_agent_console():
     with TestClient(create_app(include_dashboard=False)) as client:
         response = client.get("/")

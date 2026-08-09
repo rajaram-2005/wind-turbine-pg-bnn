@@ -307,7 +307,7 @@ class DeploymentConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    onnx_opset: int = 17
+    onnx_opset: int = 18
     onnx_path: str = "artifacts/pg_bnn.onnx"
     quantize: bool = False
     validate_export: bool = True

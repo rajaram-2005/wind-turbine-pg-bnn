@@ -6,6 +6,7 @@ end-to-end run of a lightweight ``federated`` job driven through the same
 """
 
 import asyncio
+import sqlite3
 
 import pytest
 
@@ -14,9 +15,24 @@ from src.jobs.manager import JobManager
 
 
 def test_allow_list_covers_all_framework_jobs():
-    for name in ("physics", "train", "federated", "export",
-                 "active-learning", "active-sample", "shap", "explain"):
+    for name in (
+        "physics",
+        "train",
+        "federated",
+        "export",
+        "active-learning",
+        "active-sample",
+        "shap",
+        "explain",
+    ):
         assert name in ALLOWED_JOB_TYPES
+
+
+def test_job_database_uses_wal_journaling(tmp_path):
+    db_path = tmp_path / "jobs.sqlite3"
+    JobManager(db_path=db_path)
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
 
 
 def test_queue_rejects_unknown_job_type(tmp_path):
@@ -38,8 +54,7 @@ def test_federated_job_runs_to_completion(tmp_path):
         ckpt = tmp_path / "fed.pt"
         job_id = await mgr.queue(
             "federated",
-            ["--rounds", "1", "--clients", "1", "--local-epochs", "1",
-             "--checkpoint", str(ckpt)],
+            ["--rounds", "1", "--clients", "1", "--local-epochs", "1", "--checkpoint", str(ckpt)],
         )
         assert job_id
         rec = mgr.get(job_id)

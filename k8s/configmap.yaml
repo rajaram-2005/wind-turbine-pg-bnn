@@ -11,4 +11,8 @@ data:
   MAX_WORKERS: "4"
   AEROVIGIL_STORE_DB: "/app/artifacts/aerovigil.sqlite3"
   AV_JOB_DB: "/app/artifacts/jobs.sqlite3"
+  AV_TWIN_MAX_ASSETS: "1024"
   AV_STREAM_HEURISTIC: "1"
+  # Set this to a mounted, promoted 25-feature advisory bundle when available.
+  # The empty value leaves the canonical six-signal /api/model bundle in use.
+  AV_MODEL_PATH: ""

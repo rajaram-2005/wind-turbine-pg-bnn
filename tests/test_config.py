@@ -45,6 +45,7 @@ def test_default_config_loads_and_matches_yaml():
     assert cfg.telemetry.window_s == raw["telemetry"]["window_s"]
     assert cfg.meta.reptile.meta_lr == raw["meta"]["reptile"]["meta_lr"]
     assert cfg.hermes.confidence_tau_days == raw["hermes"]["confidence_tau_days"]
+    assert cfg.deployment.onnx_opset == raw["deployment"]["onnx_opset"] == 18
     assert cfg.safety.mode == "advisory_only"
     assert cfg.safety.allow_actuation is False
 
@@ -63,6 +64,7 @@ def test_appconfig_defaults_construct_without_file():
     cfg = AppConfig()
     assert cfg.safety.mode == "advisory_only"
     assert cfg.eval.early_warning_horizon_days == 45.0
+    assert cfg.deployment.onnx_opset == 18
 
 
 def test_missing_file_raises(tmp_path):
