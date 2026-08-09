@@ -312,19 +312,24 @@
         <span class="muted" style="margin-left:12px">Unknown asset IDs are seeded as new digital twins at the spec's nominal operating point.</span>
       </div>
 
-      <div class="tier"><span class="tier-badge">Tier 1</span><span class="tier-title">Basic twin — state &amp; health envelope</span><span class="tier-sub">physics state · telemetry radar · dual-agent consensus</span></div>
+      <div class="tier"><span class="tier-badge">Tier 1</span><span class="tier-title">Basic twin — state &amp; health envelope</span><span class="tier-sub">physics state · telemetry radar · radial gauges · dual-agent consensus</span></div>
       <div class="split">
         <div class="panel"><div class="panel-head"><h3>Current state</h3><span class="muted" id="twin-updated">Waiting for asset…</span></div><div class="kpis" id="twin-kpis"></div></div>
         <div class="panel"><div class="panel-head"><h3>Health radar</h3><span class="muted">fraction of safe range · amber ring = 50%</span></div><div id="twin-radar"><div class="empty">Waiting for telemetry…</div></div></div>
       </div>
+      <div class="panel"><div class="panel-head"><h3>Decision gauges</h3><span class="muted">radial readouts · risk-coloured</span></div><div id="twin-gauges" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:space-around"><div class="empty" style="width:100%">Waiting for advisory evidence…</div></div></div>
       <div class="panel"><div class="panel-head"><h3>MIKA + KAI agent team</h3><span class="muted" id="twin-agreement"></span></div><div class="agent-council" id="twin-agents"><div class="empty">Loading connected agent evidence…</div></div></div>
 
-      <div class="tier"><span class="tier-badge">Tier 2</span><span class="tier-title">Trends &amp; forecast</span><span class="tier-sub">durable history · degradation runway projection</span></div>
-      <div class="panel"><div class="panel-head"><h3>Degradation trend</h3><span class="muted" id="trend-note">predicted RUL over persisted snapshots</span></div><div id="twin-trend"><div class="empty">Waiting for history…</div></div></div>
+      <div class="tier"><span class="tier-badge">Tier 2</span><span class="tier-title">Trends &amp; forecast</span><span class="tier-sub">uncertainty cone · countdown forecast · telemetry heatmap · durable history</span></div>
+      <div class="panel"><div class="panel-head"><h3>Degradation trend · uncertainty cone</h3><span class="muted" id="trend-note">predicted RUL over persisted snapshots</span></div><div id="twin-trend"><div class="empty">Waiting for history…</div></div></div>
+      <div class="panel"><div class="panel-head"><h3>Telemetry heatmap</h3><span class="muted">channels × persisted snapshots</span></div><div id="twin-heatmap"><div class="empty">Waiting for history…</div></div></div>
       <div class="panel"><div class="panel-head"><h3>Durable history</h3><span class="muted" id="twin-history-count"></span></div><div class="table-wrap" id="twin-history"></div></div>
 
-      <div class="tier"><span class="tier-badge">Tier 3</span><span class="tier-title">Probabilistic prediction</span><span class="tier-sub">Monte Carlo RUL distribution · warning horizons</span></div>
-      <div class="panel"><div class="panel-head"><h3>Predictive RUL distribution</h3><span class="muted" id="dist-note"></span></div><div id="twin-dist"><div class="empty">Waiting for advisory evidence…</div></div></div>
+      <div class="tier"><span class="tier-badge">Tier 3</span><span class="tier-title">Probabilistic prediction</span><span class="tier-sub">Monte Carlo distribution · reliability survival curve · warning horizons</span></div>
+      <div class="split">
+        <div class="panel"><div class="panel-head"><h3>Predictive RUL distribution</h3><span class="muted" id="dist-note"></span></div><div id="twin-dist"><div class="empty">Waiting for advisory evidence…</div></div></div>
+        <div class="panel"><div class="panel-head"><h3>Survival probability</h3><span class="muted" id="surv-note">P(RUL &gt; t)</span></div><div id="twin-survival"><div class="empty">Waiting for Monte Carlo samples…</div></div></div>
+      </div>
 
       <div class="tier"><span class="tier-badge">Tier 4</span><span class="tier-title">Advanced operations</span><span class="tier-sub">power curve · scenario lab · MIKA + KAI copilot</span></div>
       <div class="panel"><div class="panel-head"><h3>Power curve analysis</h3><span class="muted" id="power-note">ideal cubic curve vs streamed operating points</span></div><div id="twin-power"><div class="empty">Waiting for streamed wind / power readings…</div></div></div>
@@ -607,6 +612,113 @@
       const legend = slices.filter((s) => s.value).map((s) => `<span class="chip" style="border-color:${s.color};color:${s.color}">${esc(s.label)} · ${s.value}</span>`).join('');
       el.innerHTML = svgBox(size, size, body) + `<div style="margin-top:6px">${legend}</div>`;
     }
+
+    /* ── Advanced chart primitives ─────────────────────────────────────────── */
+    // Radial gauge over a 240° sweep.
+    function renderGauge(container, frac, { label, valueText, color, sub = '' } = {}) {
+      const size = 158, cx = size / 2, cy = size * 0.46, R = size * 0.36;
+      const a0 = (-210 * Math.PI) / 180, a1 = (30 * Math.PI) / 180;
+      const f = Math.max(0, Math.min(1, frac));
+      const polar = (ang, r) => [cx + r * Math.cos(ang), cy + r * Math.sin(ang)];
+      const arc = (from, to, r) => {
+        const [x0, y0] = polar(from, r), [x1, y1] = polar(to, r);
+        return `M${x0.toFixed(1)},${y0.toFixed(1)} A${r},${r} 0 ${to - from > Math.PI ? 1 : 0} 1 ${x1.toFixed(1)},${y1.toFixed(1)}`;
+      };
+      const aVal = a0 + (a1 - a0) * f;
+      let body = `<path d="${arc(a0, a1, R)}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="10" stroke-linecap="round"/>`;
+      if (f > 0.008) body += `<path d="${arc(a0, aVal, R)}" fill="none" stroke="${color}" stroke-width="10" stroke-linecap="round"/>`;
+      const [nx, ny] = polar(aVal, R - 13);
+      body += `<line x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="#e8f4f2" stroke-width="2"/><circle cx="${cx}" cy="${cy}" r="4" fill="#e8f4f2"/>`;
+      body += `<text x="${cx}" y="${(cy + R * 0.85).toFixed(1)}" text-anchor="middle" font-size="14" font-weight="750" fill="#e8f4f2">${esc(valueText)}</text>`;
+      body += `<text x="${cx}" y="${(cy + R * 0.85 + 13).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--muted)">${esc(label)}</text>`;
+      if (sub) body += `<text x="${cx}" y="${(cy + R * 0.85 + 24).toFixed(1)}" text-anchor="middle" font-size="7.5" fill="var(--muted)">${esc(sub)}</text>`;
+      container.insertAdjacentHTML('beforeend', `<div>${svgBox(size, size + 26, body)}</div>`);
+    }
+
+    function heatColor(t) {
+      const lerp = (a, b, f) => Math.round(a + (b - a) * f);
+      let r, g, b;
+      if (t < 0.5) { const f = t / 0.5; r = lerp(20, 251, f); g = lerp(120, 191, f); b = lerp(120, 36, f); }
+      else { const f = (t - 0.5) / 0.5; r = lerp(251, 251, f); g = lerp(191, 113, f); b = lerp(36, 133, f); }
+      return `rgb(${r},${g},${b})`;
+    }
+
+    // Telemetry heatmap: channels × snapshots.
+    function renderHeatmap(el, rows, channels) {
+      if (!rows.length) { el.innerHTML = '<div class="empty">No persisted snapshots for the heatmap yet.</div>'; return; }
+      const W = 640, cellH = 24, L = 108, T = 8, Rt = 12, B = 8;
+      const n = rows.length, cellW = Math.max(3, (W - L - Rt) / n);
+      const H = T + channels.length * cellH + B;
+      let body = '';
+      channels.forEach((ch, ci) => {
+        body += `<text x="${L - 8}" y="${T + ci * cellH + cellH / 2 + 3}" text-anchor="end" font-size="8.5" fill="var(--muted)">${esc(ch.label)}</text>`;
+        rows.forEach((row, ri) => {
+          const v = (row.telemetry || {})[ch.key];
+          const t = typeof v === 'number' ? Math.max(0, Math.min(1, v / ch.max)) : 0;
+          body += `<rect x="${(L + ri * cellW).toFixed(1)}" y="${T + ci * cellH}" width="${Math.max(1, cellW - 1).toFixed(1)}" height="${cellH - 3}" fill="${typeof v === 'number' ? heatColor(t) : 'rgba(255,255,255,.05)'}" rx="2"><title>${esc(ch.label)}: ${typeof v === 'number' ? number(v, 2) : '—'} · ${esc(dateText(row.timestamp || row.ts))}</title></rect>`;
+        });
+      });
+      el.innerHTML = svgBox(W, H, body) + '<div class="chart-note">Telemetry intensity per persisted snapshot (cool = low, hot = near the schema limit). Hover a cell for the exact reading.</div>';
+    }
+
+    // Trend with epistemic ⊕ aleatoric uncertainty cone + dashed forecast.
+    function renderCone(el, points, { height = 215, thresholds = [], forecast = [], yLabel = '' } = {}) {
+      if (!points.length) { el.innerHTML = '<div class="empty">No RUL-bearing snapshots yet — stream telemetry or run a scenario to persist twin states.</div>'; return; }
+      const W = 640, H = height, L = 44, Rt = 14, T = 12, B = 30;
+      const xs = [...points.map((p) => p.x), ...forecast.map((p) => p.x)];
+      const ys = [...points.flatMap((p) => [p.up ?? p.y, p.lo ?? p.y]), ...forecast.map((p) => p.y), ...thresholds.map((t) => t.y)];
+      const xMin = Math.min(...xs), xMax = Math.max(...xs, xMin + 1);
+      let yMin = Math.min(...ys), yMax = Math.max(...ys);
+      if (yMin === yMax) { yMin -= 1; yMax += 1; }
+      const pad = (yMax - yMin) * 0.06; yMin -= pad; yMax += pad;
+      const sx = (x) => L + ((x - xMin) / (xMax - xMin)) * (W - L - Rt);
+      const sy = (y) => T + (1 - (y - yMin) / (yMax - yMin)) * (H - T - B);
+      let body = '';
+      for (let g = 0; g <= 4; g++) {
+        const gy = T + (g / 4) * (H - T - B), val = yMax - (g / 4) * (yMax - yMin);
+        body += `<line x1="${L}" y1="${gy}" x2="${W - Rt}" y2="${gy}" stroke="rgba(255,255,255,.06)"/><text x="${L - 6}" y="${gy + 3}" text-anchor="end" font-size="9" fill="var(--muted)">${number(val, 0)}</text>`;
+      }
+      const upper = points.map((p) => `${sx(p.x).toFixed(1)},${sy(p.up ?? p.y).toFixed(1)}`);
+      const lower = [...points].reverse().map((p) => `${sx(p.x).toFixed(1)},${sy(p.lo ?? p.y).toFixed(1)}`);
+      body += `<polygon points="${upper.concat(lower).join(' ')}" fill="rgba(114,233,255,.13)" stroke="rgba(114,233,255,.22)" stroke-width="1"/>`;
+      body += `<path d="${points.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join(' ')}" fill="none" stroke="#72e9ff" stroke-width="2"/>`;
+      points.forEach((p) => { body += `<circle cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="2.6" fill="#72e9ff"/>`; });
+      if (forecast.length) {
+        body += `<path d="${forecast.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join(' ')}" fill="none" stroke="rgba(251,191,36,.85)" stroke-width="1.8" stroke-dasharray="6 4"/>`;
+      }
+      thresholds.forEach((t) => {
+        body += `<line x1="${L}" y1="${sy(t.y).toFixed(1)}" x2="${W - Rt}" y2="${sy(t.y).toFixed(1)}" stroke="${t.color}" stroke-dasharray="4 4" stroke-width="1.2"/><text x="${W - Rt}" y="${(sy(t.y) - 3).toFixed(1)}" text-anchor="end" font-size="8.5" fill="${t.color}">${esc(t.label)}</text>`;
+      });
+      body += `<text x="${(L + W - Rt) / 2}" y="${H - 6}" text-anchor="middle" font-size="9" fill="var(--muted)">days since first persisted snapshot →</text>`;
+      if (yLabel) body += `<text x="12" y="${(T + H - B) / 2}" font-size="9" fill="var(--muted)" transform="rotate(-90 12 ${(T + H - B) / 2})" text-anchor="middle">${esc(yLabel)}</text>`;
+      el.innerHTML = svgBox(W, H, body) + `<div style="margin-top:6px"><span class="chip" style="border-color:#72e9ff;color:#72e9ff">predicted RUL</span><span class="chip" style="border-color:rgba(114,233,255,.55);color:#9fd8e8">±(σ_epi ⊕ σ_ale) cone</span>${forecast.length ? '<span class="chip" style="border-color:var(--amber);color:var(--amber)">forecast −1 d/d</span>' : ''}</div>`;
+    }
+
+    // Reliability survival curve P(RUL > t) from Monte Carlo samples.
+    function renderSurvival(el, samples, { height = 205 } = {}) {
+      if (!samples.length) { el.innerHTML = '<div class="empty">No Monte Carlo samples available.</div>'; return; }
+      const W = 640, H = height, L = 44, Rt = 14, T = 12, B = 30;
+      const maxT = Math.max(...samples) * 1.04;
+      const steps = 140, sorted = [...samples].sort((a, b) => a - b);
+      const survAt = (t) => sorted.filter((s) => s > t).length / sorted.length;
+      const sx = (x) => L + (x / maxT) * (W - L - Rt);
+      const sy = (y) => T + (1 - y) * (H - T - B);
+      let body = '';
+      [0, 0.25, 0.5, 0.75, 1].forEach((v) => {
+        body += `<line x1="${L}" y1="${sy(v).toFixed(1)}" x2="${W - Rt}" y2="${sy(v).toFixed(1)}" stroke="rgba(255,255,255,.06)"/><text x="${L - 6}" y="${(sy(v) + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--muted)">${Math.round(v * 100)}%</text>`;
+      });
+      let path = '';
+      for (let i = 0; i <= steps; i++) { const t = (maxT * i) / steps; path += `${i ? 'L' : 'M'}${sx(t).toFixed(1)},${sy(survAt(t)).toFixed(1)} `; }
+      body += `<path d="${path}" fill="none" stroke="var(--teal)" stroke-width="2"/>`;
+      [{ x: 45, c: 'var(--amber)', l: '45-day' }, { x: 14, c: 'var(--red)', l: 'critical' }].forEach((m) => {
+        if (m.x > maxT) return;
+        const s = survAt(m.x);
+        body += `<line x1="${sx(m.x).toFixed(1)}" y1="${T}" x2="${sx(m.x).toFixed(1)}" y2="${H - B}" stroke="${m.c}" stroke-dasharray="4 4"/><circle cx="${sx(m.x).toFixed(1)}" cy="${sy(s).toFixed(1)}" r="3.6" fill="${m.c}"/><text x="${(sx(m.x) + 5).toFixed(1)}" y="${(sy(s) - 5).toFixed(1)}" font-size="8.5" fill="${m.c}">${m.l} ${(s * 100).toFixed(0)}%</text>`;
+      });
+      body += `<text x="${(L + W - Rt) / 2}" y="${H - 6}" text-anchor="middle" font-size="9" fill="var(--muted)">days of healthy life →</text>`;
+      body += `<text x="12" y="${(T + H - B) / 2}" font-size="9" fill="var(--muted)" transform="rotate(-90 12 ${(T + H - B) / 2})" text-anchor="middle">P(RUL &gt; t)</text>`;
+      el.innerHTML = svgBox(W, H, body);
+    }
     function showPage(page) {
       document.querySelectorAll('.page').forEach((node) => node.classList.toggle('active', node.id === `page-${page}`));
       document.querySelectorAll('#nav button').forEach((button) => button.classList.toggle('active', button.dataset.page === page));
@@ -671,39 +783,69 @@
       renderRadar($('twin-radar'), axes);
     }
 
+    function renderTwinGauges(advisory, wear, team) {
+      const host = $('twin-gauges');
+      host.innerHTML = '';
+      const rul = advisory?.predicted_rul_days;
+      const risk = riskOf(rul);
+      renderGauge(host, rul == null ? 0 : Math.max(0, Math.min(1, rul / 365)), {
+        label: 'Predicted RUL', valueText: rul == null ? '—' : `${number(rul, 0)} d`,
+        color: RISK_COLOR[risk] || 'var(--muted)', sub: `${risk} risk · 365 d scale`,
+      });
+      renderGauge(host, Math.max(0, Math.min(1, wear ?? 0)), {
+        label: 'Cumulative wear', valueText: wear == null ? '—' : number(wear, 3),
+        color: wear > 0.75 ? 'var(--red)' : wear > 0.5 ? 'var(--amber)' : 'var(--teal)', sub: '0 = new · 1 = failure',
+      });
+      const agree = team?.agreement_score_pct;
+      renderGauge(host, agree == null ? 0 : Math.max(0, Math.min(1, agree / 100)), {
+        label: 'Agent agreement', valueText: agree == null ? '—' : `${number(agree, 1)}%`,
+        color: 'var(--pink)', sub: 'MIKA ⇄ KAI consensus',
+      });
+      const epi = advisory?.epistemic_std;
+      renderGauge(host, epi == null ? 0 : Math.max(0, Math.min(1, epi / 120)), {
+        label: 'Epistemic σ', valueText: epi == null ? '—' : `${number(epi, 1)} d`,
+        color: '#72e9ff', sub: 'model uncertainty',
+      });
+    }
+
     function renderTwinTrend(rows) {
-      const points = [];
+      const cone = [];
       const t0 = Date.parse(rows[0]?.timestamp || rows[0]?.ts || '');
       rows.forEach((row, i) => {
         const rul = row.advisory?.predicted_rul_days;
         if (rul == null) return;
         const parsed = Date.parse(row.timestamp || row.ts || '');
         const x = Number.isNaN(t0) || Number.isNaN(parsed) ? i : (parsed - t0) / 86400000;
-        points.push({ x, y: rul });
+        const band = Math.max(0, (row.advisory?.epistemic_std || 0) + (row.advisory?.aleatoric_std || 0));
+        cone.push({ x, y: rul, up: rul + band, lo: Math.max(0, rul - band) });
       });
-      const series = [];
-      if (points.length) {
-        series.push({ name: 'predicted RUL', color: '#72e9ff', points, xLabel: 'days since first persisted snapshot →' });
-        const last = points[points.length - 1];
-        const horizon = Math.min(60, Math.max(0, last.y));
-        if (horizon > 0) {
-          const proj = [];
-          for (let d = 0; d <= horizon; d += Math.max(1, horizon / 20)) proj.push({ x: last.x + d, y: last.y - d });
-          series.push({ name: 'forecast (−1 d/d countdown)', color: 'rgba(251,191,36,.8)', points: proj });
-          $('trend-note').textContent = 'predicted RUL over persisted snapshots · dashed line is the natural countdown runway';
-        }
-        renderLine($('twin-trend'), series, {
-          thresholds: [
-            { y: 45, color: 'var(--amber)', label: '45-day early-warning' },
-            { y: 14, color: 'var(--red)', label: '14-day critical' },
-          ],
-          yLabel: 'RUL (days)',
-        });
-      } else {
+      if (!cone.length) {
         $('twin-trend').innerHTML = '<div class="empty">No RUL-bearing snapshots yet. Stream hardware telemetry or run a scenario to persist twin states.</div>';
         $('trend-note').textContent = 'predicted RUL over persisted snapshots';
+        return;
       }
+      const last = cone[cone.length - 1];
+      const forecast = [];
+      const horizon = Math.min(60, Math.max(0, last.y));
+      for (let d = 0; d <= horizon; d += Math.max(1, horizon / 20)) forecast.push({ x: last.x + d, y: Math.max(0, last.y - d) });
+      $('trend-note').textContent = 'predicted RUL with epistemic ⊕ aleatoric uncertainty cone · dashed countdown forecast';
+      renderCone($('twin-trend'), cone, {
+        forecast,
+        thresholds: [
+          { y: 45, color: 'var(--amber)', label: '45-day early-warning' },
+          { y: 14, color: 'var(--red)', label: '14-day critical' },
+        ],
+        yLabel: 'RUL (days)',
+      });
     }
+
+    const HEAT_CHANNELS = [
+      { key: 'vibration_mms', label: 'Vibration', max: 50 },
+      { key: 'temperature_c', label: 'Temperature', max: 200 },
+      { key: 'rpm', label: 'Speed', max: 3000 },
+      { key: 'oil_viscosity_cst', label: 'Viscosity', max: 500 },
+      { key: 'load_pct', label: 'Load', max: 120 },
+    ];
 
     async function streamMcSamples(inputs, n) {
       const resp = await fetch(`/model-api/predict/stream?n_mcmc_samples=${n}`, {
@@ -768,6 +910,10 @@
           { x: 14, color: 'var(--red)', label: 'critical' },
         ],
       });
+      renderSurvival($('twin-survival'), samples);
+      const survAt = (t) => samples.filter((s) => s > t).length / samples.length;
+      $('surv-note').textContent = `P(RUL > 45 d) = ${(survAt(45) * 100).toFixed(0)}% · P(RUL > 14 d) = ${(survAt(14) * 100).toFixed(0)}%`;
+      return samples;
     }
 
     function collectAssetSignals(readings, asset) {
@@ -844,9 +990,12 @@
         $('twin-history-count').textContent = `${rows.length} persisted snapshots`;
         $('twin-history').innerHTML = rows.length ? `<table><thead><tr><th>Timestamp</th><th>Source</th><th>RUL</th><th>Wear</th><th>Risk / status</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${esc(dateText(row.timestamp || row.ts))}</td><td>${esc(row.advisory_source)}</td><td>${esc(row.advisory?.predicted_rul_days == null ? '—' : number(row.advisory.predicted_rul_days) + ' d')}</td><td>${esc(number(row.cumulative_wear, 4))}</td><td>${esc(row.agent_team?.risk_level || row.advisory?.risk_level || row.advisory?.status)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No persisted twin snapshots yet. Hardware stream ingestion will populate this history.</div>';
         loadReviewTrail();
-        // Chart tiers: radar (T1), trend (T2), distribution (T3), power curve (T4).
+        // Chart tiers: radar + gauges (T1), cone trend + heatmap (T2),
+        // distribution + survival (T3), power curve (T4).
         renderTwinRadar(telemetry, state.cumulative_wear);
+        renderTwinGauges(advisory, state.cumulative_wear, team);
         renderTwinTrend(rows);
+        renderHeatmap($('twin-heatmap'), rows.slice(-48), HEAT_CHANNELS);
         const signals = collectAssetSignals(hardware.readings || [], asset);
         if (signals.pairs.length) { renderPowerCurve($('twin-power'), signals.pairs); }
         else { $('twin-power').innerHTML = '<div class="empty">No streamed wind / power readings for this asset yet — run hardware_agent or POST /api/hardware/stream.</div>'; }

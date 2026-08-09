@@ -536,6 +536,26 @@ python hardware_agent.py --connector opcua --endpoint opc.tcp://10.0.0.5:4840 \
        --opcua-nodes "generator_rpm=ns=2;s=gen_rpm,gearbox_temp=ns=2;s=gbx_temp"
 ```
 
+### Microcontroller edge (ESP32 / STM32)
+
+Bare-metal nodes connect directly to the same `POST /api/hardware/stream`
+endpoint. [`edge/`](edge) ships ready-to-flash firmware plus a device
+simulator that validates the path before you wire any hardware:
+
+```bash
+# Validate the cloud path with no hardware attached
+python edge/simulate_device.py --server http://localhost:8080 \
+       --gateway-id esp32-gw-01 --turbine-id WTG-ESP-01 --interval 5
+```
+
+* [`edge/esp32/aerovigil_telemetry.ino`](edge/esp32/aerovigil_telemetry.ino) —
+  Arduino/PlatformIO firmware: WiFi + NTP, sensor sampling, JSON batching,
+  HTTPS with retry/backoff, and NVS-persisted operating hours.
+* [`edge/stm32/aerovigil_stm32_main.c`](edge/stm32/aerovigil_stm32_main.c) —
+  STM32 HAL reference using an ESP8266/ESP32 AT modem over UART.
+* [`edge/README.md`](edge/README.md) — wire format, signal map, sensor wiring,
+  MQTT alternative, and production/TLS notes.
+
 The command line is unified the same way — one tool for every operator task,
 including the digital twin:
 
@@ -1141,6 +1161,7 @@ lubrication, sensor outages, or unusual operating regimes.
 | [`src/digital_twin/`](src/digital_twin) | Turbine specs, virtual asset, and scenario simulation |
 | [`src/agents/hermes.py`](src/agents/hermes.py) | Few-shot onboarding and promotion gating |
 | [`scripts/`](scripts) | Training, evaluation, pipeline, and smoke-test scripts |
+| [`edge/`](edge) | ESP32 / STM32 firmware + device simulator to connect microcontrollers to the cloud |
 | [`tests/`](tests) | Unit and integration tests |
 | [`docs/`](docs) | Plain-language, safety, and architecture documentation |
 
