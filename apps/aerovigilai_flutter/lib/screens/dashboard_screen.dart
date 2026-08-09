@@ -21,6 +21,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic> _stats = {};
   Map<String, dynamic> _twin = {};
   Map<String, dynamic> _reports = {};
+  Map<String, dynamic> _health = {};
   String? _error;
 
   @override
@@ -40,6 +41,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         widget.api.getSystemStats().catchError((_) => <String, dynamic>{}),
         widget.api.getDigitalTwinState().catchError((_) => <String, dynamic>{}),
         widget.api.getReports(kind: 'fleet', limit: 5).catchError((_) => <String, dynamic>{}),
+        widget.api.getHealth().catchError((_) => <String, dynamic>{}),
       ]);
       if (!mounted) return;
       setState(() {
@@ -47,6 +49,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _stats = results[1] as Map<String, dynamic>;
         _twin = results[2] as Map<String, dynamic>;
         _reports = results[3] as Map<String, dynamic>;
+        _health = results[4] as Map<String, dynamic>;
         _loading = false;
       });
     } catch (e) {
@@ -101,6 +104,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 8),
             const Text('Unified fleet health, twin telemetry, and durable-store overview from the canonical :8080 deployment.'),
+            const SizedBox(height: 16),
+            _AgentMeshBanner(health: _health),
             const SizedBox(height: 20),
 
             // KPI row
@@ -256,6 +261,79 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _AgentMeshBanner extends StatelessWidget {
+  const _AgentMeshBanner({required this.health});
+
+  final Map<String, dynamic> health;
+
+  @override
+  Widget build(BuildContext context) {
+    final mesh = (health['agent_mesh'] as Map?) ?? const {};
+    final status = '${mesh['status'] ?? 'disconnected'}';
+    final connected = status == 'connected';
+    final agents = ((mesh['agents'] as List?) ?? const ['MIKA', 'KAI']).join(' + ');
+    final evidence = (mesh['evidence_path'] as List?) ?? const ['SCADA', 'PG-BNN', 'ISO 281', 'TWIN', 'FLEET', 'HUMAN'];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0x552DD4BF)),
+        gradient: const LinearGradient(
+          colors: [Color(0x1AF0ABFC), Color(0x1A2DD4BF), Color(0x1A38BDF8)],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.hub_outlined, size: 18, color: connected ? const Color(0xFF4ADE80) : const Color(0xFFFB7185)),
+              const SizedBox(width: 9),
+              const Text(
+                'CYBER PRIME DUAL AGENT',
+                style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1.1, fontSize: 12),
+              ),
+              const Spacer(),
+              Text(
+                status.toUpperCase(),
+                style: TextStyle(
+                  color: connected ? const Color(0xFF4ADE80) : const Color(0xFFFB7185),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Text(agents, style: const TextStyle(color: Color(0xFFB8FFF5), fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 7,
+            runSpacing: 7,
+            children: [
+              for (int i = 0; i < evidence.length; i++) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: Text('${evidence[i]}', style: const TextStyle(fontSize: 10, color: Colors.white70)),
+                ),
+                if (i < evidence.length - 1) const Icon(Icons.arrow_forward, size: 13, color: Color(0xFF2DD4BF)),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }
