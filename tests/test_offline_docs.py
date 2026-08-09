@@ -30,6 +30,11 @@ def test_docs_page_uses_self_hosted_assets(client):
     assert "/vendor/swagger/swagger-ui-bundle.js" in resp.text
     assert "/vendor/swagger/swagger-ui.css" in resp.text
     assert "cdn.jsdelivr.net" not in resp.text
+    # Cache-busting: versioned asset URLs + a no-store docs shell so a stale
+    # Swagger UI bundle can never be served from a browser/proxy cache.
+    assert "swagger-ui-bundle.js?v=" in resp.text
+    assert "swagger-ui.css?v=" in resp.text
+    assert resp.headers.get("cache-control") == "no-store"
 
 
 def test_vendor_assets_exist_and_support_openapi_31(client):
@@ -37,6 +42,7 @@ def test_vendor_assets_exist_and_support_openapi_31(client):
     css = client.get("/vendor/swagger/swagger-ui.css")
     assert bundle.status_code == 200
     assert css.status_code == 200
+    assert bundle.headers.get("cache-control") == "no-cache"
     # Swagger UI must be 5.x to parse the OpenAPI 3.1 FastAPI/Pydantic v2 spec.
     match = re.search(r'PACKAGE_VERSION:"(\d+)\.', bundle.text)
     assert match is not None, "swagger-ui bundle version marker missing"

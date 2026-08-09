@@ -58,6 +58,19 @@ _CONSOLE_DIR = Path(__file__).resolve().parents[1] / "web_console" / "dist"
 DEFAULT_PORT = 8080
 
 
+class _NoCacheStaticFiles(StaticFiles):
+    """Static assets served with ``Cache-Control: no-cache``.
+
+    Browsers must revalidate on every fetch, so an upgraded asset (e.g. a new
+    Swagger UI bundle) can never be masked by a stale cached copy.
+    """
+
+    def file_response(self, full_path, stat_result, scope):  # type: ignore[override]
+        response = super().file_response(full_path, stat_result, scope)
+        response.headers.setdefault("Cache-Control", "no-cache")
+        return response
+
+
 def configured_port() -> int:
     """Resolve the canonical port from deployment environment variables."""
     raw = os.environ.get("PORT", os.environ.get("AEROVIGIL_PORT", str(DEFAULT_PORT)))
@@ -162,6 +175,14 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
 
     # Mount the single API before the catch-all static console.
     application.mount("/api", operations_api, name="operations-api")
+
+    # Self-hosted docs assets (Swagger UI): mounted with no-cache so a stale
+    # bundle can never linger in a browser/proxy cache after an upgrade.
+    _vendor_dir = _CONSOLE_DIR / "vendor"
+    if _vendor_dir.is_dir():
+        application.mount(
+            "/vendor", _NoCacheStaticFiles(directory=str(_vendor_dir)), name="vendor"
+        )
 
     # Root path serves the compiled AeroVigilAI browser console.
     if _CONSOLE_DIR.is_dir():

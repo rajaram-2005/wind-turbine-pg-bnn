@@ -309,17 +309,22 @@ def _swagger_asset_urls() -> tuple:
 
     In the canonical deployment the browser console is served at ``/``, so the
     bundled assets resolve at ``/vendor/swagger/...`` with no external access.
+    A version query string busts any stale browser/proxy cache of the bundle
+    (e.g. an older Swagger UI that cannot parse OpenAPI 3.1).
     """
     vendor = Path(__file__).resolve().parents[2] / "web_console" / "dist" / "vendor" / "swagger"
     if (vendor / "swagger-ui-bundle.js").is_file() and (vendor / "swagger-ui.css").is_file():
         return (
-            "/vendor/swagger/swagger-ui-bundle.js",
-            "/vendor/swagger/swagger-ui.css",
+            f"/vendor/swagger/swagger-ui-bundle.js?v={_SWAGGER_ASSET_VERSION}",
+            f"/vendor/swagger/swagger-ui.css?v={_SWAGGER_ASSET_VERSION}",
         )
     return (
         "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
         "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
     )
+
+
+_SWAGGER_ASSET_VERSION = "5.3.1"
 
 
 @app.get("/docs", include_in_schema=False)
@@ -328,12 +333,16 @@ async def model_docs() -> HTMLResponse:
     from fastapi.openapi.docs import get_swagger_ui_html
 
     js_url, css_url = _swagger_asset_urls()
-    return get_swagger_ui_html(
+    response = get_swagger_ui_html(
         openapi_url="openapi.json",
         title="Aerovigil PG-BNN API — Swagger UI",
         swagger_js_url=js_url,
         swagger_css_url=css_url,
     )
+    # Never let browsers/proxies cache the docs shell or it can pin an
+    # old Swagger UI that rejects the current OpenAPI version.
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 # Middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
