@@ -194,6 +194,62 @@ class ApiService {
     return _handle(resp);
   }
 
+  // ── MIKA + KAI agent copilot ──────────────────────────────────────────
+
+  /// Ask the MIKA + KAI agent council about an asset. Physics questions route
+  /// to KAI, maintenance-planning questions to MIKA, everything else to the
+  /// council consensus. Answers are rebuilt from live twin evidence.
+  Future<Map<String, dynamic>> askAgents({
+    required String assetId,
+    required String question,
+    String model = 'GE-1.5',
+  }) async {
+    final resp = await http.post(
+      _uri('/api/agent/ask'),
+      headers: _jsonHeaders,
+      body: jsonEncode({'asset_id': assetId, 'model': model, 'question': question}),
+    );
+    return _handle(resp);
+  }
+
+  /// Record an advisory-only operator decision at the human decision gate.
+  Future<Map<String, dynamic>> recordReview({
+    required String assetId,
+    required String decision,
+    String? note,
+  }) async {
+    final resp = await http.post(
+      _uri('/api/agent/review'),
+      headers: _jsonHeaders,
+      body: jsonEncode({'asset_id': assetId, 'decision': decision, 'note': note}),
+    );
+    return _handle(resp);
+  }
+
+  /// Read back the durable human-review audit trail for an asset.
+  Future<Map<String, dynamic>> listReviews({String? assetId, int limit = 20}) async {
+    final query = StringBuffer('/api/agent/reviews?limit=$limit');
+    if (assetId != null && assetId.isNotEmpty) {
+      query.write('&asset_id=${Uri.encodeQueryComponent(assetId)}');
+    }
+    final resp = await http.get(_uri(query.toString()), headers: _jsonHeaders);
+    return _handle(resp);
+  }
+
+  /// Scenario Lab: run parallel operating-profile futures on a forked twin.
+  Future<Map<String, dynamic>> runScenarios({
+    required String assetId,
+    String model = 'GE-1.5',
+    double hours = 24.0,
+  }) async {
+    final resp = await http.post(
+      _uri('/api/twin/scenarios'),
+      headers: _jsonHeaders,
+      body: jsonEncode({'asset_id': assetId, 'model': model, 'hours': hours}),
+    );
+    return _handle(resp);
+  }
+
   Map<String, dynamic> _handle(http.Response resp) {
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
       return _safeJson(resp.body, fallback: {});

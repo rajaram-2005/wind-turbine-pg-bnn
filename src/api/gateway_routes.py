@@ -5,7 +5,10 @@ These routes are attached to the operations API (mounted at ``/api`` by
 surface on one host and one port:
 
 * ``POST /api/model``            – canonical PG-BNN inference endpoint.
-* ``ANY  /api/model-api``        – permanent (308) redirect to ``/api/model``.
+* ``GET  /api/model/info``       – model metadata.
+* ``POST /api/model/batch``      – batch predictions.
+* ``POST /api/model/stream``     – streamed Monte Carlo samples (SSE).
+* ``POST /api/model/trend``      – RUL trend across a telemetry sequence.
 * ``POST /api/jobs/{job_type}``  – queue a framework job, returns ``job_id``.
 * ``GET  /api/jobs``             – list recent jobs.
 * ``GET  /api/jobs/{job_id}``    – job status + recent execution logs.
@@ -17,23 +20,38 @@ surface on one host and one port:
 
 Hardware-stream ingestion is *not* fire-and-forget: every batch is persisted
 to the durable store (:mod:`src.data.store`), the affected digital twins are
-updated (advisory computed via the attached serving PG-BNN when available),
-and the fleet report is regenerated automatically.
+updated (advisory from the attached serving PG-BNN when configured, else the
+loaded six-signal PG-BNN when the batch carries all six of its inputs, else
+the clearly-labeled demo heuristic), and the fleet report is regenerated
+automatically.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import os
+import statistics
 import time
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from src.jobs import ALLOWED_JOB_TYPES, get_job_manager
+
+# Six-signal PG-BNN schemas and handlers, reused so the canonical ``/api``
+# surface exposes the full model capability without a second (legacy) mount.
+from src.aerovigil_pg_bnn.api import (
+    BatchInput,
+    TelemetryInput,
+    TrendInput,
+    model_info,
+    predict_batch,
+    predict_stream,
+    predict_trend,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,14 +89,30 @@ async def model_inference(request: Request) -> dict[str, Any]:
     return result.model_dump() if hasattr(result, "model_dump") else dict(result)
 
 
-@router.api_route(
-    "/model-api",
-    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-    include_in_schema=False,
-)
-async def model_api_redirect() -> RedirectResponse:
-    """Permanent redirect from the legacy ``/api/model-api`` path."""
-    return RedirectResponse(url="/api/model", status_code=308)
+@router.get("/model/info", tags=["model"])
+async def model_metadata() -> Any:
+    """Model metadata for the six-signal PG-BNN (name, inputs, metrics)."""
+    return await model_info()
+
+
+@router.post("/model/batch", tags=["model"])
+async def model_batch(request: Request, batch_input: BatchInput) -> Any:
+    """Batch RUL predictions (up to 1000 samples per request)."""
+    return await predict_batch(request, batch_input)
+
+
+@router.post("/model/stream", tags=["model"])
+async def model_stream(
+    request: Request, input_data: TelemetryInput, n_mcmc_samples: int = 100
+) -> Any:
+    """Stream Monte Carlo RUL samples as Server-Sent Events."""
+    return await predict_stream(request, input_data, n_mcmc_samples=n_mcmc_samples)
+
+
+@router.post("/model/trend", tags=["model"])
+async def model_trend(request: Request, trend_input: TrendInput) -> Any:
+    """RUL trend across a sequence of telemetry readings."""
+    return await predict_trend(request, trend_input)
 
 
 # ------------------------------------------------------------------ jobs
@@ -179,22 +213,58 @@ def _stream_heuristic_enabled() -> bool:
     return os.environ.get("AV_STREAM_HEURISTIC", "1") != "0"
 
 
+def _checkpoint_is_serving_format(path: str) -> bool | None:
+    """Peek at a checkpoint's state_dict keys without building any model.
+
+    Returns ``True`` when the keys match the serving
+    :class:`~src.models.serving` layout (``linears.*`` / ``out_mean.*``),
+    ``False`` when they match the six-signal model-API checkpoint
+    (``feature_extractor.*`` / ``rul_mean_head.*``), and ``None`` when the
+    file cannot be inspected.
+    """
+    try:
+        import torch
+
+        state = torch.load(path, map_location="cpu", weights_only=True)
+        keys = set(state.keys()) if hasattr(state, "keys") else set()
+        if any(k.startswith("linears.") or k.startswith("out_mean.") for k in keys):
+            return True
+        if any(k.startswith("feature_extractor.") or k.startswith("rul_mean_head.") for k in keys):
+            return False
+        return None
+    except Exception:  # noqa: BLE001 - inspection must never break ingestion
+        return None
+
+
 def _ensure_stream_serving(state) -> None:
     """Lazily attach a serving PG-BNN to the operations app for streams.
 
     ``state`` is the operations API's ``app.state`` (it owns the ``serving``
-    attribute). Uses ``AV_MODEL_PATH`` when set, else the bundled demo bundle
-    so that hardware streams produce real model advisories out of the box.
-    The result is cached on ``state.serving`` for the life of the process.
+    attribute). Uses ``AV_MODEL_PATH`` when set. The bundled demo checkpoint
+    is only attempted when it is actually in the serving (25-feature) format;
+    the six-signal model-API checkpoint is recognised and skipped here because
+    it is served directly by :func:`_stream_model_bnn_state` instead. The
+    outcome is cached on ``state`` for the life of the process.
     """
     if getattr(state, "serving", None) is not None:
         return
+    if getattr(state, "stream_serving_checked", False):
+        return
+    state.stream_serving_checked = True
     path = os.environ.get("AV_MODEL_PATH") or os.environ.get("AV_STREAM_MODEL")
     if not path and _DEMO_BUNDLE.is_file():
         path = str(_DEMO_BUNDLE)
     if not path:
         logger.info(
             "[hardware] no serving model configured; streams update twins without model advisories"
+        )
+        return
+    if _checkpoint_is_serving_format(path) is False:
+        logger.info(
+            "[hardware] %s is the six-signal model-API checkpoint; stream "
+            "advisories use the six-signal PG-BNN directly (set AV_MODEL_PATH "
+            "to a 25-feature serving bundle to enable the serving path)",
+            path,
         )
         return
     try:
@@ -275,6 +345,96 @@ def _stream_heuristic_bnn_state(tel: dict[str, float], spec) -> dict[str, Any]:
     }
 
 
+# Canonical signal names required by the six-signal PG-BNN and the gateway
+# aliases that fold onto them.
+_SIX_SIGNAL_ALIASES: dict[str, tuple[str, ...]] = {
+    "vibration_rms": ("vibration_rms", "vibration_mms", "vib_rms", "vibration"),
+    "bearing_temp": ("bearing_temp", "gearbox_temp", "bearing_temperature"),
+    "generator_temp": ("generator_temp", "generator_temperature", "gen_temp"),
+    "power_output": ("power_output", "active_power", "power_kw"),
+    "wind_speed": ("wind_speed", "wind"),
+    "operating_hours": ("operating_hours", "total_hours", "runtime_hours", "hours"),
+}
+
+# Monte-Carlo passes for the six-signal stream advisory (kept small: this runs
+# inline on the ingestion path).
+_STREAM_MODEL_MC_SAMPLES = 24
+
+
+def _six_signal_api():
+    """Return the model-API module when its six-signal PG-BNN is loaded.
+
+    The unified app runs the packaged ``src.aerovigil_pg_bnn.api`` lifespan at
+    startup, which loads the bundled demo checkpoint into the shared module
+    globals; the same trained model that answers ``/api/model`` can therefore
+    also advise hardware streams. Returns ``None`` when the model (or its
+    dependencies) is unavailable.
+    """
+    try:
+        from src.aerovigil_pg_bnn import api as six_api
+    except Exception:  # noqa: BLE001 - torch/model-API optional on this path
+        return None
+    return six_api if getattr(six_api, "_model", None) is not None else None
+
+
+def _stream_model_bnn_state(signals: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Compute a real-model ``BNNState`` for one turbine's streamed signals.
+
+    Uses the loaded six-signal PG-BNN (the same checkpoint behind
+    ``/api/model``) with MC dropout sampling: the epistemic term is the spread
+    of the sampled means, the aleatoric term the mean sampled data noise.
+    Returns ``None`` when the model is not loaded or the batch does not carry
+    all six required signals — the caller then falls back to the documented
+    heuristic. Nothing is fabricated: a missing signal means no model advisory.
+    """
+    six_api = _six_signal_api()
+    if six_api is None:
+        return None
+
+    by_name: dict[str, float] = {}
+    for reading in signals:
+        name = str(reading.get("signal", "")).strip().lower()
+        try:
+            value = float(reading.get("value"))
+        except (TypeError, ValueError):
+            continue
+        for canonical, aliases in _SIX_SIGNAL_ALIASES.items():
+            if name in aliases and canonical not in by_name:
+                by_name[canonical] = value
+                break
+    if set(by_name) != set(_SIX_SIGNAL_ALIASES):
+        return None
+
+    try:
+        import torch
+
+        # TelemetryInput re-validates every value against the model's bounds;
+        # out-of-range streams correctly fall back to the heuristic.
+        telemetry = six_api.TelemetryInput(**by_name)
+        features = six_api._telemetry_to_tensor(telemetry)
+        model = six_api._model
+        model.train()  # enable MC dropout
+        means: list[float] = []
+        noises: list[float] = []
+        with torch.no_grad():
+            for _ in range(_STREAM_MODEL_MC_SAMPLES):
+                rul_mean, rul_log_var = model(features)
+                means.append(float(rul_mean.item()))
+                log_var = max(float(rul_log_var.item()), -20.0)
+                noises.append(math.sqrt(math.exp(log_var)))
+        predicted = float(statistics.fmean(means))
+        epistemic = float(statistics.pstdev(means))
+        aleatoric = float(statistics.fmean(noises))
+        return {
+            "predicted_rul_days": round(min(max(predicted, 0.0), 3650.0), 1),
+            "epistemic_uncertainty": round(min(max(epistemic, 0.0), 3650.0), 2),
+            "aleatoric_uncertainty": round(min(max(aleatoric, 0.0), 3650.0), 2),
+        }
+    except Exception as exc:  # noqa: BLE001 - one bad advisory must not fail the batch
+        logger.warning("[hardware] six-signal stream advisory failed: %s", exc)
+        return None
+
+
 def _health_score(tel: dict[str, float], spec) -> float:
     """Deterministic 0-100 fleet health score from twin telemetry.
 
@@ -304,8 +464,10 @@ async def hardware_stream(batch: HardwareStreamBatch, request: Request) -> dict[
     Beyond acknowledging the batch this now:
 
     1. Persists every reading to the durable store.
-    2. Updates each affected digital twin (advisory via the serving PG-BNN
-       when loaded, else twin physics metrics).
+    2. Updates each affected digital twin. Advisory hierarchy: the serving
+       PG-BNN when a 25-feature bundle is configured, else the loaded
+       six-signal PG-BNN when the batch carries all six of its inputs, else
+       the clearly-labeled demo heuristic.
     3. Upserts the per-turbine fleet-health row.
     4. Regenerates and persists the fleet report.
     """
@@ -332,15 +494,22 @@ async def hardware_stream(batch: HardwareStreamBatch, request: Request) -> dict[
             tel = _to_telemetry(signals, twin.spec)
             if tel is None:
                 continue
-            # Model path when a serving PG-BNN is attached; otherwise a
-            # deterministic, clearly-labeled heuristic bnn_state so streams
-            # still produce advisory records out of the box.
+            # Advisory hierarchy: (1) the attached serving PG-BNN when a
+            # 25-feature bundle is configured (handled inside the twin bridge);
+            # (2) the loaded six-signal PG-BNN when the batch carries all six
+            # of its inputs; (3) the deterministic, clearly-labeled demo
+            # heuristic so streams still produce advisories out of the box.
             bnn_state = None
             advisory_source = None
-            if not serving_loaded and _stream_heuristic_enabled():
-                heuristic = _stream_heuristic_bnn_state(tel, twin.spec)
-                bnn_state = BNNState(**heuristic)
-                advisory_source = "stream-heuristic"
+            if not serving_loaded:
+                model_state = _stream_model_bnn_state(signals)
+                if model_state is not None:
+                    bnn_state = BNNState(**model_state)
+                    advisory_source = "stream-model-six-signal"
+                elif _stream_heuristic_enabled():
+                    heuristic = _stream_heuristic_bnn_state(tel, twin.spec)
+                    bnn_state = BNNState(**heuristic)
+                    advisory_source = "stream-heuristic"
             state_record = twin.update_state(TwinTelemetry(**tel), bnn_state)
             if advisory_source:
                 # Label the heuristic path explicitly so twin status, the
@@ -399,6 +568,10 @@ async def hardware_stream(batch: HardwareStreamBatch, request: Request) -> dict[
     assets_updated = [a["asset"] for a in assets_updated]
     advisories_computed = len([a for a in assets_updated if a["predicted_rul_days"] is not None])
 
+    heuristic_used = any(a.get("advisory_source") == "stream-heuristic" for a in assets_updated)
+    six_signal_used = any(
+        a.get("advisory_source") == "stream-model-six-signal" for a in assets_updated
+    )
     return {
         "ack": True,
         "gateway_id": batch.gateway_id,
@@ -406,7 +579,8 @@ async def hardware_stream(batch: HardwareStreamBatch, request: Request) -> dict[
         "turbines_updated": len(assets_updated),
         "advisories_computed": advisories_computed,
         "serving_model_loaded": serving_loaded,
-        "heuristic_advisories": serving_loaded is False and _stream_heuristic_enabled(),
+        "heuristic_advisories": heuristic_used,
+        "six_signal_model_advisories": six_signal_used,
         "assets": assets_updated,
         "server_time": time.time(),
     }

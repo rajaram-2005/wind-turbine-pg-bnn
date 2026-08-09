@@ -22,7 +22,7 @@ services:
       - AV_TWIN_MAX_ASSETS=1024
       - AV_STREAM_HEURISTIC=1
       # Optional promoted 25-feature advisory bundle; the bundled six-signal
-      # model remains available through /api/model and /model-api.
+      # model remains available through the consolidated /api/model routes.
       - AV_MODEL_PATH=${AV_MODEL_PATH:-}
     volumes:
       - ./artifacts:/app/artifacts

@@ -28,6 +28,8 @@ from __future__ import annotations
 import contextlib
 import os
 from collections import OrderedDict
+from pathlib import Path
+from typing import Any
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException
@@ -37,6 +39,8 @@ from src.agents.cyber_team import build_cyber_team_brief
 from src.api.schemas import (
     AdvisoryRequest,
     AdvisoryResponse,
+    AgentAskRequest,
+    AgentReviewRequest,
     FleetRequest,
     FleetResponse,
     FleetSummary,
@@ -45,6 +49,7 @@ from src.api.schemas import (
     TelemetryCompressResponse,
     TelemetryRestoreRequest,
     TelemetryRestoreResponse,
+    TwinScenariosRequest,
     TwinSimulateRequest,
 )
 from src.eval.calibration import expected_asset_utilization
@@ -59,6 +64,30 @@ ENV_MODEL_PATH = "AV_MODEL_PATH"
 # deployment; the default comfortably covers fleet-scale demos.
 ENV_TWIN_MAX_ASSETS = "AV_TWIN_MAX_ASSETS"
 DEFAULT_TWIN_MAX_ASSETS = 1024
+
+
+def _swagger_asset_urls() -> tuple[str, str]:
+    """Self-hosted Swagger UI assets when bundled, else the public CDN.
+
+    The canonical deployment serves ``web_console/dist`` at ``/``, so the
+    bundled assets resolve at ``/vendor/swagger/...`` without any external
+    network access — important for air-gapped sites and sandboxed previews.
+    A version query string busts any stale browser/proxy cache of the bundle
+    (e.g. an older Swagger UI that cannot parse OpenAPI 3.1).
+    """
+    vendor = Path(__file__).resolve().parents[2] / "web_console" / "dist" / "vendor" / "swagger"
+    if (vendor / "swagger-ui-bundle.js").is_file() and (vendor / "swagger-ui.css").is_file():
+        return (
+            f"/vendor/swagger/swagger-ui-bundle.js?v={_SWAGGER_ASSET_VERSION}",
+            f"/vendor/swagger/swagger-ui.css?v={_SWAGGER_ASSET_VERSION}",
+        )
+    return (
+        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
+        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
+    )
+
+
+_SWAGGER_ASSET_VERSION = "5.3.1"
 
 
 def _serving_model_path() -> str | None:
@@ -178,7 +207,26 @@ def create_app() -> FastAPI:
         title="AeroVigil advisory API (wind-turbine-pg-bnn) v1.0.0",
         version=VERSION,
         description=SAFETY_BANNER,
+        docs_url=None,
+        redoc_url=None,
     )
+
+    @app.get("/docs", include_in_schema=False)
+    def operations_docs() -> Any:
+        """Swagger UI served with self-hosted assets (no CDN dependency)."""
+        from fastapi.openapi.docs import get_swagger_ui_html
+
+        js_url, css_url = _swagger_asset_urls()
+        response = get_swagger_ui_html(
+            openapi_url="openapi.json",
+            title="AeroVigil operations API — Swagger UI",
+            swagger_js_url=js_url,
+            swagger_css_url=css_url,
+        )
+        # Never let browsers/proxies cache the docs shell or it can pin an
+        # old Swagger UI that rejects the current OpenAPI version.
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     # Optional model serving: load a trained PG-BNN bundle when configured.
     # Requests without a ``telemetry_window`` still take the bnn_state path
@@ -224,7 +272,17 @@ def create_app() -> FastAPI:
             "agent_team": {
                 "team_id": "CYBER_PRIME_DUAL_AGENT",
                 "agents": ["MIKA", "KAI"],
-                "connected_surfaces": ["advisory", "fleet", "twin", "prompt", "cli", "dashboard"],
+                "connected_surfaces": [
+                    "advisory",
+                    "fleet",
+                    "twin",
+                    "prompt",
+                    "copilot",
+                    "review",
+                    "scenario",
+                    "cli",
+                    "dashboard",
+                ],
             },
             "endpoints": [
                 "/health",
@@ -233,7 +291,11 @@ def create_app() -> FastAPI:
                 "/twin/status",
                 "/twin/history",
                 "/twin/simulate",
+                "/twin/scenarios",
                 "/twin/prompt",
+                "/agent/ask",
+                "/agent/review",
+                "/agent/reviews",
                 "/telemetry/compress",
                 "/telemetry/restore",
                 "/fleet/report",
@@ -406,6 +468,150 @@ def create_app() -> FastAPI:
             "last_records": records[-5:],
             "last_advisory": advisories[-1] if advisories else None,
             "agent_team": records[-1].get("agent_team") if records else None,
+            "advisory_only": True,
+        }
+        enforce_safety_contract(body)
+        return body
+
+    # ------------------------------------------------------------------ #
+    # MIKA + KAI Agent Copilot (restored from the legacy dashboard)       #
+    # ------------------------------------------------------------------ #
+    _KAI_KEYWORDS = ("physics", "vibration", "temperature", "bearing", "why", "l10", "iso")
+    _MIKA_KEYWORDS = ("when", "maintenance", "inspect", "crew", "plan", "window", "escalate")
+
+    @app.post("/agent/ask")
+    def agent_ask(req: AgentAskRequest) -> dict:
+        """Ask MIKA + KAI about an asset — deterministic, evidence-grounded routing.
+
+        Restored from the legacy Cyber Twin "Agent Copilot": physics questions
+        are answered by KAI, maintenance-planning questions by MIKA, and
+        everything else by the COUNCIL shared summary. Findings are always
+        rebuilt from the asset's live twin evidence — never free-form text.
+        """
+        twin = _get_twin(req.asset_id, req.model)
+        last = twin.state_history[-1] if twin.state_history else {}
+        advisory = last.get("advisory") or {}
+        team = build_cyber_team_brief(
+            asset_id=twin.asset_id,
+            predicted_rul_days=advisory.get("predicted_rul_days"),
+            epistemic_std=advisory.get("epistemic_std", 0.0),
+            physics_violations=last.get("physics_violations"),
+            cumulative_wear=twin.cumulative_wear,
+            bearing_l10_hours=last.get("bearing_l10_hours"),
+            telemetry=last.get("telemetry"),
+        )
+        lower = req.question.lower()
+        if any(word in lower for word in _KAI_KEYWORDS):
+            agent, answer = "KAI", team["agents"]["kai"]["finding"]
+        elif any(word in lower for word in _MIKA_KEYWORDS):
+            agent = "MIKA"
+            answer = (
+                f"{team['agents']['mika']['finding']} The current advisory review "
+                f"window is approximately {team['review_window_days']:.1f} days."
+            )
+        else:
+            agent, answer = "COUNCIL", team["shared_summary"]
+        body = {
+            "asset_id": twin.asset_id,
+            "question": req.question,
+            "agent": agent,
+            "answer": answer,
+            "risk_level": team["risk_level"],
+            "review_window_days": team["review_window_days"],
+            "agreement_score_pct": team["agreement_score_pct"],
+            "connected_sources": team["connected_sources"],
+            "team": team,
+            "advisory_only": True,
+        }
+        enforce_safety_contract(body)
+        return body
+
+    @app.post("/agent/review")
+    def agent_review(req: AgentReviewRequest) -> dict:
+        """Human decision gate: durably record an advisory-only operator decision.
+
+        Restored from the legacy Cyber Twin review gate — every acknowledgement,
+        engineering-review request, or escalation is kept as an auditable row in
+        the durable store. It never actuates anything.
+        """
+        from src.data.store import get_store
+
+        store = get_store()
+        sequence = store.record_review(req.asset_id, req.decision, req.note)
+        trail = store.list_reviews(asset_id=req.asset_id, limit=8)
+        body = {
+            "asset_id": req.asset_id,
+            "decision": req.decision,
+            "note": req.note,
+            "sequence": sequence,
+            "recorded_at": trail[-1]["ts"] if trail else None,
+            "trail": [
+                {"sequence": row["id"], "decision": row["decision"], "ts": row["ts"]}
+                for row in reversed(trail)
+            ],
+            "advisory_only": True,
+        }
+        enforce_safety_contract(body)
+        return body
+
+    @app.get("/agent/reviews")
+    def agent_reviews(asset_id: str | None = None, limit: int = 50) -> dict:
+        """Durable audit trail of human review decisions."""
+        from src.data.store import get_store
+
+        rows = get_store().list_reviews(asset_id=asset_id, limit=limit)
+        body = {"count": len(rows), "reviews": rows, "advisory_only": True}
+        enforce_safety_contract(body)
+        return body
+
+    @app.post("/twin/scenarios")
+    def twin_scenarios(req: TwinScenariosRequest) -> dict:
+        """Scenario Lab: parallel futures across operating profiles.
+
+        Runs each requested profile on a forked twin (same spec and cumulative
+        wear as the canonical asset) so the live twin is never mutated, then
+        returns a side-by-side decision-runway comparison.
+        """
+        from src.digital_twin.twin import WindTurbineDigitalTwin
+
+        canonical = _get_twin(req.asset_id, req.model)
+        rows: list[dict[str, Any]] = []
+        for profile in req.profiles:
+            fork = WindTurbineDigitalTwin(f"{canonical.asset_id}::scenario", canonical.spec)
+            fork.cumulative_wear = canonical.cumulative_wear
+            try:
+                records = fork.simulate_scenario(profile=profile, hours=req.hours)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            advisories = [r["advisory"] for r in records if r.get("advisory")]
+            final_advisory = advisories[-1] if advisories else None
+            final_record = records[-1] if records else {}
+            rows.append(
+                {
+                    "profile": profile,
+                    "final_rul_days": (final_advisory or {}).get("predicted_rul_days"),
+                    "epistemic_std": (final_advisory or {}).get("epistemic_std"),
+                    "cumulative_wear": fork.cumulative_wear,
+                    "wear_delta_pct": round(
+                        (fork.cumulative_wear - canonical.cumulative_wear) * 100.0, 4
+                    ),
+                    "bearing_l10_hours": final_record.get("bearing_l10_hours"),
+                    "physics_violations": final_record.get("physics_violations", []),
+                    "risk_level": (final_record.get("agent_team") or {}).get("risk_level"),
+                }
+            )
+        ranked = sorted(
+            (r for r in rows if r["final_rul_days"] is not None),
+            key=lambda r: r["final_rul_days"],
+        )
+        body = {
+            "asset_id": canonical.asset_id,
+            "model_name": canonical.spec.model_name,
+            "hours": req.hours,
+            "baseline_wear": canonical.cumulative_wear,
+            "scenarios": rows,
+            "best_profile": ranked[-1]["profile"] if ranked else None,
+            "worst_profile": ranked[0]["profile"] if ranked else None,
             "advisory_only": True,
         }
         enforce_safety_contract(body)

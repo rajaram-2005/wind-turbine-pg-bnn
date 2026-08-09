@@ -431,18 +431,64 @@ are available without starting any other server:
 | Unified health/discovery | `/health` |
 | Advisory, fleet, twin, telemetry, reports | `/api` (`/api/docs`) |
 | **Canonical model inference** | `POST /api/model` |
-| Legacy inference alias (308 → `/api/model`) | `ANY /api/model-api` |
+| Model metadata · batch · Monte Carlo stream · trend | `GET /api/model/info` · `POST /api/model/batch` · `POST /api/model/stream` · `POST /api/model/trend` |
 | Framework job queue (train / federated / export / active-sample / explain) | `POST /api/jobs/{job_type}`, `GET /api/jobs/{job_id}` |
 | Hardware gateway ingestion + read-back | `POST /api/hardware/stream`, `GET /api/hardware/latest` |
 | Offline SCADA upload | `POST /api/telemetry/upload` |
-| Low-level PG-BNN prediction (sub-app) | `/model-api` (`/model-api/docs`) |
-| Deprecated Gradio dashboard (redirect notice) | `/legacy` |
+
+The legacy standalone model server (`/model-api`) and deprecated dashboard
+redirect (`/legacy`) were consolidated into this single `/api` surface — one
+process, one port, one OpenAPI document.
 
 CORS is configured so the native **AeroVigil console** (Flutter app in
 `apps/aerovigilai_flutter/`, targeting Windows, macOS, Android and iOS) can call
 every endpoint from any platform. Or run the complete container with
 `docker compose up aerovigil`. Legacy container service-mode names converge on
 the same unified process; they cannot open separate API or Gradio servers.
+
+### Native app downloads
+
+The unified app ships a cross-platform **download site** at
+[`/download`](http://localhost:8080/download) (also linked from the console
+hero and footer). It advertises the native console for every supported target
+and links the published binaries:
+
+| Platform | Binary | Published as |
+|----------|--------|--------------|
+| Windows 10/11 (x64) | Portable app | `aerovigil-windows-x64.zip` |
+| macOS 12+ (universal) | `.app` bundle | `aerovigil-macos-universal.zip` |
+| Linux (GTK) | Portable bundle | `aerovigil-linux-x64.tar.gz` |
+| Android 8+ | APK | `aerovigil-android.apk` |
+| iOS 15+ | TestFlight / App Store | signed distribution |
+| Any OS | Web console | served at `/` (no install) |
+
+Binaries are built and attached to a GitHub Release automatically by the
+release workflow in [`ci/release-apps.yml`](ci/release-apps.yml). Two ways to
+run it once activated:
+
+1. **All platforms at once** — push a version tag:
+   `git tag v1.0.0 && git push origin v1.0.0`
+2. **One by one** — GitHub → *Actions* → *release-apps* → *Run workflow*,
+   then pick a single platform (`windows`, `macos`, `linux`, `android`) and
+   the release tag to publish to.
+
+Each build runs on its native GitHub-hosted runner (Windows binaries require a
+Windows runner, macOS/iOS require macOS runners — they cannot be
+cross-compiled from Linux). Binaries are attached to the release **and**
+uploaded as workflow artifacts. **One-time activation** (requires push access
+with the `workflows` scope): copy the workflow into the GitHub workflows
+directory —
+
+```bash
+mkdir -p .github/workflows
+cp ci/release-apps.yml .github/workflows/release-apps.yml
+git add .github/workflows/release-apps.yml && git commit -m "Enable release builds" && git push
+```
+
+The download page detects each published asset via the GitHub Releases API and
+links it directly; until a tag is released it falls back to the releases page
+plus per-platform build instructions (Flutter
+`flutter build windows|macos|linux|apk`).
 
 ### Async framework job queue
 
@@ -535,6 +581,26 @@ python hardware_agent.py --connector opcua --endpoint opc.tcp://10.0.0.5:4840 \
        --opcua-security "Basic256Sha256,SignAndEncrypt,cert.der,key.pem" \
        --opcua-nodes "generator_rpm=ns=2;s=gen_rpm,gearbox_temp=ns=2;s=gbx_temp"
 ```
+
+### Microcontroller edge (ESP32 / STM32)
+
+Bare-metal nodes connect directly to the same `POST /api/hardware/stream`
+endpoint. [`edge/`](edge) ships ready-to-flash firmware plus a device
+simulator that validates the path before you wire any hardware:
+
+```bash
+# Validate the cloud path with no hardware attached
+python edge/simulate_device.py --server http://localhost:8080 \
+       --gateway-id esp32-gw-01 --turbine-id WTG-ESP-01 --interval 5
+```
+
+* [`edge/esp32/aerovigil_telemetry.ino`](edge/esp32/aerovigil_telemetry.ino) —
+  Arduino/PlatformIO firmware: WiFi + NTP, sensor sampling, JSON batching,
+  HTTPS with retry/backoff, and NVS-persisted operating hours.
+* [`edge/stm32/aerovigil_stm32_main.c`](edge/stm32/aerovigil_stm32_main.c) —
+  STM32 HAL reference using an ESP8266/ESP32 AT modem over UART.
+* [`edge/README.md`](edge/README.md) — wire format, signal map, sensor wiring,
+  MQTT alternative, and production/TLS notes.
 
 The command line is unified the same way — one tool for every operator task,
 including the digital twin:
@@ -853,11 +919,11 @@ Android / iOS) talks to the same endpoints.
 #### Option B: Programmatic API access (same unified process)
 
 Do not start a second API server. Keep the Option A unified application running
-and use its mounted OpenAPI surfaces:
+and use its single OpenAPI surface:
 
-- Operations docs: **http://localhost:8080/api/docs**
-- Low-level model docs: **http://localhost:8080/model-api/docs**
+- API docs (every route, including the model surface): **http://localhost:8080/api/docs**
 - Canonical six-signal inference: `POST /api/model`
+- Batch / streamed Monte Carlo / trend: `POST /api/model/batch` · `/api/model/stream` · `/api/model/trend`
 
 ```bash
 curl -X POST "http://localhost:8080/api/model" \
@@ -873,8 +939,8 @@ curl -X POST "http://localhost:8080/api/model" \
   }'
 ```
 
-The compatibility prediction surface remains mounted under `/model-api`; it is
-not a separate process or port.
+All model capabilities (single, batch, streamed Monte Carlo, and trend
+inference) are served under `/api/model*` — no separate process or port.
 
 #### Option C: Python script (use the model directly)
 
@@ -1098,12 +1164,15 @@ python -m src.unified_app
 |----------|---------|
 | `GET /health` | Unified app, service discovery, and agent-mesh health |
 | `POST /api/model` | Canonical six-signal RUL prediction |
-| `GET /api/docs` | Operations OpenAPI UI |
-| `GET /model-api/model/info` | Low-level model metadata |
-| `POST /model-api/predict` | Compatibility low-level prediction |
-| `POST /model-api/predict/batch` | Batch predictions |
-| `POST /model-api/predict/stream` | Streamed Monte Carlo samples |
-| `GET /model-api/docs` | Low-level model OpenAPI UI |
+| `GET /api/model/info` | Model metadata |
+| `POST /api/model/batch` | Batch predictions |
+| `POST /api/model/stream` | Streamed Monte Carlo samples (SSE) |
+| `POST /api/model/trend` | RUL trend across a telemetry sequence |
+| `POST /api/agent/ask` | Ask MIKA + KAI — evidence-grounded copilot answers |
+| `POST /api/agent/review` | Human decision gate — durable advisory-only review |
+| `GET /api/agent/reviews` | Audit trail of recorded human reviews |
+| `POST /api/twin/scenarios` | Scenario Lab — parallel operating-profile futures |
+| `GET /api/docs` | Single OpenAPI UI for the whole platform |
 
 ```bash
 curl -X POST "http://localhost:8080/api/model" \
@@ -1112,8 +1181,9 @@ curl -X POST "http://localhost:8080/api/model" \
 ```
 
 The operations API—including advisory, digital-twin, telemetry, jobs, hardware,
-and fleet-report endpoints—is mounted at `/api`. The lower-level packaged model
-API is mounted at `/model-api`; neither requires another process or port.
+fleet-report, and the full PG-BNN model surface (`/api/model`, `/api/model/info`,
+`/api/model/batch`, `/api/model/stream`, `/api/model/trend`)—is mounted at
+`/api`. Everything runs in one process on one port.
 
 ## Intended use
 
@@ -1137,6 +1207,7 @@ lubrication, sensor outages, or unusual operating regimes.
 | [`src/digital_twin/`](src/digital_twin) | Turbine specs, virtual asset, and scenario simulation |
 | [`src/agents/hermes.py`](src/agents/hermes.py) | Few-shot onboarding and promotion gating |
 | [`scripts/`](scripts) | Training, evaluation, pipeline, and smoke-test scripts |
+| [`edge/`](edge) | ESP32 / STM32 firmware + device simulator to connect microcontrollers to the cloud |
 | [`tests/`](tests) | Unit and integration tests |
 | [`docs/`](docs) | Plain-language, safety, and architecture documentation |
 
@@ -1166,7 +1237,7 @@ surface** ready for pilot deployment:
 | Component | What it does | Who it's for |
 |-----------|-------------|--------------|
 | 🧠 **PG-BNN model** | Physics-guided Bayesian RUL prediction with uncertainty | Data scientists, reliability engineers |
-| 🌐 **Unified browser console** | Eight connected operator pages with live MIKA + KAI evidence | Operators, stage demos, investors |
+| 🌐 **Unified browser console** | Connected operator pages with live MIKA + KAI copilot, human decision gate, and scenario lab | Operators, stage demos, investors |
 | 🔌 **Unified FastAPI boundary** | Operations and model endpoints with two mounted OpenAPI docs | Backend engineers, integrators |
 | 💻 **CLI tool** | Command-line inference for scripts and automation | DevOps, field engineers |
 | 🏭 **Digital twin** | Per-asset virtual representation with scenario simulation | Reliability planners, asset managers |
@@ -1195,6 +1266,7 @@ surface** ready for pilot deployment:
 | ✅ Safety contract (advisory-only, enforced in code) | Done |
 | ✅ Meta-learning / Hermes few-shot onboarding agent | Done |
 | ✅ Fleet reporting and advisory pipeline | Done |
+| ✅ MIKA + KAI copilot, human decision gate, and scenario lab restored on the unified API | Done |
 | ✅ 94.2% early-warning accuracy, 100% recall (demo) | Done |
 | 🔜 First pilot fleet validation | **Next — seeking partners** |
 | 🔜 Site-specific calibration on real SCADA data | **Next — seeking partners** |

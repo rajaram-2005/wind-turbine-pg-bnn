@@ -227,8 +227,19 @@
     .agent-name { margin-bottom: 8px; font: 800 .69rem ui-monospace, monospace; letter-spacing: .11em; }
     .agent-name.mika { color: var(--pink); }
     .agent-name.kai { color: #72e9ff; }
+    .agent-name.council { color: var(--amber); }
     .agent-finding { color: #b8d1cf; font-size: .78rem; line-height: 1.55; }
     .agent-summary { grid-column: 1 / -1; padding: 12px 14px; border-left: 2px solid var(--teal); color: #a7c6c4; background: rgba(45,212,191,.04); font-size: .75rem; line-height: 1.5; }
+    .tier { display: flex; align-items: baseline; gap: 10px; margin: 30px 0 14px; padding-bottom: 9px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+    .tier-badge { font: 800 .64rem ui-monospace, monospace; letter-spacing: .14em; color: #06131f; background: linear-gradient(135deg, var(--teal), #72e9ff); padding: 4px 10px; border-radius: 6px; text-transform: uppercase; }
+    .tier-title { font-weight: 750; font-size: .98rem; }
+    .tier-sub { color: var(--muted); font-size: .76rem; margin-left: auto; }
+    .chart-note { color: var(--muted); font-size: .72rem; margin-top: 8px; }
+    .carbon-wrap { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+    @keyframes rotor-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .ct-rotor { transform-origin: 160px 108px; animation: rotor-spin 4s linear infinite; }
+    .ct-rotor.paused { animation-play-state: paused; }
+    .ct-glow { transition: fill .6s ease; }
     .job-row { display: grid; grid-template-columns: 95px 125px minmax(160px,1fr) 165px; gap: 8px; align-items: center; padding: 10px 4px; border-bottom: 1px solid rgba(255,255,255,.05); cursor: pointer; }
     .job-row:hover { background: rgba(255,255,255,.025); }
     .gauge-wrap { display: grid; place-items: center; min-height: 230px; }
@@ -293,25 +304,88 @@
         <div class="eyebrow">One app · One process · One port</div>
         <h2>Evidence moves from turbine telemetry to a human decision on port 8080.</h2>
         <p>The console, operational API, PG-BNN model API, durable digital twins, fleet reports, job queue, and compatibility routes share one canonical deployment. MIKA and KAI explain the maintenance and physics evidence without issuing turbine commands.</p>
-        <div class="hero-actions"><button class="primary" data-go="twin">Inspect WTG-001</button><a class="link-button secondary" href="/api/docs" target="_blank" rel="noopener">Operations API</a><a class="link-button secondary" href="/model-api/docs" target="_blank" rel="noopener">Model API</a></div>
+        <div class="hero-actions"><button class="primary" data-go="twin">Inspect WTG-001</button><a class="link-button secondary" href="/download">⬇ Download apps</a><a class="link-button secondary" href="/api/docs">API Explorer</a></div>
       </div>
       <div class="grid" id="overview-cards"></div>
     </section>
 
     <section class="page" id="page-twin">
-      <div class="hero"><div class="eyebrow">Durable digital twin</div><h2>Asset state, physics, and dual-agent consensus.</h2><p><code>GET /api/twin/status</code> hydrates each asset through the shared twin registry; <code>GET /api/twin/history</code> reads its durable SQLite snapshots.</p></div>
+      <div class="hero"><div class="eyebrow">Durable digital twin · basic → advanced</div><h2>From a seeded twin to probabilistic, graphed decision support.</h2><p><code>GET /api/twin/status</code> hydrates (or seeds) each asset through the shared twin registry; every tier below is drawn from live or durable evidence — no chart is decorative.</p></div>
       <div class="panel">
         <div class="form-grid"><div><label for="twin-asset">Asset ID</label><input id="twin-asset" value="WTG-001" autocomplete="off" /></div><div><label for="twin-model">Turbine model</label><select id="twin-model"><option value="GE-1.5">GE 1.5</option><option value="Vestas-V90">Vestas V90</option><option value="Siemens-SWT-2.3">Siemens SWT 2.3</option></select></div></div>
-        <button class="primary" id="twin-refresh">Refresh twin</button>
+        <button class="primary" id="twin-refresh">Create / refresh twin</button>
+        <span class="muted" style="margin-left:12px">Unknown asset IDs are seeded as new digital twins at the spec's nominal operating point.</span>
       </div>
-      <div class="panel"><div class="panel-head"><h3>Current state</h3><span class="muted" id="twin-updated">Waiting for asset…</span></div><div class="kpis" id="twin-kpis"></div></div>
+
+      <div class="tier"><span class="tier-badge">Tier 1</span><span class="tier-title">Basic twin — state &amp; health envelope</span><span class="tier-sub">carbon-copy replica · physics state · telemetry radar · radial gauges · dual-agent consensus</span></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Carbon copy · live virtual replica</h3><span class="muted" id="carbon-status">Waiting for state…</span></div>
+        <div class="carbon-wrap">
+          <div id="carbon-copy" style="flex:0 0 auto"></div>
+          <div class="kpis" id="carbon-kpis" style="flex:1;min-width:260px"></div>
+        </div>
+      </div>
+      <div class="split">
+        <div class="panel"><div class="panel-head"><h3>Current state</h3><span class="muted" id="twin-updated">Waiting for asset…</span></div><div class="kpis" id="twin-kpis"></div></div>
+        <div class="panel"><div class="panel-head"><h3>Health radar</h3><span class="muted">fraction of safe range · amber ring = 50%</span></div><div id="twin-radar"><div class="empty">Waiting for telemetry…</div></div></div>
+      </div>
+      <div class="panel"><div class="panel-head"><h3>Decision gauges</h3><span class="muted">radial readouts · risk-coloured</span></div><div id="twin-gauges" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:space-around"><div class="empty" style="width:100%">Waiting for advisory evidence…</div></div></div>
       <div class="panel"><div class="panel-head"><h3>MIKA + KAI agent team</h3><span class="muted" id="twin-agreement"></span></div><div class="agent-council" id="twin-agents"><div class="empty">Loading connected agent evidence…</div></div></div>
+
+      <div class="tier"><span class="tier-badge">Tier 2</span><span class="tier-title">Trends &amp; forecast</span><span class="tier-sub">uncertainty cone · countdown forecast · telemetry heatmap · durable history</span></div>
+      <div class="panel"><div class="panel-head"><h3>Degradation trend · uncertainty cone</h3><span class="muted" id="trend-note">predicted RUL over persisted snapshots</span></div><div id="twin-trend"><div class="empty">Waiting for history…</div></div></div>
+      <div class="panel"><div class="panel-head"><h3>Telemetry heatmap</h3><span class="muted">channels × persisted snapshots</span></div><div id="twin-heatmap"><div class="empty">Waiting for history…</div></div></div>
       <div class="panel"><div class="panel-head"><h3>Durable history</h3><span class="muted" id="twin-history-count"></span></div><div class="table-wrap" id="twin-history"></div></div>
+
+      <div class="tier"><span class="tier-badge">Tier 3</span><span class="tier-title">Probabilistic prediction</span><span class="tier-sub">Monte Carlo distribution · reliability survival curve · warning horizons</span></div>
+      <div class="split">
+        <div class="panel"><div class="panel-head"><h3>Predictive RUL distribution</h3><span class="muted" id="dist-note"></span></div><div id="twin-dist"><div class="empty">Waiting for advisory evidence…</div></div></div>
+        <div class="panel"><div class="panel-head"><h3>Survival probability</h3><span class="muted" id="surv-note">P(RUL &gt; t)</span></div><div id="twin-survival"><div class="empty">Waiting for Monte Carlo samples…</div></div></div>
+      </div>
+
+      <div class="tier"><span class="tier-badge">Tier 4</span><span class="tier-title">Advanced operations</span><span class="tier-sub">power curve · scenario lab · MIKA + KAI copilot</span></div>
+      <div class="panel"><div class="panel-head"><h3>Power curve analysis</h3><span class="muted" id="power-note">ideal cubic curve vs streamed operating points</span></div><div id="twin-power"><div class="empty">Waiting for streamed wind / power readings…</div></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Scenario lab · parallel futures</h3><span class="muted">POST /api/twin/scenarios</span></div>
+        <p class="muted">Runs every operating profile on a forked twin (the live asset is never mutated) and compares the decision runway side by side.</p>
+        <div class="form-grid"><div><label for="scenario-hours">Horizon (hours)</label><input id="scenario-hours" type="number" value="24" min="1" max="720" /></div></div>
+        <button class="primary" id="scenario-btn">Run scenario comparison</button>
+        <span class="muted" id="scenario-verdict" style="margin-left:12px"></span>
+        <div id="scenario-chart" style="margin-top:12px"></div>
+        <div class="table-wrap" id="scenario-table" style="margin-top:12px"></div>
+      </div>
+      <div class="split">
+        <div class="panel">
+          <div class="panel-head"><h3>Ask MIKA + KAI</h3><span class="muted">POST /api/agent/ask</span></div>
+          <p class="muted">Physics questions route to KAI, maintenance-planning questions to MIKA, everything else to the council. Answers are rebuilt from live twin evidence — never free-form.</p>
+          <label for="agent-question">Operator question</label>
+          <input id="agent-question" placeholder="Why is bearing risk rising? When should engineering review it?" autocomplete="off" />
+          <button class="primary" id="agent-ask-btn">Ask Agent Council</button>
+          <div class="agent-council" id="agent-answer" style="margin-top:12px"><div class="empty">Ask about maintenance timing, physics, uncertainty, or scenarios…</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Human decision gate</h3><span class="muted">POST /api/agent/review</span></div>
+          <p class="muted">Advisory-only operator decisions are kept as a durable audit trail. Nothing here actuates the turbine.</p>
+          <label for="review-decision">Operator decision</label>
+          <select id="review-decision">
+            <option>Acknowledge evidence</option>
+            <option>Request engineering review</option>
+            <option>Escalate to reliability lead</option>
+          </select>
+          <button class="primary" id="review-btn">Record Human Review</button>
+          <div class="muted" id="review-receipt" style="margin-top:10px"></div>
+          <div id="review-trail" style="margin-top:8px"></div>
+        </div>
+      </div>
     </section>
 
     <section class="page" id="page-fleet">
       <div class="hero"><div class="eyebrow">Fleet intelligence</div><h2>Aggregate health, risk, and persisted reports.</h2><p>The fleet surface combines <code>/api/fleet/summary</code>, the generated markdown report, and the durable <code>/api/reports</code> index.</p></div>
       <div class="panel"><div class="panel-head"><h3>Fleet summary</h3><button class="primary secondary" id="fleet-refresh" style="margin:0 0 0 auto">Refresh</button></div><div class="kpis" id="fleet-kpis"></div><div class="table-wrap" id="fleet-assets" style="margin-top:14px"></div></div>
+      <div class="split">
+        <div class="panel"><div class="panel-head"><h3>RUL comparison across fleet</h3><span class="muted">predicted healthy life per asset</span></div><div id="fleet-bars"><div class="empty">No fleet assets yet.</div></div></div>
+        <div class="panel"><div class="panel-head"><h3>Fleet risk distribution</h3><span class="muted">advisory risk mix</span></div><div id="fleet-donut"><div class="empty">No fleet assets yet.</div></div></div>
+      </div>
       <div class="split"><div class="panel"><div class="panel-head"><h3>Generated fleet report</h3><span class="muted">GET /api/fleet/report</span></div><pre id="fleet-report">Loading…</pre></div><div class="panel"><div class="panel-head"><h3>Persisted reports</h3><span class="muted" id="reports-count"></span></div><div id="reports-list"></div></div></div>
     </section>
 
@@ -340,7 +414,7 @@
     <section class="page" id="page-inference">
       <div class="hero"><div class="eyebrow">PG-BNN inference</div><h2>Six signals in. RUL and uncertainty out.</h2><p>Submit one validated SCADA snapshot to <code>POST /api/model</code>. The Bayesian model response stays advisory-only and includes its confidence interval, risk state, and inference timing.</p></div>
       <div class="split">
-        <div class="panel"><h3>Telemetry snapshot</h3><div class="form-grid" style="margin-top:14px"><div><label for="inf-vibration">Vibration RMS · mm/s</label><input id="inf-vibration" type="number" min="0" max="50" step="0.1" value="2.1" /></div><div><label for="inf-bearing">Bearing temp · °C</label><input id="inf-bearing" type="number" min="20" max="150" step="0.1" value="62" /></div><div><label for="inf-generator">Generator temp · °C</label><input id="inf-generator" type="number" min="20" max="200" step="0.1" value="74" /></div><div><label for="inf-power">Power output · kW</label><input id="inf-power" type="number" min="0" max="5000" step="1" value="1350" /></div><div><label for="inf-wind">Wind speed · m/s</label><input id="inf-wind" type="number" min="0" max="30" step="0.1" value="11" /></div><div><label for="inf-hours">Operating hours</label><input id="inf-hours" type="number" min="0" max="100000" step="1" value="21000" /></div></div><button class="primary" id="inference-btn">Run inference</button><div class="hero-actions"><a class="link-button secondary" href="/model-api/docs" target="_blank" rel="noopener">Model docs</a><a class="link-button secondary" href="/api/docs" target="_blank" rel="noopener">Operations docs</a><a class="link-button secondary" href="/legacy">Legacy → Console</a></div></div>
+        <div class="panel"><h3>Telemetry snapshot</h3><div class="form-grid" style="margin-top:14px"><div><label for="inf-vibration">Vibration RMS · mm/s</label><input id="inf-vibration" type="number" min="0" max="50" step="0.1" value="2.1" /></div><div><label for="inf-bearing">Bearing temp · °C</label><input id="inf-bearing" type="number" min="20" max="150" step="0.1" value="62" /></div><div><label for="inf-generator">Generator temp · °C</label><input id="inf-generator" type="number" min="20" max="200" step="0.1" value="74" /></div><div><label for="inf-power">Power output · kW</label><input id="inf-power" type="number" min="0" max="5000" step="1" value="1350" /></div><div><label for="inf-wind">Wind speed · m/s</label><input id="inf-wind" type="number" min="0" max="30" step="0.1" value="11" /></div><div><label for="inf-hours">Operating hours</label><input id="inf-hours" type="number" min="0" max="100000" step="1" value="21000" /></div></div><button class="primary" id="inference-btn">Run inference</button><div class="hero-actions"><a class="link-button secondary" href="/api/docs">API docs</a></div></div>
         <div class="panel"><div class="panel-head"><h3>RUL estimate</h3><span class="muted" id="inference-time">Ready</span></div><div class="gauge-wrap"><div class="gauge" id="rul-gauge" style="--gauge:0%"><div class="gauge-value"><strong id="rul-value">—</strong><span>predicted days</span></div></div></div><div id="inference-chips"></div></div>
       </div>
       <div class="panel"><div class="panel-head"><h3>Prediction details</h3><span class="muted">Decision support only</span></div><div class="table-wrap" id="inference-table"><div class="empty">Run inference to inspect the result.</div></div></div>
@@ -354,7 +428,7 @@
     </section>
   </main>
 
-  <footer>AeroVigilAI · Advisory-only decision support · MIKA and KAI issue no turbine commands · © <span id="year"></span></footer>
+  <footer>AeroVigilAI · Advisory-only decision support · MIKA and KAI issue no turbine commands · <a href="/download">Download apps</a> · © <span id="year"></span></footer>
   <div class="toast" id="toast" role="status"></div>
 
   <script>
@@ -389,6 +463,274 @@
     function kpi(label, value, note = '') {
       return `<div class="kpi"><div class="kpi-label">${esc(label)}</div><div class="kpi-value">${esc(value)}</div>${note ? `<div class="kpi-note">${esc(note)}</div>` : ''}</div>`;
     }
+
+    /* ───────────────────────── SVG chart kit (dependency-free) ─────────────────────────
+       Small, offline-safe chart generators used across the console. Everything is inline
+       SVG so there is no bundle, no CDN, and no network dependency. */
+    const RISK_COLOR = { LOW: 'var(--green)', MODERATE: 'var(--amber)', HIGH: '#ff9f43', CRITICAL: 'var(--red)' };
+    function riskOf(rul) {
+      if (rul == null) return 'UNKNOWN';
+      if (rul < 14) return 'CRITICAL';
+      if (rul < 30) return 'HIGH';
+      if (rul < 45) return 'MODERATE';
+      return 'LOW';
+    }
+    function mulberry32(seed) {
+      return function () {
+        seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    function normalSamples(mean, sigma, n, seed) {
+      const rnd = mulberry32(seed);
+      const out = [];
+      for (let i = 0; i < n; i += 2) {
+        const u1 = Math.max(rnd(), 1e-9), u2 = rnd();
+        const z0 = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+        const z1 = Math.sqrt(-2 * Math.log(u1)) * Math.sin(2 * Math.PI * u2);
+        out.push(mean + sigma * z0);
+        if (out.length < n) out.push(mean + sigma * z1);
+      }
+      return out.slice(0, n);
+    }
+    function svgBox(w, h, body) {
+      return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="xMidYMid meet" role="img">${body}</svg>`;
+    }
+
+    // Radar / spider chart. axes: [{label, value(0..1)}]
+    function renderRadar(el, axes, { size = 230 } = {}) {
+      if (!axes.length) { el.innerHTML = '<div class="empty">No telemetry to plot.</div>'; return; }
+      const cx = size / 2, cy = size / 2, R = size * 0.34, n = axes.length;
+      const pt = (i, r) => { const a = (Math.PI * 2 * i) / n - Math.PI / 2; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; };
+      let grid = '';
+      [0.25, 0.5, 0.75, 1].forEach((f) => {
+        const poly = axes.map((_, i) => pt(i, R * f).map((v) => v.toFixed(1)).join(',')).join(' ');
+        grid += `<polygon points="${poly}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="1"/>`;
+      });
+      axes.forEach((_, i) => { const [x, y] = pt(i, R); grid += `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,.08)"/>`; });
+      const dataPoly = axes.map((a, i) => pt(i, R * Math.max(0, Math.min(1, a.value))).map((v) => v.toFixed(1)).join(',')).join(' ');
+      const dots = axes.map((a, i) => { const [x, y] = pt(i, R * Math.max(0, Math.min(1, a.value))); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="var(--teal)"/>`; }).join('');
+      const labels = axes.map((a, i) => {
+        const [x, y] = pt(i, R + 20);
+        const anchor = Math.abs(x - cx) < 6 ? 'middle' : x > cx ? 'start' : 'end';
+        return `<text x="${x.toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="${anchor}" font-size="9" fill="var(--muted)">${esc(a.label)}</text>`;
+      }).join('');
+      el.innerHTML = svgBox(size, size, `${grid}<polygon points="${dataPoly}" fill="rgba(45,212,191,.16)" stroke="var(--teal)" stroke-width="1.6"/>${dots}${labels}`);
+    }
+
+    // Line chart with threshold lines. series: [{name,color,points:[{x,y}]}]
+    function renderLine(el, series, { height = 210, thresholds = [], yLabel = '' } = {}) {
+      const all = series.flatMap((s) => s.points);
+      if (!all.length) { el.innerHTML = '<div class="empty">No history yet — stream telemetry or run a simulation.</div>'; return; }
+      const W = 640, H = height, L = 44, Rt = 14, T = 12, B = 30;
+      const xs = all.map((p) => p.x), ys = all.map((p) => p.y);
+      const xMin = Math.min(...xs), xMax = Math.max(...xs, xMin + 1);
+      let yMin = Math.min(...ys, ...thresholds.map((t) => t.y)), yMax = Math.max(...ys, ...thresholds.map((t) => t.y));
+      if (yMin === yMax) { yMin -= 1; yMax += 1; }
+      const sx = (x) => L + ((x - xMin) / (xMax - xMin)) * (W - L - Rt);
+      const sy = (y) => T + (1 - (y - yMin) / (yMax - yMin)) * (H - T - B);
+      let body = '';
+      for (let g = 0; g <= 4; g++) {
+        const gy = T + (g / 4) * (H - T - B);
+        const val = yMax - (g / 4) * (yMax - yMin);
+        body += `<line x1="${L}" y1="${gy}" x2="${W - Rt}" y2="${gy}" stroke="rgba(255,255,255,.06)"/><text x="${L - 6}" y="${gy + 3}" text-anchor="end" font-size="9" fill="var(--muted)">${number(val, 0)}</text>`;
+      }
+      thresholds.forEach((t) => {
+        body += `<line x1="${L}" y1="${sy(t.y).toFixed(1)}" x2="${W - Rt}" y2="${sy(t.y).toFixed(1)}" stroke="${t.color}" stroke-dasharray="4 4" stroke-width="1.2"/><text x="${W - Rt}" y="${(sy(t.y) - 3).toFixed(1)}" text-anchor="end" font-size="8.5" fill="${t.color}">${esc(t.label)}</text>`;
+      });
+      series.forEach((s) => {
+        const d = s.points.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join(' ');
+        body += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2"/>`;
+        s.points.forEach((p) => { body += `<circle cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="2.4" fill="${s.color}"/>`; });
+      });
+      body += `<text x="${(L + W - Rt) / 2}" y="${H - 6}" text-anchor="middle" font-size="9" fill="var(--muted)">${esc(series[0].xLabel || 'snapshot →')}</text>`;
+      if (yLabel) body += `<text x="12" y="${(T + H - B) / 2}" font-size="9" fill="var(--muted)" transform="rotate(-90 12 ${(T + H - B) / 2})" text-anchor="middle">${esc(yLabel)}</text>`;
+      const legend = series.map((s) => `<span class="chip" style="border-color:${s.color};color:${s.color}">${esc(s.name)}</span>`).join('');
+      el.innerHTML = svgBox(W, H, body) + `<div style="margin-top:6px">${legend}</div>`;
+    }
+
+    // Histogram with mean + CI band. values: number[]
+    function renderHistogram(el, values, { height = 200, mean = null, ci = null, thresholds = [], color = 'var(--teal)' } = {}) {
+      if (!values.length) { el.innerHTML = '<div class="empty">No distribution available.</div>'; return; }
+      const W = 640, H = height, L = 40, Rt = 14, T = 12, B = 30;
+      const lo = Math.min(...values), hi = Math.max(...values);
+      const bins = 28, bw = (hi - lo) / bins || 1;
+      const counts = new Array(bins).fill(0);
+      values.forEach((v) => { const b = Math.min(bins - 1, Math.floor((v - lo) / bw)); counts[b]++; });
+      const cMax = Math.max(...counts, 1);
+      const sx = (v) => L + ((v - lo) / (hi - lo || 1)) * (W - L - Rt);
+      const sy = (c) => T + (1 - c / cMax) * (H - T - B);
+      let body = '';
+      if (ci) body += `<rect x="${sx(ci[0]).toFixed(1)}" y="${T}" width="${Math.max(0, sx(ci[1]) - sx(ci[0])).toFixed(1)}" height="${H - T - B}" fill="rgba(45,212,191,.07)"/>`;
+      counts.forEach((c, i) => {
+        const x0 = sx(lo + i * bw), x1 = sx(lo + (i + 1) * bw);
+        body += `<rect x="${(x0 + 0.5).toFixed(1)}" y="${sy(c).toFixed(1)}" width="${Math.max(0.5, x1 - x0 - 1).toFixed(1)}" height="${(H - B - sy(c)).toFixed(1)}" fill="${color}" opacity="0.75" rx="1"/>`;
+      });
+      thresholds.forEach((t) => {
+        if (t.x < lo || t.x > hi) return;
+        body += `<line x1="${sx(t.x).toFixed(1)}" y1="${T}" x2="${sx(t.x).toFixed(1)}" y2="${H - B}" stroke="${t.color}" stroke-dasharray="4 4" stroke-width="1.3"/><text x="${(sx(t.x) + 3).toFixed(1)}" y="${T + 9}" font-size="8.5" fill="${t.color}">${esc(t.label)}</text>`;
+      });
+      if (mean != null && mean >= lo && mean <= hi) {
+        body += `<line x1="${sx(mean).toFixed(1)}" y1="${T}" x2="${sx(mean).toFixed(1)}" y2="${H - B}" stroke="var(--pink)" stroke-width="1.6"/><text x="${(sx(mean) + 4).toFixed(1)}" y="${H - B - 6}" font-size="9" fill="var(--pink)">mean ${number(mean, 1)}</text>`;
+      }
+      body += `<line x1="${L}" y1="${H - B}" x2="${W - Rt}" y2="${H - B}" stroke="rgba(255,255,255,.2)"/>`;
+      [lo, (lo + hi) / 2, hi].forEach((v) => { body += `<text x="${sx(v).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="9" fill="var(--muted)">${number(v, 0)}</text>`; });
+      el.innerHTML = svgBox(W, H, body);
+    }
+
+    // Vertical bar chart with threshold lines. rows: [{label, value, color}]
+    function renderBars(el, rows, { height = 220, thresholds = [] } = {}) {
+      if (!rows.length) { el.innerHTML = '<div class="empty">Nothing to plot yet.</div>'; return; }
+      const W = 640, H = height, L = 44, Rt = 14, T = 14, B = 44;
+      const vals = rows.map((r) => r.value ?? 0);
+      const yMax = Math.max(...vals, ...thresholds.map((t) => t.y), 1) * 1.12;
+      const sy = (v) => T + (1 - v / yMax) * (H - T - B);
+      const slot = (W - L - Rt) / rows.length, bw = Math.min(52, slot * 0.6);
+      let body = '';
+      for (let g = 0; g <= 4; g++) {
+        const gy = T + (g / 4) * (H - T - B), val = yMax - (g / 4) * yMax;
+        body += `<line x1="${L}" y1="${gy}" x2="${W - Rt}" y2="${gy}" stroke="rgba(255,255,255,.06)"/><text x="${L - 6}" y="${gy + 3}" text-anchor="end" font-size="9" fill="var(--muted)">${number(val, 0)}</text>`;
+      }
+      thresholds.forEach((t) => {
+        body += `<line x1="${L}" y1="${sy(t.y).toFixed(1)}" x2="${W - Rt}" y2="${sy(t.y).toFixed(1)}" stroke="${t.color}" stroke-dasharray="4 4" stroke-width="1.2"/><text x="${W - Rt}" y="${(sy(t.y) - 3).toFixed(1)}" text-anchor="end" font-size="8.5" fill="${t.color}">${esc(t.label)}</text>`;
+      });
+      rows.forEach((r, i) => {
+        const x = L + slot * i + (slot - bw) / 2, v = Math.max(0, r.value ?? 0);
+        body += `<rect x="${x.toFixed(1)}" y="${sy(v).toFixed(1)}" width="${bw}" height="${Math.max(1, H - B - sy(v)).toFixed(1)}" rx="4" fill="${r.color || 'var(--teal)'}" opacity="0.85"/>`;
+        body += `<text x="${(x + bw / 2).toFixed(1)}" y="${(sy(v) - 4).toFixed(1)}" text-anchor="middle" font-size="9" fill="#cfe8e6">${number(v, 0)}</text>`;
+        body += `<text x="${(x + bw / 2).toFixed(1)}" y="${H - 24}" text-anchor="middle" font-size="8.5" fill="var(--muted)">${esc(r.label)}</text>`;
+      });
+      el.innerHTML = svgBox(W, H, body);
+    }
+
+    // Donut chart. slices: [{label, value, color}]
+    function renderDonut(el, slices, { size = 190 } = {}) {
+      const total = slices.reduce((s, x) => s + x.value, 0);
+      if (!total) { el.innerHTML = '<div class="empty">No fleet data yet.</div>'; return; }
+      const cx = size / 2, cy = size / 2, R = size * 0.36, r = size * 0.22;
+      let angle = -Math.PI / 2, body = '';
+      slices.forEach((s) => {
+        if (!s.value) return;
+        const frac = s.value / total, a2 = angle + frac * 2 * Math.PI;
+        const large = frac > 0.5 ? 1 : 0;
+        const p1 = [cx + R * Math.cos(angle), cy + R * Math.sin(angle)], p2 = [cx + R * Math.cos(a2), cy + R * Math.sin(a2)];
+        const p3 = [cx + r * Math.cos(a2), cy + r * Math.sin(a2)], p4 = [cx + r * Math.cos(angle), cy + r * Math.sin(angle)];
+        body += `<path d="M${p1[0].toFixed(1)},${p1[1].toFixed(1)} A${R},${R} 0 ${large} 1 ${p2[0].toFixed(1)},${p2[1].toFixed(1)} L${p3[0].toFixed(1)},${p3[1].toFixed(1)} A${r},${r} 0 ${large} 0 ${p4[0].toFixed(1)},${p4[1].toFixed(1)} Z" fill="${s.color}" opacity="0.88"/>`;
+        angle = a2;
+      });
+      body += `<text x="${cx}" y="${cy - 2}" text-anchor="middle" font-size="16" font-weight="700" fill="#e8f4f2">${total}</text><text x="${cx}" y="${cy + 13}" text-anchor="middle" font-size="8.5" fill="var(--muted)">assets</text>`;
+      const legend = slices.filter((s) => s.value).map((s) => `<span class="chip" style="border-color:${s.color};color:${s.color}">${esc(s.label)} · ${s.value}</span>`).join('');
+      el.innerHTML = svgBox(size, size, body) + `<div style="margin-top:6px">${legend}</div>`;
+    }
+
+    /* ── Advanced chart primitives ─────────────────────────────────────────── */
+    // Radial gauge over a 240° sweep.
+    function renderGauge(container, frac, { label, valueText, color, sub = '' } = {}) {
+      const size = 158, cx = size / 2, cy = size * 0.46, R = size * 0.36;
+      const a0 = (-210 * Math.PI) / 180, a1 = (30 * Math.PI) / 180;
+      const f = Math.max(0, Math.min(1, frac));
+      const polar = (ang, r) => [cx + r * Math.cos(ang), cy + r * Math.sin(ang)];
+      const arc = (from, to, r) => {
+        const [x0, y0] = polar(from, r), [x1, y1] = polar(to, r);
+        return `M${x0.toFixed(1)},${y0.toFixed(1)} A${r},${r} 0 ${to - from > Math.PI ? 1 : 0} 1 ${x1.toFixed(1)},${y1.toFixed(1)}`;
+      };
+      const aVal = a0 + (a1 - a0) * f;
+      let body = `<path d="${arc(a0, a1, R)}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="10" stroke-linecap="round"/>`;
+      if (f > 0.008) body += `<path d="${arc(a0, aVal, R)}" fill="none" stroke="${color}" stroke-width="10" stroke-linecap="round"/>`;
+      const [nx, ny] = polar(aVal, R - 13);
+      body += `<line x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="#e8f4f2" stroke-width="2"/><circle cx="${cx}" cy="${cy}" r="4" fill="#e8f4f2"/>`;
+      body += `<text x="${cx}" y="${(cy + R * 0.85).toFixed(1)}" text-anchor="middle" font-size="14" font-weight="750" fill="#e8f4f2">${esc(valueText)}</text>`;
+      body += `<text x="${cx}" y="${(cy + R * 0.85 + 13).toFixed(1)}" text-anchor="middle" font-size="8" fill="var(--muted)">${esc(label)}</text>`;
+      if (sub) body += `<text x="${cx}" y="${(cy + R * 0.85 + 24).toFixed(1)}" text-anchor="middle" font-size="7.5" fill="var(--muted)">${esc(sub)}</text>`;
+      container.insertAdjacentHTML('beforeend', `<div>${svgBox(size, size + 26, body)}</div>`);
+    }
+
+    function heatColor(t) {
+      const lerp = (a, b, f) => Math.round(a + (b - a) * f);
+      let r, g, b;
+      if (t < 0.5) { const f = t / 0.5; r = lerp(20, 251, f); g = lerp(120, 191, f); b = lerp(120, 36, f); }
+      else { const f = (t - 0.5) / 0.5; r = lerp(251, 251, f); g = lerp(191, 113, f); b = lerp(36, 133, f); }
+      return `rgb(${r},${g},${b})`;
+    }
+
+    // Telemetry heatmap: channels × snapshots.
+    function renderHeatmap(el, rows, channels) {
+      if (!rows.length) { el.innerHTML = '<div class="empty">No persisted snapshots for the heatmap yet.</div>'; return; }
+      const W = 640, cellH = 24, L = 108, T = 8, Rt = 12, B = 8;
+      const n = rows.length, cellW = Math.max(3, (W - L - Rt) / n);
+      const H = T + channels.length * cellH + B;
+      let body = '';
+      channels.forEach((ch, ci) => {
+        body += `<text x="${L - 8}" y="${T + ci * cellH + cellH / 2 + 3}" text-anchor="end" font-size="8.5" fill="var(--muted)">${esc(ch.label)}</text>`;
+        rows.forEach((row, ri) => {
+          const v = (row.telemetry || {})[ch.key];
+          const t = typeof v === 'number' ? Math.max(0, Math.min(1, v / ch.max)) : 0;
+          body += `<rect x="${(L + ri * cellW).toFixed(1)}" y="${T + ci * cellH}" width="${Math.max(1, cellW - 1).toFixed(1)}" height="${cellH - 3}" fill="${typeof v === 'number' ? heatColor(t) : 'rgba(255,255,255,.05)'}" rx="2"><title>${esc(ch.label)}: ${typeof v === 'number' ? number(v, 2) : '—'} · ${esc(dateText(row.timestamp || row.ts))}</title></rect>`;
+        });
+      });
+      el.innerHTML = svgBox(W, H, body) + '<div class="chart-note">Telemetry intensity per persisted snapshot (cool = low, hot = near the schema limit). Hover a cell for the exact reading.</div>';
+    }
+
+    // Trend with epistemic ⊕ aleatoric uncertainty cone + dashed forecast.
+    function renderCone(el, points, { height = 215, thresholds = [], forecast = [], yLabel = '' } = {}) {
+      if (!points.length) { el.innerHTML = '<div class="empty">No RUL-bearing snapshots yet — stream telemetry or run a scenario to persist twin states.</div>'; return; }
+      const W = 640, H = height, L = 44, Rt = 14, T = 12, B = 30;
+      const xs = [...points.map((p) => p.x), ...forecast.map((p) => p.x)];
+      const ys = [...points.flatMap((p) => [p.up ?? p.y, p.lo ?? p.y]), ...forecast.map((p) => p.y), ...thresholds.map((t) => t.y)];
+      const xMin = Math.min(...xs), xMax = Math.max(...xs, xMin + 1);
+      let yMin = Math.min(...ys), yMax = Math.max(...ys);
+      if (yMin === yMax) { yMin -= 1; yMax += 1; }
+      const pad = (yMax - yMin) * 0.06; yMin -= pad; yMax += pad;
+      const sx = (x) => L + ((x - xMin) / (xMax - xMin)) * (W - L - Rt);
+      const sy = (y) => T + (1 - (y - yMin) / (yMax - yMin)) * (H - T - B);
+      let body = '';
+      for (let g = 0; g <= 4; g++) {
+        const gy = T + (g / 4) * (H - T - B), val = yMax - (g / 4) * (yMax - yMin);
+        body += `<line x1="${L}" y1="${gy}" x2="${W - Rt}" y2="${gy}" stroke="rgba(255,255,255,.06)"/><text x="${L - 6}" y="${gy + 3}" text-anchor="end" font-size="9" fill="var(--muted)">${number(val, 0)}</text>`;
+      }
+      const upper = points.map((p) => `${sx(p.x).toFixed(1)},${sy(p.up ?? p.y).toFixed(1)}`);
+      const lower = [...points].reverse().map((p) => `${sx(p.x).toFixed(1)},${sy(p.lo ?? p.y).toFixed(1)}`);
+      body += `<polygon points="${upper.concat(lower).join(' ')}" fill="rgba(114,233,255,.13)" stroke="rgba(114,233,255,.22)" stroke-width="1"/>`;
+      body += `<path d="${points.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join(' ')}" fill="none" stroke="#72e9ff" stroke-width="2"/>`;
+      points.forEach((p) => { body += `<circle cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="2.6" fill="#72e9ff"/>`; });
+      if (forecast.length) {
+        body += `<path d="${forecast.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join(' ')}" fill="none" stroke="rgba(251,191,36,.85)" stroke-width="1.8" stroke-dasharray="6 4"/>`;
+      }
+      thresholds.forEach((t) => {
+        body += `<line x1="${L}" y1="${sy(t.y).toFixed(1)}" x2="${W - Rt}" y2="${sy(t.y).toFixed(1)}" stroke="${t.color}" stroke-dasharray="4 4" stroke-width="1.2"/><text x="${W - Rt}" y="${(sy(t.y) - 3).toFixed(1)}" text-anchor="end" font-size="8.5" fill="${t.color}">${esc(t.label)}</text>`;
+      });
+      body += `<text x="${(L + W - Rt) / 2}" y="${H - 6}" text-anchor="middle" font-size="9" fill="var(--muted)">days since first persisted snapshot →</text>`;
+      if (yLabel) body += `<text x="12" y="${(T + H - B) / 2}" font-size="9" fill="var(--muted)" transform="rotate(-90 12 ${(T + H - B) / 2})" text-anchor="middle">${esc(yLabel)}</text>`;
+      el.innerHTML = svgBox(W, H, body) + `<div style="margin-top:6px"><span class="chip" style="border-color:#72e9ff;color:#72e9ff">predicted RUL</span><span class="chip" style="border-color:rgba(114,233,255,.55);color:#9fd8e8">±(σ_epi ⊕ σ_ale) cone</span>${forecast.length ? '<span class="chip" style="border-color:var(--amber);color:var(--amber)">forecast −1 d/d</span>' : ''}</div>`;
+    }
+
+    // Reliability survival curve P(RUL > t) from Monte Carlo samples.
+    function renderSurvival(el, samples, { height = 205 } = {}) {
+      if (!samples.length) { el.innerHTML = '<div class="empty">No Monte Carlo samples available.</div>'; return; }
+      const W = 640, H = height, L = 44, Rt = 14, T = 12, B = 30;
+      const maxT = Math.max(...samples) * 1.04;
+      const steps = 140, sorted = [...samples].sort((a, b) => a - b);
+      const survAt = (t) => sorted.filter((s) => s > t).length / sorted.length;
+      const sx = (x) => L + (x / maxT) * (W - L - Rt);
+      const sy = (y) => T + (1 - y) * (H - T - B);
+      let body = '';
+      [0, 0.25, 0.5, 0.75, 1].forEach((v) => {
+        body += `<line x1="${L}" y1="${sy(v).toFixed(1)}" x2="${W - Rt}" y2="${sy(v).toFixed(1)}" stroke="rgba(255,255,255,.06)"/><text x="${L - 6}" y="${(sy(v) + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--muted)">${Math.round(v * 100)}%</text>`;
+      });
+      let path = '';
+      for (let i = 0; i <= steps; i++) { const t = (maxT * i) / steps; path += `${i ? 'L' : 'M'}${sx(t).toFixed(1)},${sy(survAt(t)).toFixed(1)} `; }
+      body += `<path d="${path}" fill="none" stroke="var(--teal)" stroke-width="2"/>`;
+      [{ x: 45, c: 'var(--amber)', l: '45-day' }, { x: 14, c: 'var(--red)', l: 'critical' }].forEach((m) => {
+        if (m.x > maxT) return;
+        const s = survAt(m.x);
+        body += `<line x1="${sx(m.x).toFixed(1)}" y1="${T}" x2="${sx(m.x).toFixed(1)}" y2="${H - B}" stroke="${m.c}" stroke-dasharray="4 4"/><circle cx="${sx(m.x).toFixed(1)}" cy="${sy(s).toFixed(1)}" r="3.6" fill="${m.c}"/><text x="${(sx(m.x) + 5).toFixed(1)}" y="${(sy(s) - 5).toFixed(1)}" font-size="8.5" fill="${m.c}">${m.l} ${(s * 100).toFixed(0)}%</text>`;
+      });
+      body += `<text x="${(L + W - Rt) / 2}" y="${H - 6}" text-anchor="middle" font-size="9" fill="var(--muted)">days of healthy life →</text>`;
+      body += `<text x="12" y="${(T + H - B) / 2}" font-size="9" fill="var(--muted)" transform="rotate(-90 12 ${(T + H - B) / 2})" text-anchor="middle">P(RUL &gt; t)</text>`;
+      el.innerHTML = svgBox(W, H, body);
+    }
     function showPage(page) {
       document.querySelectorAll('.page').forEach((node) => node.classList.toggle('active', node.id === `page-${page}`));
       document.querySelectorAll('#nav button').forEach((button) => button.classList.toggle('active', button.dataset.page === page));
@@ -401,14 +743,14 @@
     document.querySelectorAll('[data-go]').forEach((button) => button.addEventListener('click', () => showPage(button.dataset.go)));
 
     const overviewCards = [
-      ['◈', 'Digital Twin', 'Current physics state, durable history, and MIKA + KAI evidence for any asset.', 'GET /api/twin/status', 'twin'],
+      ['◈', 'Digital Twin', 'Carbon-copy replica, physics state, MIKA + KAI copilot, scenario lab, and durable history.', 'GET /api/twin/status', 'twin'],
       ['≋', 'Fleet', 'Fleet health aggregates plus generated and persisted advisory reports.', 'GET /api/fleet/summary', 'fleet'],
       ['⌁', 'AeroZip / Hardware', 'WAL-persisted edge and restored telemetry from industrial gateways.', 'GET /api/hardware/latest', 'hardware'],
       ['⇧', 'Ingestion', 'Offline file upload, signed HTTPS import, provenance, and store counts.', 'POST /api/telemetry/upload', 'ingestion'],
       ['⚙', 'Jobs', 'Durable training, evaluation, export, federated, active-learning, and SHAP work.', 'POST /api/jobs/{type}', 'jobs'],
       ['Σ', 'Inference', 'Six-signal PG-BNN prediction with risk and confidence evidence.', 'POST /api/model', 'inference'],
       ['◎', 'System', 'Root health, agent mesh, mounted services, and SQLite statistics.', 'GET /health', 'system'],
-      ['{}', 'API Explorer', 'Interactive OpenAPI references for operations and low-level model services.', '/api/docs · /model-api/docs', null],
+      ['{}', 'API Explorer', 'One interactive OpenAPI reference for the whole platform — advisory, twin, fleet, jobs, hardware, and model routes.', '/api/docs', null],
     ];
     $('overview-cards').innerHTML = overviewCards.map(([icon,title,copy,endpoint,target]) => `<article class="card ${target ? 'clickable' : ''}" ${target ? `data-card-target="${target}"` : ''}><div class="card-icon">${icon}</div><h3>${esc(title)}</h3><p>${esc(copy)}</p><span class="badge">${esc(endpoint)}</span></article>`).join('');
     document.querySelectorAll('[data-card-target]').forEach((card) => card.addEventListener('click', () => showPage(card.dataset.cardTarget)));
@@ -438,14 +780,258 @@
     }
 
     function twinTeam(data) { return data.agent_team || data.last_state?.agent_team || data.last_state?.advisory?.agent_team || null; }
+
+    /* ── Digital-twin chart tiers (basic → advanced) ─────────────────────────── */
+    function renderTwinRadar(telemetry, wear) {
+      const t = telemetry || {};
+      const axes = [
+        { label: 'Vibration', value: (t.vibration_mms ?? 0) / 50 },
+        { label: 'Temperature', value: (t.temperature_c ?? 0) / 200 },
+        { label: 'Speed', value: (t.rpm ?? 0) / 3000 },
+        { label: 'Viscosity', value: (t.oil_viscosity_cst ?? 0) / 500 },
+        { label: 'Load', value: (t.load_pct ?? 0) / 120 },
+        { label: 'Wear', value: Math.max(0, Math.min(1, wear ?? 0)) },
+      ];
+      renderRadar($('twin-radar'), axes);
+    }
+
+    // Carbon copy: animated virtual replica of the turbine, driven by live state.
+    function renderCarbonCopy({ telemetry, wind, power, risk }) {
+      const t = telemetry || {};
+      // Rotor speed: high-speed-shaft rpm ÷ gearbox ratio (~97); fall back to a
+      // wind-based estimate when the twin has no rpm channel.
+      let rotorRpm = null;
+      if (typeof t.rpm === 'number' && t.rpm > 0) rotorRpm = t.rpm / 97;
+      else if (typeof wind === 'number' && wind >= 3) rotorRpm = Math.min(20, 6 + wind * 0.9);
+      const cutIn = typeof wind === 'number' && wind < 3;
+      const parked = risk === 'CRITICAL' || cutIn || rotorRpm == null || rotorRpm < 0.5;
+      const seconds = parked ? null : Math.max(1.2, 60 / rotorRpm);
+      const tone = riskTone(risk) || 'var(--muted)';
+      const reason = risk === 'CRITICAL' ? 'parked · critical risk'
+        : cutIn ? 'standby · below cut-in wind'
+        : rotorRpm == null ? 'awaiting telemetry' : null;
+      const blade = 'M-4.5,0 C-8,-28 -6,-62 0,-84 C6,-62 8,-28 4.5,0 Z';
+      const beacon = risk === 'HIGH' || risk === 'CRITICAL'
+        ? '<circle cx="160" cy="92" r="3" fill="var(--red)" class="live-dot" style="animation:pulse 1.2s ease-in-out infinite"/>' : '';
+      const svg = `<svg viewBox="0 0 320 300" width="300" height="282" role="img" aria-label="Carbon copy of the wind turbine">
+        <defs>
+          <linearGradient id="ct-sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="rgba(56,189,248,.10)"/><stop offset="1" stop-color="rgba(56,189,248,0)"/>
+          </linearGradient>
+          <linearGradient id="ct-tower" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#9fb8bd"/><stop offset=".5" stop-color="#e8f2f2"/><stop offset="1" stop-color="#8aa4a9"/>
+          </linearGradient>
+        </defs>
+        <rect x="0" y="0" width="320" height="290" rx="12" fill="url(#ct-sky)"/>
+        <ellipse cx="160" cy="284" rx="120" ry="7" fill="rgba(255,255,255,.05)"/>
+        <circle class="ct-glow" cx="160" cy="108" r="96" fill="${tone}" opacity="0.07"/>
+        <polygon points="154,116 166,116 173,282 147,282" fill="url(#ct-tower)" stroke="rgba(255,255,255,.18)"/>
+        <rect x="138" y="98" width="46" height="20" rx="7" fill="#cfdfe2" stroke="rgba(255,255,255,.22)"/>
+        ${beacon}
+        <g class="ct-rotor${parked ? ' paused' : ''}" style="animation-duration:${seconds == null ? 4 : seconds.toFixed(2)}s">
+          <g transform="translate(160,108)">
+            <path d="${blade}" fill="#dff3f1" stroke="rgba(255,255,255,.3)"/>
+            <path d="${blade}" transform="rotate(120)" fill="#dff3f1" stroke="rgba(255,255,255,.3)"/>
+            <path d="${blade}" transform="rotate(240)" fill="#dff3f1" stroke="rgba(255,255,255,.3)"/>
+            <circle r="9" fill="#0b2530" stroke="#9fd8e8" stroke-width="2"/>
+          </g>
+        </g>
+        <text x="160" y="262" text-anchor="middle" font-size="9" fill="var(--muted)" font-family="ui-monospace,monospace">CARBON COPY · mirror of the physical asset</text>
+      </svg>`;
+      $('carbon-copy').innerHTML = svg;
+      $('carbon-status').textContent = parked
+        ? `Rotor ${reason}`
+        : `Rotor ${number(rotorRpm, 1)} rpm · ${risk || '—'} risk`;
+      $('carbon-kpis').innerHTML = [
+        kpi('Wind speed', typeof wind === 'number' ? `${number(wind, 1)} m/s` : '—', 'latest streamed reading'),
+        kpi('Rotor speed', rotorRpm == null ? '—' : `${number(rotorRpm, 1)} rpm`, 'HSS rpm ÷ gear ratio'),
+        kpi('Power output', typeof power === 'number' ? `${number(power, 0)} kW` : '—', 'ideal curve reference 2500 kW'),
+        kpi('Replica state', parked ? 'STATIONARY' : 'GENERATING', reason || `${risk || 'UNKNOWN'} risk class`),
+      ].join('');
+    }
+
+    function renderTwinGauges(advisory, wear, team) {
+      const host = $('twin-gauges');
+      host.innerHTML = '';
+      const rul = advisory?.predicted_rul_days;
+      const risk = riskOf(rul);
+      renderGauge(host, rul == null ? 0 : Math.max(0, Math.min(1, rul / 365)), {
+        label: 'Predicted RUL', valueText: rul == null ? '—' : `${number(rul, 0)} d`,
+        color: RISK_COLOR[risk] || 'var(--muted)', sub: `${risk} risk · 365 d scale`,
+      });
+      renderGauge(host, Math.max(0, Math.min(1, wear ?? 0)), {
+        label: 'Cumulative wear', valueText: wear == null ? '—' : number(wear, 3),
+        color: wear > 0.75 ? 'var(--red)' : wear > 0.5 ? 'var(--amber)' : 'var(--teal)', sub: '0 = new · 1 = failure',
+      });
+      const agree = team?.agreement_score_pct;
+      renderGauge(host, agree == null ? 0 : Math.max(0, Math.min(1, agree / 100)), {
+        label: 'Agent agreement', valueText: agree == null ? '—' : `${number(agree, 1)}%`,
+        color: 'var(--pink)', sub: 'MIKA ⇄ KAI consensus',
+      });
+      const epi = advisory?.epistemic_std;
+      renderGauge(host, epi == null ? 0 : Math.max(0, Math.min(1, epi / 120)), {
+        label: 'Epistemic σ', valueText: epi == null ? '—' : `${number(epi, 1)} d`,
+        color: '#72e9ff', sub: 'model uncertainty',
+      });
+    }
+
+    function renderTwinTrend(rows) {
+      const cone = [];
+      const t0 = Date.parse(rows[0]?.timestamp || rows[0]?.ts || '');
+      rows.forEach((row, i) => {
+        const rul = row.advisory?.predicted_rul_days;
+        if (rul == null) return;
+        const parsed = Date.parse(row.timestamp || row.ts || '');
+        const x = Number.isNaN(t0) || Number.isNaN(parsed) ? i : (parsed - t0) / 86400000;
+        const band = Math.max(0, (row.advisory?.epistemic_std || 0) + (row.advisory?.aleatoric_std || 0));
+        cone.push({ x, y: rul, up: rul + band, lo: Math.max(0, rul - band) });
+      });
+      if (!cone.length) {
+        $('twin-trend').innerHTML = '<div class="empty">No RUL-bearing snapshots yet. Stream hardware telemetry or run a scenario to persist twin states.</div>';
+        $('trend-note').textContent = 'predicted RUL over persisted snapshots';
+        return;
+      }
+      const last = cone[cone.length - 1];
+      const forecast = [];
+      const horizon = Math.min(60, Math.max(0, last.y));
+      for (let d = 0; d <= horizon; d += Math.max(1, horizon / 20)) forecast.push({ x: last.x + d, y: Math.max(0, last.y - d) });
+      $('trend-note').textContent = 'predicted RUL with epistemic ⊕ aleatoric uncertainty cone · dashed countdown forecast';
+      renderCone($('twin-trend'), cone, {
+        forecast,
+        thresholds: [
+          { y: 45, color: 'var(--amber)', label: '45-day early-warning' },
+          { y: 14, color: 'var(--red)', label: '14-day critical' },
+        ],
+        yLabel: 'RUL (days)',
+      });
+    }
+
+    const HEAT_CHANNELS = [
+      { key: 'vibration_mms', label: 'Vibration', max: 50 },
+      { key: 'temperature_c', label: 'Temperature', max: 200 },
+      { key: 'rpm', label: 'Speed', max: 3000 },
+      { key: 'oil_viscosity_cst', label: 'Viscosity', max: 500 },
+      { key: 'load_pct', label: 'Load', max: 120 },
+    ];
+
+    async function streamMcSamples(inputs, n) {
+      const resp = await fetch(`/api/model/stream?n_mcmc_samples=${n}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(inputs),
+      });
+      if (!resp.ok || !resp.body) throw new Error(`stream ${resp.status}`);
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const samples = [];
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let cut;
+        while ((cut = buffer.indexOf('\n\n')) >= 0) {
+          const chunk = buffer.slice(0, cut);
+          buffer = buffer.slice(cut + 2);
+          for (const line of chunk.split('\n')) {
+            if (!line.startsWith('data: ')) continue;
+            const payload = line.slice(6).trim();
+            if (payload === '[DONE]') continue;
+            try { const d = JSON.parse(payload); if (typeof d.rul === 'number') samples.push(d.rul); } catch (_) { /* partial */ }
+          }
+        }
+      }
+      return samples;
+    }
+
+    async function renderTwinDistribution(advisory, latestSignals) {
+      const el = $('twin-dist'), note = $('dist-note');
+      const six = ['vibration_rms', 'bearing_temp', 'generator_temp', 'power_output', 'wind_speed', 'operating_hours'];
+      const haveAll = six.every((k) => typeof latestSignals[k] === 'number');
+      let samples = null, label = '';
+      if (haveAll) {
+        try {
+          note.textContent = 'streaming Monte Carlo samples from /api/model/stream…';
+          samples = await streamMcSamples(Object.fromEntries(six.map((k) => [k, latestSignals[k]])), 80);
+          label = `${samples.length} live MC samples · six-signal PG-BNN`;
+        } catch (_) { samples = null; }
+      }
+      if (!samples) {
+        const mean = advisory?.predicted_rul_days;
+        if (mean == null) {
+          el.innerHTML = '<div class="empty">No advisory evidence yet — stream telemetry or record a bnn_state to see the predictive distribution.</div>';
+          note.textContent = '';
+          return;
+        }
+        const sigma = Math.max(1.0, Math.hypot(advisory.epistemic_std || 0, advisory.aleatoric_std || 0));
+        samples = normalSamples(mean, sigma, 500, Math.round(mean * 100));
+        label = `normal approximation · mean ${number(mean, 1)} d · σ_epi ${number(advisory.epistemic_std, 1)} ⊕ σ_ale ${number(advisory.aleatoric_std, 1)}`;
+      }
+      note.textContent = label;
+      const q = (arr, p) => { const s = [...arr].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
+      renderHistogram(el, samples, {
+        mean: samples.reduce((s, v) => s + v, 0) / samples.length,
+        ci: [q(samples, 0.025), q(samples, 0.975)],
+        thresholds: [
+          { x: 45, color: 'var(--amber)', label: '45-day' },
+          { x: 14, color: 'var(--red)', label: 'critical' },
+        ],
+      });
+      renderSurvival($('twin-survival'), samples);
+      const survAt = (t) => samples.filter((s) => s > t).length / samples.length;
+      $('surv-note').textContent = `P(RUL > 45 d) = ${(survAt(45) * 100).toFixed(0)}% · P(RUL > 14 d) = ${(survAt(14) * 100).toFixed(0)}%`;
+      return samples;
+    }
+
+    function collectAssetSignals(readings, asset) {
+      const latest = {};
+      const byTs = new Map();
+      for (const row of readings || []) {
+        if (row.turbine_id !== asset) continue;
+        if (!(row.signal in latest)) latest[row.signal] = Number(row.value);
+        const key = row.ts || '';
+        const bucket = byTs.get(key) || {};
+        bucket[row.signal] = Number(row.value);
+        byTs.set(key, bucket);
+      }
+      if (latest.gearbox_temp != null && latest.bearing_temp == null) latest.bearing_temp = latest.gearbox_temp;
+      const pairs = [];
+      for (const bucket of byTs.values()) {
+        if (typeof bucket.wind_speed === 'number' && typeof bucket.power_output === 'number') {
+          pairs.push({ wind: bucket.wind_speed, power: bucket.power_output });
+        }
+      }
+      return { latest, pairs };
+    }
+
+    function renderPowerCurve(el, pairs) {
+      const W = 640, H = 220, L = 50, Rt = 14, T = 12, B = 34;
+      const xMax = 26, yMax = 2700;
+      const sx = (w) => L + (w / xMax) * (W - L - Rt), sy = (p) => T + (1 - p / yMax) * (H - T - B);
+      const ideal = (w) => { const ci = 3, r = 12, co = 25, P = 2500; if (w < ci || w > co) return 0; if (w >= r) return P; return P * Math.pow((w - ci) / (r - ci), 3); };
+      let grid = '';
+      for (let g = 0; g <= 4; g++) {
+        const gy = T + (g / 4) * (H - T - B), val = yMax - (g / 4) * yMax;
+        grid += `<line x1="${L}" y1="${gy}" x2="${W - Rt}" y2="${gy}" stroke="rgba(255,255,255,.06)"/><text x="${L - 6}" y="${gy + 3}" text-anchor="end" font-size="9" fill="var(--muted)">${number(val, 0)}</text>`;
+      }
+      [0, 5, 10, 15, 20, 25].forEach((w) => { grid += `<text x="${sx(w).toFixed(1)}" y="${H - 16}" text-anchor="middle" font-size="9" fill="var(--muted)">${w}</text>`; });
+      grid += `<text x="${(L + W - Rt) / 2}" y="${H - 4}" text-anchor="middle" font-size="9" fill="var(--muted)">wind speed (m/s)</text>`;
+      grid += `<text x="13" y="${(T + H - B) / 2}" font-size="9" fill="var(--muted)" transform="rotate(-90 13 ${(T + H - B) / 2})" text-anchor="middle">power (kW)</text>`;
+      let curve = '';
+      for (let w = 0; w <= 25.01; w += 0.5) curve += `${curve ? 'L' : 'M'}${sx(w).toFixed(1)},${sy(ideal(w)).toFixed(1)} `;
+      const dots = pairs.slice(-60).map((p) => `<circle cx="${sx(Math.min(26, p.wind)).toFixed(1)}" cy="${sy(Math.min(yMax, p.power)).toFixed(1)}" r="4" fill="var(--pink)" opacity="0.85"/>`).join('');
+      el.innerHTML = svgBox(W, H, `${grid}<path d="${curve}" fill="none" stroke="rgba(114,233,255,.65)" stroke-width="2" stroke-dasharray="5 4"/>${dots}`) + `<div class="chart-note">Dashed: ideal cubic power curve (cut-in 3 · rated 12 @ 2500 kW · cut-out 25). Dots: ${pairs.length} streamed operating point(s) for this asset${pairs.length > 60 ? ' (last 60 shown)' : ''}.</div>`;
+    }
+
     async function refreshTwin() {
       const asset = $('twin-asset').value.trim() || 'WTG-001';
       const model = $('twin-model').value;
       $('twin-updated').innerHTML = '<span class="spin"></span>Loading';
       try {
-        const [state, history] = await Promise.all([
+        const [state, history, hardware] = await Promise.all([
           api(`/api/twin/status?asset_id=${encodeURIComponent(asset)}&model=${encodeURIComponent(model)}`),
           api(`/api/twin/history?asset_id=${encodeURIComponent(asset)}&limit=40`),
+          api('/api/hardware/latest?limit=500').catch(() => ({ readings: [] })),
         ]);
         const last = state.last_state || {};
         const telemetry = last.telemetry || {};
@@ -470,6 +1056,23 @@
         const rows = history.history || [];
         $('twin-history-count').textContent = `${rows.length} persisted snapshots`;
         $('twin-history').innerHTML = rows.length ? `<table><thead><tr><th>Timestamp</th><th>Source</th><th>RUL</th><th>Wear</th><th>Risk / status</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${esc(dateText(row.timestamp || row.ts))}</td><td>${esc(row.advisory_source)}</td><td>${esc(row.advisory?.predicted_rul_days == null ? '—' : number(row.advisory.predicted_rul_days) + ' d')}</td><td>${esc(number(row.cumulative_wear, 4))}</td><td>${esc(row.agent_team?.risk_level || row.advisory?.risk_level || row.advisory?.status)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No persisted twin snapshots yet. Hardware stream ingestion will populate this history.</div>';
+        loadReviewTrail();
+        const signals = collectAssetSignals(hardware.readings || [], asset);
+        // Chart tiers: carbon copy + radar + gauges (T1), cone trend + heatmap
+        // (T2), distribution + survival (T3), power curve (T4).
+        renderCarbonCopy({
+          telemetry,
+          wind: signals.latest.wind_speed,
+          power: signals.latest.power_output,
+          risk: team?.risk_level || riskOf(advisory.predicted_rul_days),
+        });
+        renderTwinRadar(telemetry, state.cumulative_wear);
+        renderTwinGauges(advisory, state.cumulative_wear, team);
+        renderTwinTrend(rows);
+        renderHeatmap($('twin-heatmap'), rows.slice(-48), HEAT_CHANNELS);
+        if (signals.pairs.length) { renderPowerCurve($('twin-power'), signals.pairs); }
+        else { $('twin-power').innerHTML = '<div class="empty">No streamed wind / power readings for this asset yet — run hardware_agent or POST /api/hardware/stream.</div>'; }
+        renderTwinDistribution(advisory, signals.latest).catch(() => {});
       } catch (error) {
         $('twin-updated').textContent = 'Load failed';
         toast('Twin: ' + error.message, true);
@@ -478,6 +1081,90 @@
     $('twin-refresh').addEventListener('click', refreshTwin);
     $('twin-asset').addEventListener('keydown', (event) => { if (event.key === 'Enter') refreshTwin(); });
 
+    // ── MIKA + KAI Agent Copilot (restored from the legacy dashboard) ──
+    const agentBadgeClass = (agent) => ({ MIKA: 'mika', KAI: 'kai' }[agent] || 'council');
+    const agentRole = (agent) => ({
+      MIKA: 'MIKA · MAINTENANCE STRATEGIST',
+      KAI: 'KAI · PHYSICS CONSTRAINT SENTINEL',
+      COUNCIL: 'MIKA + KAI · COUNCIL CONSENSUS',
+    }[agent] || agent);
+
+    async function askAgentCouncil() {
+      const question = $('agent-question').value.trim();
+      const asset = $('twin-asset').value.trim() || 'WTG-001';
+      const model = $('twin-model').value;
+      if (!question) { toast('Enter a question for MIKA + KAI first.', true); return; }
+      $('agent-answer').innerHTML = '<div class="empty"><span class="spin"></span> Consulting the agent council…</div>';
+      try {
+        const data = await api('/api/agent/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asset_id: asset, model, question }),
+        });
+        $('agent-answer').innerHTML = `<div class="agent-card"><div class="agent-name ${agentBadgeClass(data.agent)}">${esc(agentRole(data.agent))}</div><div class="agent-finding">${esc(data.answer)}</div></div><div class="agent-summary">${esc(data.risk_level)} risk · review window ${number(data.review_window_days)} d · ${number(data.agreement_score_pct)}% team agreement<div style="margin-top:8px">${(data.connected_sources || []).map((s) => `<span class="chip">${esc(s)}</span>`).join('')}</div></div>`;
+      } catch (error) {
+        $('agent-answer').innerHTML = `<div class="empty">Council unavailable: ${esc(error.message)}</div>`;
+      }
+    }
+    $('agent-ask-btn').addEventListener('click', askAgentCouncil);
+    $('agent-question').addEventListener('keydown', (event) => { if (event.key === 'Enter') askAgentCouncil(); });
+
+    function renderReviewTrail(trail) {
+      $('review-trail').innerHTML = (trail || []).map((item) => `<span class="chip" title="${esc(dateText(item.ts))}">#${esc(item.sequence)} · ${esc(item.decision)}</span>`).join('');
+    }
+    async function loadReviewTrail() {
+      const asset = $('twin-asset').value.trim() || 'WTG-001';
+      try {
+        const data = await api(`/api/agent/reviews?asset_id=${encodeURIComponent(asset)}&limit=8`);
+        renderReviewTrail((data.reviews || []).slice().reverse().map((row) => ({ sequence: row.id, decision: row.decision, ts: row.ts })));
+      } catch (_) { /* trail is best-effort */ }
+    }
+    async function recordReview() {
+      const asset = $('twin-asset').value.trim() || 'WTG-001';
+      const decision = $('review-decision').value;
+      try {
+        const data = await api('/api/agent/review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asset_id: asset, decision }),
+        });
+        $('review-receipt').textContent = `Recorded #${data.sequence} · ${data.decision} · advisory-only`;
+        renderReviewTrail(data.trail);
+        toast(`Human review #${data.sequence} recorded for ${asset}`);
+      } catch (error) {
+        toast('Review: ' + error.message, true);
+      }
+    }
+    $('review-btn').addEventListener('click', recordReview);
+
+    const riskTone = (risk) => ({ LOW: 'var(--green)', MODERATE: 'var(--amber)', HIGH: '#ff9f43', CRITICAL: 'var(--red)' }[risk] || 'var(--muted)');
+    async function runScenarios() {
+      const asset = $('twin-asset').value.trim() || 'WTG-001';
+      const model = $('twin-model').value;
+      const hours = Number($('scenario-hours').value || 24);
+      $('scenario-verdict').textContent = 'Simulating parallel futures…';
+      $('scenario-table').innerHTML = '';
+      try {
+        const data = await api('/api/twin/scenarios', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asset_id: asset, model, hours }),
+        });
+        $('scenario-verdict').textContent = `Best runway: ${data.best_profile || '—'} · Worst: ${data.worst_profile || '—'} · ${data.hours} h horizon`;
+        renderBars($('scenario-chart'), (data.scenarios || []).map((row) => ({ label: row.profile, value: row.final_rul_days, color: riskTone(row.risk_level) })), {
+          thresholds: [
+            { y: 45, color: 'var(--amber)', label: '45-day' },
+            { y: 14, color: 'var(--red)', label: 'critical' },
+          ],
+        });
+        $('scenario-table').innerHTML = `<table><thead><tr><th>Profile</th><th>Projected RUL</th><th>Wear Δ</th><th>Bearing L10</th><th>Risk</th><th>Violations</th></tr></thead><tbody>${(data.scenarios || []).map((row) => `<tr><td>${esc(row.profile)}${row.profile === data.best_profile ? ' ★' : ''}</td><td>${row.final_rul_days == null ? '—' : number(row.final_rul_days) + ' d'}</td><td>${number(row.wear_delta_pct, 3)}%</td><td>${row.bearing_l10_hours == null ? '—' : number(row.bearing_l10_hours, 0) + ' h'}</td><td style="color:${riskTone(row.risk_level)}">${esc(row.risk_level || '—')}</td><td>${(row.physics_violations || []).length ? esc(row.physics_violations.join('; ')) : 'none'}</td></tr>`).join('')}</tbody></table>`;
+      } catch (error) {
+        $('scenario-verdict').textContent = '';
+        toast('Scenarios: ' + error.message, true);
+      }
+    }
+    $('scenario-btn').addEventListener('click', runScenarios);
+
     async function refreshFleet() {
       $('fleet-kpis').innerHTML = kpi('Fleet', 'Loading…');
       try {
@@ -485,6 +1172,20 @@
         $('fleet-kpis').innerHTML = [kpi('Assets tracked', summary.n_assets ?? 0), kpi('At risk (<104d)', summary.at_risk_count ?? 0), kpi('Mean RUL', summary.mean_rul_days == null ? '—' : `${number(summary.mean_rul_days)} d`), kpi('Mean health', summary.mean_health_score == null ? '—' : `${number(summary.mean_health_score)}%`)].join('');
         const assets = summary.turbines || [];
         $('fleet-assets').innerHTML = assets.length ? `<table><thead><tr><th>Asset</th><th>Status</th><th>Health</th><th>RUL</th><th>Availability</th><th>Gateway</th><th>Last seen</th></tr></thead><tbody>${assets.map((row) => `<tr><td>${esc(row.turbine_id)}</td><td><span class="chip">${esc(row.status)}</span></td><td>${esc(number(row.health_score))}%</td><td>${esc(number(row.predicted_rul_days))} d</td><td>${esc(number(row.availability))}%</td><td>${esc(row.gateway_id)}</td><td>${esc(dateText(row.last_seen))}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No fleet assets yet. Stream gateway telemetry to populate the durable fleet.</div>';
+        renderBars($('fleet-bars'), assets.map((row) => ({ label: row.turbine_id, value: row.predicted_rul_days, color: RISK_COLOR[riskOf(row.predicted_rul_days)] || 'var(--muted)' })), {
+          thresholds: [
+            { y: 45, color: 'var(--amber)', label: '45-day' },
+            { y: 14, color: 'var(--red)', label: 'critical' },
+          ],
+        });
+        const riskCounts = { LOW: 0, MODERATE: 0, HIGH: 0, CRITICAL: 0 };
+        assets.forEach((row) => { const r = riskOf(row.predicted_rul_days); if (riskCounts[r] != null) riskCounts[r]++; });
+        renderDonut($('fleet-donut'), [
+          { label: 'LOW', value: riskCounts.LOW, color: '#4ade80' },
+          { label: 'MODERATE', value: riskCounts.MODERATE, color: '#fbbf24' },
+          { label: 'HIGH', value: riskCounts.HIGH, color: '#ff9f43' },
+          { label: 'CRITICAL', value: riskCounts.CRITICAL, color: '#fb7185' },
+        ]);
         $('fleet-report').textContent = report;
         const persisted = reports.reports || [];
         $('reports-count').textContent = `${persisted.length} records`;
@@ -608,7 +1309,7 @@
         const twin = health.digital_twin || {};
         $('system-health-time').textContent = `Checked ${new Date().toLocaleTimeString()}`;
         $('system-kpis').innerHTML = [kpi('Application', health.status, `v${health.version}`), kpi('Canonical port', health.port), kpi('Agent mesh', mesh.status, (mesh.agents || []).join(' + ')), kpi('Twins tracked', twin.assets_tracked ?? 0, `cap ${twin.max_assets ?? '—'}`)].join('');
-        $('services-table').innerHTML = `<table><thead><tr><th>Service</th><th>Path</th></tr></thead><tbody>${Object.entries(health.services || {}).filter(([,path]) => path).map(([name,path]) => `<tr><td>${esc(name.replaceAll('_',' '))}</td><td><a href="${esc(path.replace('{job_type}','train'))}" target="_blank" rel="noopener">${esc(path)}</a></td></tr>`).join('')}</tbody></table>`;
+        $('services-table').innerHTML = `<table><thead><tr><th>Service</th><th>Path</th></tr></thead><tbody>${Object.entries(health.services || {}).filter(([,path]) => path).map(([name,path]) => `<tr><td>${esc(name.replaceAll('_',' '))}</td><td><a href="${esc(path.replace('{job_type}','train'))}">${esc(path)}</a></td></tr>`).join('')}</tbody></table>`;
         $('system-stats').innerHTML = Object.entries(stats.tables || {}).map(([name,count]) => kpi(name.replaceAll('_',' '), count)).join('') + kpi('Jobs', stats.jobs ?? '—') + kpi('Journal', 'WAL');
         $('health-json').textContent = JSON.stringify(health, null, 2);
       } catch (error) { $('system-health-time').textContent = 'Health check failed'; $('health-json').textContent = error.message; }

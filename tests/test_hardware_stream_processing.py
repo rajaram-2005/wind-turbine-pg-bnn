@@ -84,6 +84,59 @@ def test_hardware_stream_persists_and_updates_twins(client):
     assert stats["tables"]["reports"] >= 1
 
 
+_STREAM_BATCH_SIX_SIGNAL = {
+    "gateway_id": "gw-nacelle-01",
+    "readings": [
+        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S2", "signal": "generator_rpm",
+         "value": 1500.0, "unit": "rpm", "timestamp": "2026-08-08T11:00:00Z"},
+        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S2", "signal": "gearbox_temp",
+         "value": 62.0, "unit": "C", "timestamp": "2026-08-08T11:00:00Z"},
+        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S2", "signal": "generator_temp",
+         "value": 74.0, "unit": "C", "timestamp": "2026-08-08T11:00:00Z"},
+        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S2", "signal": "vibration_rms",
+         "value": 2.5, "unit": "mm/s", "timestamp": "2026-08-08T11:00:00Z"},
+        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S2", "signal": "wind_speed",
+         "value": 10.0, "unit": "m/s", "timestamp": "2026-08-08T11:00:00Z"},
+        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S2", "signal": "power_output",
+         "value": 1500.0, "unit": "kW", "timestamp": "2026-08-08T11:00:00Z"},
+        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S2", "signal": "operating_hours",
+         "value": 22000.0, "unit": "h", "timestamp": "2026-08-08T11:00:00Z"},
+    ],
+}
+
+
+def test_hardware_stream_uses_six_signal_model_when_batch_is_complete(client):
+    """A batch carrying all six PG-BNN inputs gets a real model advisory —
+    not the demo heuristic — proving the stream is wired to the trained model
+    served at /api/model."""
+    resp = client.post("/api/hardware/stream", json=_STREAM_BATCH_SIX_SIGNAL)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["received"] == 7
+    assert body["serving_model_loaded"] is False
+    assert body["six_signal_model_advisories"] is True
+    assert body["heuristic_advisories"] is False
+
+    asset = body["assets"][0]
+    assert asset["advisory_source"] == "stream-model-six-signal"
+    assert asset["predicted_rul_days"] is not None
+    assert 0.0 <= asset["predicted_rul_days"] <= 3650.0
+
+    twin = client.get("/api/twin/status", params={"asset_id": "WTG-S2"}).json()
+    assert twin["advisory_source"] == "stream-model-six-signal"
+
+
+def test_hardware_stream_partial_batch_falls_back_to_heuristic(client):
+    """Without all six inputs (here: no generator_temp / operating_hours) the
+    documented heuristic remains the advisory source."""
+    resp = client.post("/api/hardware/stream", json=_STREAM_BATCH)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["six_signal_model_advisories"] is False
+    assert body["heuristic_advisories"] is True
+    assert body["assets"][0]["advisory_source"] == "stream-heuristic"
+
+
 def test_hardware_stream_records_imports_and_cloud_import_validates(client):
     up = client.post(
         "/api/telemetry/upload",

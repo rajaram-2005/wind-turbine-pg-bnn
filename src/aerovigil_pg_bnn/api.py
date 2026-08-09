@@ -18,7 +18,7 @@ import torch
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .model import PhysicsGuidedBNN
@@ -298,10 +298,51 @@ app = FastAPI(
     title="Aerovigil PG-BNN API",
     description="Physics-Guided Bayesian Neural Network for Wind Turbine RUL Prediction",
     version="0.1.0",
-    docs_url="/docs",
+    docs_url=None,
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+
+def _swagger_asset_urls() -> tuple:
+    """Self-hosted Swagger UI assets when bundled, else the public CDN.
+
+    In the canonical deployment the browser console is served at ``/``, so the
+    bundled assets resolve at ``/vendor/swagger/...`` with no external access.
+    A version query string busts any stale browser/proxy cache of the bundle
+    (e.g. an older Swagger UI that cannot parse OpenAPI 3.1).
+    """
+    vendor = Path(__file__).resolve().parents[2] / "web_console" / "dist" / "vendor" / "swagger"
+    if (vendor / "swagger-ui-bundle.js").is_file() and (vendor / "swagger-ui.css").is_file():
+        return (
+            f"/vendor/swagger/swagger-ui-bundle.js?v={_SWAGGER_ASSET_VERSION}",
+            f"/vendor/swagger/swagger-ui.css?v={_SWAGGER_ASSET_VERSION}",
+        )
+    return (
+        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
+        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
+    )
+
+
+_SWAGGER_ASSET_VERSION = "5.3.1"
+
+
+@app.get("/docs", include_in_schema=False)
+async def model_docs() -> HTMLResponse:
+    """Swagger UI served with self-hosted assets (no CDN dependency)."""
+    from fastapi.openapi.docs import get_swagger_ui_html
+
+    js_url, css_url = _swagger_asset_urls()
+    response = get_swagger_ui_html(
+        openapi_url="openapi.json",
+        title="Aerovigil PG-BNN API — Swagger UI",
+        swagger_js_url=js_url,
+        swagger_css_url=css_url,
+    )
+    # Never let browsers/proxies cache the docs shell or it can pin an
+    # old Swagger UI that rejects the current OpenAPI version.
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 # Middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -588,5 +629,5 @@ if __name__ == "__main__":
     from src.unified_app import configured_port
 
     # Historical module command, canonical runtime: never create a model-only
-    # server. The low-level API remains available under /model-api.
+    # server. The model surface is served by the unified app under /api/model*.
     uvicorn.run(unified_app, host="0.0.0.0", port=configured_port())

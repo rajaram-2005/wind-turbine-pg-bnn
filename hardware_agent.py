@@ -124,15 +124,27 @@ class ProtocolConnector(abc.ABC):
                            self.name, exc, self._reconnect_delay)
             return False
 
-    @staticmethod
-    def _simulated_signals() -> list[dict[str, Any]]:
-        """Produce realistic simulated SCADA readings for offline/dev runs."""
+    # Cumulative operating hours for the simulated turbine; advances a little
+    # on every poll so the six-signal PG-BNN receives a realistic channel.
+    _sim_operating_hours: float = random.uniform(15000.0, 60000.0)
+
+    @classmethod
+    def _simulated_signals(cls) -> list[dict[str, Any]]:
+        """Produce realistic simulated SCADA readings for offline/dev runs.
+
+        Carries the full channel set the six-signal PG-BNN needs (including
+        ``generator_temp`` and ``operating_hours``) so streamed batches get
+        model-backed advisories instead of the demo heuristic.
+        """
+        cls._sim_operating_hours += 0.1  # ≈ one 6-minute SCADA cycle
         return [
             {"signal": "generator_rpm", "value": round(random.uniform(900, 1800), 1), "unit": "rpm"},
             {"signal": "gearbox_temp", "value": round(random.uniform(45, 95), 2), "unit": "C"},
+            {"signal": "generator_temp", "value": round(random.uniform(55, 110), 2), "unit": "C"},
             {"signal": "vibration_rms", "value": round(random.uniform(0.5, 12.0), 3), "unit": "mm/s"},
             {"signal": "power_output", "value": round(random.uniform(0, 3200), 1), "unit": "kW"},
             {"signal": "wind_speed", "value": round(random.uniform(2, 22), 2), "unit": "m/s"},
+            {"signal": "operating_hours", "value": round(cls._sim_operating_hours, 1), "unit": "h"},
         ]
 
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'services/api_service.dart';
+import 'screens/agents_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/data_ingestion_screen.dart';
 import 'screens/digital_twin_screen.dart';
@@ -61,6 +62,7 @@ class _HomeShellState extends State<HomeShell> {
   late final List<_NavItem> _items = [
     _NavItem('Dashboard', Icons.dashboard, (api) => DashboardScreen(api: api)),
     _NavItem('Digital Twin', Icons.speed, (api) => DigitalTwinScreen(api: api)),
+    _NavItem('Agents', Icons.smart_toy_outlined, (api) => AgentsScreen(api: api)),
     _NavItem('Fleet', Icons.table_chart, (api) => FleetReportsScreen(api: api)),
     _NavItem('AeroZip', Icons.compress, (api) => AeroZipTelemetryScreen(api: api)),
     _NavItem('Ingestion', Icons.upload_file, (api) => DataIngestionScreen(api: api)),

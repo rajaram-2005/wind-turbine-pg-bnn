@@ -24,10 +24,72 @@ def client():
         yield c
 
 
-def test_model_api_redirects_permanently_to_canonical(client):
-    resp = client.get("/api/model-api", follow_redirects=False)
-    assert resp.status_code == 308
-    assert resp.headers["location"] == "/api/model"
+def test_legacy_model_api_alias_is_gone(client):
+    # The old /api/model-api alias was removed in the API consolidation.
+    assert client.get("/api/model-api").status_code == 404
+
+
+def test_model_info_is_served_on_the_single_api(client):
+    resp = client.get("/api/model/info")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["architecture"] == "Physics-Guided Bayesian Neural Network"
+    assert "vibration_rms" in body["input_features"]
+
+
+def test_model_batch_is_served_on_the_single_api(client):
+    sample = {
+        "vibration_rms": 2.1,
+        "bearing_temp": 62.0,
+        "generator_temp": 74.0,
+        "power_output": 1350.0,
+        "wind_speed": 11.0,
+        "operating_hours": 21000.0,
+    }
+    resp = client.post(
+        "/api/model/batch", json={"samples": [sample, sample], "n_mcmc_samples": 12}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["predictions"]) == 2
+    assert all("predicted_rul_days" in p for p in body["predictions"])
+
+
+def test_model_stream_is_served_on_the_single_api(client):
+    sample = {
+        "vibration_rms": 2.1,
+        "bearing_temp": 62.0,
+        "generator_temp": 74.0,
+        "power_output": 1350.0,
+        "wind_speed": 11.0,
+        "operating_hours": 21000.0,
+    }
+    with client.stream(
+        "POST", "/api/model/stream", params={"n_mcmc_samples": 8}, json=sample
+    ) as resp:
+        assert resp.status_code == 200
+        text = "".join(resp.iter_text())
+    assert text.count('"rul"') == 8
+    assert "[DONE]" in text
+
+
+def test_model_trend_is_served_on_the_single_api(client):
+    sample = {
+        "vibration_rms": 2.1,
+        "bearing_temp": 62.0,
+        "generator_temp": 74.0,
+        "power_output": 1350.0,
+        "wind_speed": 11.0,
+        "operating_hours": 21000.0,
+    }
+    worse = {**sample, "vibration_rms": 6.5, "bearing_temp": 88.0}
+    resp = client.post(
+        "/api/model/trend", json={"samples": [sample, worse], "n_mcmc_samples": 12}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["degradation_trend"] in ("DEGRADING", "IMPROVING", "STABLE")
+    assert len(body["trend"]) == 2
 
 
 def test_canonical_model_endpoint_returns_prediction(client):
