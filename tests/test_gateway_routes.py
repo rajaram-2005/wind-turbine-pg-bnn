@@ -103,3 +103,13 @@ def test_unknown_job_type_is_rejected(client):
 def test_unknown_job_id_status_is_404(client):
     resp = client.get("/api/jobs/deadbeefdeadbeef")
     assert resp.status_code == 404
+
+
+def test_twin_history_has_one_operations_api_owner(client):
+    """The gateway router must not shadow the operations API history route."""
+    from src.api.gateway_routes import router
+
+    assert "/twin/history" not in {route.path for route in router.routes}
+    response = client.get("/api/twin/history", params={"asset_id": "WTG-001"})
+    assert response.status_code == 200
+    assert response.json()["asset_id"] == "WTG-001"

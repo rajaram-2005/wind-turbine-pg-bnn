@@ -8,16 +8,21 @@ reporting → api/ui/cli*, plus the digital-twin and meta/hermes paths.
 
 ## Single deployment boundary
 
-`src/unified_app.py` is the canonical runtime. It binds the Gradio operator UI,
-the complete operations API, and the low-level model API into one ASGI process
-and one port. `/health` discovers the whole system, `/api/*` connects advisory,
-fleet, twin, telemetry, and reporting, `/model-api/*` exposes raw PG-BNN
-inference, and `/` serves the dashboard. Mounted child lifespans are explicitly
-managed by the parent, so model initialization is not skipped.
+`src/unified_app.py` is the canonical runtime. It binds the static eight-page
+operator console, complete operations API, and low-level model API into one ASGI
+process and one port. `/health` discovers the whole system, `/api/*` connects
+advisory, fleet, twin, telemetry, jobs, and reporting, `/model-api/*` exposes
+raw PG-BNN inference, and `/` serves the console. Mounted child lifespans are
+explicitly managed by the parent, so model initialization is not skipped.
 
-The former standalone apps remain import-compatible, but they are compatibility
-surfaces rather than separate deployments. `docker compose up aerovigil` and
-`make serve` both start the unified boundary.
+Former standalone apps remain import-compatible, but they are not deployments.
+Legacy container service-mode names converge on the unified app, and the Gradio
+script no longer opens a port. `docker compose up aerovigil` and `make serve`
+both start the same boundary. Kubernetes deliberately runs one pod with a PVC
+at `/app/data`: the twin registry is in memory and the operational/job stores
+use SQLite WAL, so horizontal replicas would create divergent state. The
+separate `docker/` training/federation stack is offline model-production
+infrastructure, not an operator HTTP surface.
 
 Rendered Mermaid versions of these diagrams — including the inference pipeline
 sequence — live in [`DIAGRAMS.md`](DIAGRAMS.md).
@@ -156,3 +161,7 @@ src/models/telemetry/pipeline.py  compress_window / restore_window (surfaces ano
    with the training pipeline.
 5. **Metadata `torch.load(weights_only=True)`.** Bundle checkpoints carry no
    arbitrary pickles for the model payload itself.
+6. **One state owner.** The canonical deployment runs one application process.
+   Kubernetes uses one pod and a persistent `/app/data` claim; do not add HPA or
+   replicas until SQLite and the in-memory twin registry move to shared external
+   services.

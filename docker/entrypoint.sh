@@ -11,7 +11,7 @@ echo "⚙️  Config:   ${CONFIG_PATH}"
 if [ -n "${SCALER_PATH}" ] && [ -f "${SCALER_PATH}" ]; then
     echo "📊 Scaler:   ${SCALER_PATH}"
 fi
-echo "🌐 Port:     ${PORT}"
+echo "🌐 Port:     ${PORT:-8080}"
 echo ""
 
 # Verify model file exists
@@ -35,24 +35,27 @@ if torch.cuda.is_available():
     print(f'CUDA device: {torch.cuda.get_device_name(0)}')
 "
 
-# Start service based on environment
-if [ "${SERVICE_MODE}" = "all" ] || [ "${SERVICE_MODE}" = "unified" ]; then
-    echo "🚀 Starting unified dashboard + APIs on one port..."
-    exec uvicorn src.unified_app:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1
-elif [ "${SERVICE_MODE}" = "api" ]; then
-    echo "🚀 Starting advisory API (legacy standalone mode)..."
-    exec uvicorn src.api.app:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1
-elif [ "${SERVICE_MODE}" = "model-api" ]; then
-    echo "🚀 Starting low-level model API (legacy standalone mode)..."
-    exec uvicorn src.aerovigil_pg_bnn.api:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1
-elif [ "${SERVICE_MODE}" = "cli" ]; then
-    echo "🔧 Running CLI inference..."
-    exec aerovigil-infer "$@"
-elif [ "${SERVICE_MODE}" = "gradio" ]; then
-    echo "🎨 Starting Gradio demo..."
-    exec python3 gradio_app/app.py
-else
-    echo "ℹ️  Container ready. Set SERVICE_MODE=all|api|model-api|cli|gradio."
-    echo "    Recommended: docker run -e SERVICE_MODE=all -p 8080:8080 aerovigil-pg-bnn"
-    exec "$@"
-fi
+# The production image has one network boundary. Historical service-mode names
+# are accepted for compatibility, but they all converge on the unified app
+# instead of creating a second API or Gradio process.
+case "${SERVICE_MODE:-all}" in
+    all|unified)
+        echo "🚀 Starting unified console + APIs on one port..."
+        exec uvicorn src.unified_app:app --host 0.0.0.0 --port "${PORT:-8080}" --workers 1
+        ;;
+    api|model-api|gradio)
+        echo "⚠️  SERVICE_MODE=${SERVICE_MODE} is deprecated; starting the unified app instead."
+        exec uvicorn src.unified_app:app --host 0.0.0.0 --port "${PORT:-8080}" --workers 1
+        ;;
+    cli)
+        echo "🔧 Running CLI inference..."
+        exec aerovigil-infer "$@"
+        ;;
+    *)
+        if [ "$#" -eq 0 ]; then
+            echo "❌ Unknown SERVICE_MODE=${SERVICE_MODE}. Use all|unified|cli or provide a command."
+            exit 2
+        fi
+        exec "$@"
+        ;;
+esac

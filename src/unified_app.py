@@ -53,6 +53,17 @@ _CONSOLE_DIR = Path(__file__).resolve().parents[1] / "web_console" / "dist"
 # Default deployment port for the unified application.
 DEFAULT_PORT = 8080
 
+
+def configured_port() -> int:
+    """Resolve the canonical port from deployment environment variables."""
+    raw = os.environ.get("PORT", os.environ.get("AEROVIGIL_PORT", str(DEFAULT_PORT)))
+    try:
+        port = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_PORT
+    return port if 1 <= port <= 65535 else DEFAULT_PORT
+
+
 # Deprecated UI requests permanently return to the canonical console.
 
 # Origins allowed to call the /api surface from the native Flutter clients.
@@ -120,7 +131,7 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
             "product": PRODUCT,
             "version": VERSION,
             "advisory_only": True,
-            "port": DEFAULT_PORT,
+            "port": configured_port(),
             "services": {
                 "console": "/",
                 "operations_api": "/api",
@@ -186,5 +197,4 @@ app = create_app()
 if __name__ == "__main__":  # pragma: no cover - manual launch helper
     import uvicorn
 
-    port = int(os.environ.get("PORT", os.environ.get("AEROVIGIL_PORT", DEFAULT_PORT)))
-    uvicorn.run("src.unified_app:app", host="0.0.0.0", port=port, reload=False)
+    uvicorn.run("src.unified_app:app", host="0.0.0.0", port=configured_port(), reload=False)

@@ -7,7 +7,7 @@ pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from src.unified_app import create_app  # noqa: E402
+from src.unified_app import configured_port, create_app  # noqa: E402
 
 
 def test_unified_health_discovers_every_surface():
@@ -21,6 +21,14 @@ def test_unified_health_discovers_every_surface():
         assert body["agent_mesh"]["agents"] == ["MIKA", "KAI"]
         assert body["agent_mesh"]["status"] == "connected"
         assert body["agent_mesh"]["evidence_path"][-1] == "HUMAN"
+
+
+def test_health_reports_the_configured_canonical_port(monkeypatch):
+    monkeypatch.setenv("PORT", "9090")
+    with TestClient(create_app(include_dashboard=False)) as client:
+        assert client.get("/health").json()["port"] == 9090
+    monkeypatch.setenv("PORT", "not-a-port")
+    assert configured_port() == 8080
 
 
 def test_operations_api_is_connected_under_one_boundary():

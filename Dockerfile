@@ -54,6 +54,7 @@ LABEL org.opencontainers.image.licenses="MIT"
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONFAULTHANDLER=1
+ENV SERVICE_MODE=all
 ENV APP_HOME=/app
 ENV MODEL_PATH=/app/artifacts/pg_bnn_demo/bnn_demo.pt
 ENV CONFIG_PATH=/app/artifacts/pg_bnn_demo/config.json
@@ -115,6 +116,7 @@ FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu22.04 as gpu
 ARG PYTHON_VERSION=3.11
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV SERVICE_MODE=all
 ENV APP_HOME=/app
 ENV MODEL_PATH=/app/artifacts/pg_bnn_demo/bnn_demo.pt
 ENV CONFIG_PATH=/app/artifacts/pg_bnn_demo/config.json

@@ -584,4 +584,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Compatibility-only standalone runner. Production and operator workflows
+    # use src.unified_app, where this API is mounted at /model-api.
+    port = int(os.environ.get("PORT", os.environ.get("AEROVIGIL_PORT", "8080")))
+    uvicorn.run(app, host="0.0.0.0", port=port)

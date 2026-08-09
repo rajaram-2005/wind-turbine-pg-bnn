@@ -70,6 +70,10 @@ dev = [
     "packaging>=26.1",
     "twine>=4.0.0",
     "httpx>=0.24",  # FastAPI TestClient for the src/api advisory tests
+    # Keep ONNX export + runtime parity validation enabled in clean dev/CI installs.
+    "onnx>=1.17",
+    "onnxruntime>=1.20",
+    "onnxscript>=0.2",
     "pre-commit>=3.3.0",
 ]
 demo = [

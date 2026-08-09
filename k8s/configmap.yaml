@@ -8,9 +8,11 @@ data:
   PORT: "8080"
   AEROVIGIL_PORT: "8080"
   LOG_LEVEL: "info"
-  MAX_WORKERS: "4"
-  AEROVIGIL_STORE_DB: "/app/artifacts/aerovigil.sqlite3"
-  AV_JOB_DB: "/app/artifacts/jobs.sqlite3"
+  # SQLite + in-memory twin state require the canonical single-process pod.
+  # Runtime state lives on the PVC; /app/artifacts remains the image's
+  # read-only model bundle and must not be shadowed by a volume mount.
+  AEROVIGIL_STORE_DB: "/app/data/aerovigil.sqlite3"
+  AV_JOB_DB: "/app/data/jobs.sqlite3"
   AV_TWIN_MAX_ASSETS: "1024"
   AV_STREAM_HEURISTIC: "1"
   # Set this to a mounted, promoted 25-feature advisory bundle when available.

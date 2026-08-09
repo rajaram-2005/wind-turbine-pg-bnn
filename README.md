@@ -418,7 +418,7 @@ process and deployment boundary:
 
 ```bash
 pip install -e ".[api,demo]"
-python -m src.unified_app                 # serves on :8080 (AEROVIGIL_PORT to override)
+python -m src.unified_app                 # serves on :8080 (PORT to override)
 # or: uvicorn src.unified_app:app --host 0.0.0.0 --port 8080
 ```
 
@@ -427,7 +427,7 @@ are available without starting any other server:
 
 | Surface | Path |
 |---|---|
-| Static operator console (compiled Flutter/web assets) | `/` |
+| Static eight-page browser operator console | `/` |
 | Unified health/discovery | `/health` |
 | Advisory, fleet, twin, telemetry, reports | `/api` (`/api/docs`) |
 | **Canonical model inference** | `POST /api/model` |
@@ -441,8 +441,8 @@ are available without starting any other server:
 CORS is configured so the native **AeroVigil console** (Flutter app in
 `apps/aerovigilai_flutter/`, targeting Windows, macOS, Android and iOS) can call
 every endpoint from any platform. Or run the complete container with
-`docker compose up aerovigil`. The old standalone launch commands remain
-available only for backwards compatibility.
+`docker compose up aerovigil`. Legacy container service-mode names converge on
+the same unified process; they cannot open separate API or Gradio servers.
 
 ### Async framework job queue
 
@@ -792,20 +792,14 @@ into this isolated environment.
 With the virtual environment activated:
 
 ```bash
-# Install the core package
+# Install the core package and unified HTTP application
 python -m pip install --upgrade pip
-python -m pip install -e .
-
-# Install the Gradio demo dependencies (for the interactive web UI)
-python -m pip install -r gradio_app/requirements.txt
-
-# (Optional) Install the REST API dependencies
 python -m pip install -e ".[api]"
 
-# (Optional) Install development dependencies (testing, linting)
-python -m pip install -e ".[dev]"
+# Development includes lint/build tools plus ONNX export/runtime validation
+python -m pip install -e ".[api,dev,demo]"
 
-# (Optional) Install everything at once
+# Or install every optional dependency at once
 python -m pip install -e ".[all]"
 ```
 
@@ -827,9 +821,9 @@ This creates the following artifacts in `artifacts/pg_bnn_demo/`:
 | `config.json` | Model configuration |
 | `scaler.npz` | Feature normalization parameters |
 
-> The Gradio app uses these local weights by default, so the demo works
-> **offline** after this step. If you skip training, the app falls back to
-> the pre-trained demo weights bundled in `artifacts/pg_bnn_demo/`.
+> The unified app loads these local weights, so inference works **offline**
+> after this step. If you skip training, it uses the pre-trained demo weights
+> bundled in `artifacts/pg_bnn_demo/`.
 
 ---
 
@@ -844,37 +838,29 @@ API (advisory, fleet, digital twin, telemetry, job queue, hardware ingestion and
 PG-BNN inference) on one host.
 
 ```bash
-python -m src.unified_app         # AEROVIGIL_PORT to override the default 8080
+python -m src.unified_app         # PORT overrides the default 8080
 ```
 
 Open your browser and go to **http://localhost:8080**. The native cross-platform
 console (Flutter app in `apps/aerovigilai_flutter/`, for Windows / macOS /
 Android / iOS) talks to the same endpoints.
 
-> **Note:** the old Gradio dashboard is **deprecated**. Running
-> `python gradio_app/app.py` now shows a deprecation notice that redirects to
-> the unified console; its headless prediction API (`api_name="predict"`) is
-> retained for backwards compatibility.
+> **Note:** the standalone Gradio server is retired. Running
+> `python gradio_app/app.py` prints the canonical launch command instead of
+> opening a second port. Compatibility builders remain importable for older
+> scripts, and browser requests to `/legacy` permanently redirect to `/`.
 
-#### Option B: REST API (programmatic access)
+#### Option B: Programmatic API access (same unified process)
 
-Launch the FastAPI inference server:
+Do not start a second API server. Keep the Option A unified application running
+and use its mounted OpenAPI surfaces:
 
-```bash
-# Make sure API dependencies are installed:
-python -m pip install -e ".[api]"
-
-# Start the server:
-python -m aerovigil_pg_bnn.api
-```
-
-The server starts at **http://localhost:8000**. Interactive API docs are at
-**http://localhost:8000/docs**.
-
-Test with curl (Linux / macOS / Windows PowerShell):
+- Operations docs: **http://localhost:8080/api/docs**
+- Low-level model docs: **http://localhost:8080/model-api/docs**
+- Canonical six-signal inference: `POST /api/model`
 
 ```bash
-curl -X POST "http://localhost:8000/predict?n_mcmc_samples=100" \
+curl -X POST "http://localhost:8080/api/model" \
   -H "Content-Type: application/json" \
   -d '{
     "vibration_rms": 1.5,
@@ -882,15 +868,13 @@ curl -X POST "http://localhost:8000/predict?n_mcmc_samples=100" \
     "generator_temp": 60.0,
     "power_output": 2000.0,
     "wind_speed": 9.0,
-    "operating_hours": 1000.0
+    "operating_hours": 1000.0,
+    "n_mcmc_samples": 100
   }'
 ```
 
-On **Windows Command Prompt** (no `\` line continuation — use a single line):
-
-```cmd
-curl -X POST "http://localhost:8000/predict?n_mcmc_samples=100" -H "Content-Type: application/json" -d "{\"vibration_rms\": 1.5, \"bearing_temp\": 45.0, \"generator_temp\": 60.0, \"power_output\": 2000.0, \"wind_speed\": 9.0, \"operating_hours\": 1000.0}"
-```
+The compatibility prediction surface remains mounted under `/model-api`; it is
+not a separate process or port.
 
 #### Option C: Python script (use the model directly)
 
@@ -932,28 +916,19 @@ aerovigil-infer --input telemetry.json --samples 100
 
 #### Option E: Docker (any OS — no Python setup needed)
 
-If you have [Docker Desktop](https://docs.docker.com/get-docker/) installed,
-this is the simplest way to run AeroVigil on **any** platform:
+Docker uses the same unified app and port as local development:
 
 ```bash
-# Run the REST API
-docker compose up api
+# CPU image: console + every API at http://localhost:8080
+docker compose up --build aerovigil
 
-# Run the Gradio demo
-docker compose up gradio
-
-# Run both at the same time
-docker compose up api gradio
+# Optional NVIDIA GPU profile (stop the CPU service first; both own port 8080)
+docker compose --profile gpu up --build aerovigil-gpu
 ```
 
-- API: **http://localhost:8000**
-- Gradio: **http://localhost:7860**
-
-For GPU acceleration (NVIDIA GPU + Docker):
-
-```bash
-docker compose up api-gpu
-```
+Legacy `SERVICE_MODE=api`, `model-api`, or `gradio` values are accepted by the
+entrypoint but intentionally converge on `src.unified_app`; they no longer
+create standalone network services.
 
 ---
 
@@ -964,11 +939,11 @@ docker compose up api-gpu
 | `python` or `python3` not found | Make sure Python is installed and in your PATH (see Step 1). On Windows, try `py` instead of `python`. |
 | `pip install` fails with permission error | Make sure your virtual environment is activated (prompt should show `(.venv)`). If not, use `python -m pip install` instead of bare `pip install`. |
 | `ModuleNotFoundError: No module named 'torch'` | Install dependencies: `python -m pip install -e . && python -m pip install -r gradio_app/requirements.txt` |
-| Port 7860 or 8000 already in use | Stop the other process, or change the port. For Gradio, edit `server_port` in `gradio_app/app.py`. For the API, set `PORT=9000` env variable. |
+| Port 8080 already in use | Stop the other AeroVigil process, or set `PORT` and pass the same port to Uvicorn/container publishing. One deployment should own the console and all API routes. |
 | Training is slow | This is normal on CPU — the demo training takes a few minutes. For faster training, install the GPU version of PyTorch from [pytorch.org](https://pytorch.org/get-started/locally/). |
 | `venv` command not found (Linux) | Install the venv package: `sudo apt install python3-venv` (Ubuntu/Debian) or `sudo dnf install python3-venv` (Fedora). |
 | `torch` install fails on Apple Silicon (M1/M2/M3) | Use the default PyTorch — it has native Apple Silicon support since PyTorch 2.0. If issues persist: `pip install --pre torch --extra-index-url https://download.pytorch.org/whl/nightly/cpu` |
-| Gradio shows "Running on local URL" but browser doesn't open | Manually open http://localhost:7860 in your browser. |
+| `python gradio_app/app.py` does not start a server | This is intentional: standalone Gradio is retired. Run `python -m src.unified_app` and open http://localhost:8080. |
 | Windows: `'python' is not recognized` | Re-run the Python installer and check **"Add python.exe to PATH"**, or use the `py` launcher instead: `py -m venv .venv` |
 | Windows: `.venv\Scripts\activate` doesn't work in PowerShell | You may need to allow script execution: `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` |
 
@@ -1112,29 +1087,33 @@ passes, or use `MonteCarloVI` as shown above.
 
 ## REST API
 
+All HTTP clients use the canonical unified process:
+
 ```bash
 python -m pip install -e ".[api]"
-python -m aerovigil_pg_bnn.api    # listens on 0.0.0.0:8000
+python -m src.unified_app
 ```
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /health` | Model-health check |
-| `GET /model/info` | Model metadata |
-| `POST /predict` | Single-telemetry RUL prediction |
-| `POST /predict/batch` | Batch predictions |
-| `POST /predict/stream` | Streamed Monte Carlo samples |
-| `GET /docs` | OpenAPI UI |
+| `GET /health` | Unified app, service discovery, and agent-mesh health |
+| `POST /api/model` | Canonical six-signal RUL prediction |
+| `GET /api/docs` | Operations OpenAPI UI |
+| `GET /model-api/model/info` | Low-level model metadata |
+| `POST /model-api/predict` | Compatibility low-level prediction |
+| `POST /model-api/predict/batch` | Batch predictions |
+| `POST /model-api/predict/stream` | Streamed Monte Carlo samples |
+| `GET /model-api/docs` | Low-level model OpenAPI UI |
 
 ```bash
-curl -X POST "http://localhost:8000/predict?n_mcmc_samples=100" \
+curl -X POST "http://localhost:8080/api/model" \
   -H "Content-Type: application/json" \
   -d @telemetry.json
 ```
 
-The broader AeroVigil advisory service — including `/advisory`, digital-twin,
-telemetry-compression, and fleet-report endpoints — lives in
-[`src/api/app.py`](src/api/app.py).
+The operations API—including advisory, digital-twin, telemetry, jobs, hardware,
+and fleet-report endpoints—is mounted at `/api`. The lower-level packaged model
+API is mounted at `/model-api`; neither requires another process or port.
 
 ## Intended use
 
@@ -1175,8 +1154,9 @@ make security            # bandit
 make test                # pytest
 ```
 
-Container images and Kubernetes manifests are provided for API and demo
-deployments: `docker compose up api`.
+The container and Kubernetes manifests deploy the same unified app. Kubernetes
+uses one pod plus a persistent runtime-data claim because SQLite WAL and the
+in-memory twin registry must not be split across replicas.
 
 ## 🎁 What's in the box
 
@@ -1186,8 +1166,8 @@ surface** ready for pilot deployment:
 | Component | What it does | Who it's for |
 |-----------|-------------|--------------|
 | 🧠 **PG-BNN model** | Physics-guided Bayesian RUL prediction with uncertainty | Data scientists, reliability engineers |
-| 🌐 **Gradio web UI** | Interactive demo with scenario presets, gauge, and risk badge | Stage demos, investor pitches |
-| 🔌 **FastAPI REST API** | Production inference endpoints with OpenAPI docs | Backend engineers, integrators |
+| 🌐 **Unified browser console** | Eight connected operator pages with live MIKA + KAI evidence | Operators, stage demos, investors |
+| 🔌 **Unified FastAPI boundary** | Operations and model endpoints with two mounted OpenAPI docs | Backend engineers, integrators |
 | 💻 **CLI tool** | Command-line inference for scripts and automation | DevOps, field engineers |
 | 🏭 **Digital twin** | Per-asset virtual representation with scenario simulation | Reliability planners, asset managers |
 | 📦 **AeroZip compressor** | Telemetry compression for low-bandwidth sites | Edge deployment, remote wind farms |

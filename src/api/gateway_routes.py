@@ -158,7 +158,13 @@ class HardwareStreamBatch(BaseModel):
 # map folds them onto the digital-twin Telemetry schema.
 SIGNAL_ALIASES: dict[str, tuple[str, ...]] = {
     "vibration_mms": ("vibration_mms", "vibration_rms", "vib_rms", "vibration"),
-    "temperature_c": ("temperature_c", "gearbox_temp", "bearing_temp", "generator_temp", "oil_temp"),
+    "temperature_c": (
+        "temperature_c",
+        "gearbox_temp",
+        "bearing_temp",
+        "generator_temp",
+        "oil_temp",
+    ),
     "rpm": ("rpm", "generator_rpm", "rotor_rpm", "hss_rpm", "rpm_hss"),
     "oil_viscosity_cst": ("oil_viscosity_cst", "oil_viscosity", "viscosity"),
     "load_pct": ("load_pct", "load_percent"),
@@ -187,7 +193,9 @@ def _ensure_stream_serving(state) -> None:
     if not path and _DEMO_BUNDLE.is_file():
         path = str(_DEMO_BUNDLE)
     if not path:
-        logger.info("[hardware] no serving model configured; streams update twins without model advisories")
+        logger.info(
+            "[hardware] no serving model configured; streams update twins without model advisories"
+        )
         return
     try:
         from src.models.serving import load_serving_model
@@ -234,7 +242,9 @@ def _to_telemetry(signals: list[dict[str, Any]], spec=None) -> dict[str, float] 
 
     if "load_pct" not in channels and "power_output" in by_signal and spec is not None:
         rated_kw = max(float(getattr(spec, "rated_power_mw", 1.5)) * 1000.0, 1.0)
-        channels["load_pct"] = round(max(0.0, min(100.0, by_signal["power_output"] / rated_kw * 100.0)), 2)
+        channels["load_pct"] = round(
+            max(0.0, min(100.0, by_signal["power_output"] / rated_kw * 100.0)), 2
+        )
     if "oil_viscosity_cst" not in channels and spec is not None:
         channels["oil_viscosity_cst"] = (
             float(spec.viscosity_min_cst) + float(spec.viscosity_max_cst)
@@ -370,7 +380,9 @@ async def hardware_stream(batch: HardwareStreamBatch, request: Request) -> dict[
 
             records = [a["advisory"] for a in assets_updated if a["advisory"]]
             if records:
-                body = build_fleet_report(records, title="Fleet RUL advisory report (hardware stream)")
+                body = build_fleet_report(
+                    records, title="Fleet RUL advisory report (hardware stream)"
+                )
                 store.record_report(
                     "fleet",
                     body,
@@ -472,7 +484,9 @@ async def telemetry_import(req: CloudImportRequest) -> dict[str, Any]:
 
     parsed = urlparse(req.url)
     if parsed.scheme == "http" and parsed.hostname not in ("localhost", "127.0.0.1"):
-        raise HTTPException(status_code=422, detail="Only https:// URLs (or http://localhost) are allowed")
+        raise HTTPException(
+            status_code=422, detail="Only https:// URLs (or http://localhost) are allowed"
+        )
     if parsed.scheme not in ("https", "http"):
         raise HTTPException(status_code=422, detail=f"Unsupported URL scheme: {parsed.scheme!r}")
 
@@ -540,23 +554,10 @@ async def list_reports(kind: str | None = None, limit: int = 20) -> dict[str, An
 async def latest_report(kind: str = "fleet") -> dict[str, Any]:
     """Return the most recent persisted report of a given kind."""
     from fastapi import HTTPException
+
     from src.data.store import get_store
 
     rec = get_store().latest_report(kind)
     if rec is None:
         raise HTTPException(status_code=404, detail=f"No report found for kind={kind!r}")
     return rec
-
-
-@router.get("/twin/history", tags=["twin"])
-async def twin_history(asset_id: str = "WTG-001", limit: int = 50) -> dict[str, Any]:
-    """Durable twin-state history (gateway alias for /api/twin/history).
-
-    Keeps both the operations API and the gateway router exposing the same
-    durable history so Flutter/Web console can fetch it from a single base.
-    """
-    from src.data.store import get_store
-
-    limit = max(1, min(int(limit), 500))
-    history = get_store().twin_history(asset_id, limit=limit)
-    return {"asset_id": asset_id, "count": len(history), "history": history, "advisory_only": True}

@@ -1438,11 +1438,10 @@ def build_epic_interface() -> gr.Blocks:
 def build_interface() -> gr.Blocks:
     """Canonical entry point – now returns the redirect notice.
 
-    The legacy EPIC dashboard is retained as :func:`build_epic_interface` and
-    can be launched with ``AEROVIGIL_GRADIO_LEGACY=1 python gradio_app/app.py``.
-    By default the visible UI is only a deprecation notice that redirects to
-    the unified AeroVigilAI console at http://localhost:8080/. The headless
-    prediction API (api_name='predict') is still registered via deprecated.py.
+    The legacy EPIC dashboard is retained as :func:`build_epic_interface` for
+    import-only compatibility and reference. The visible compatibility UI is
+    a deprecation notice pointing to the unified AeroVigilAI console at
+    http://localhost:8080/. No standalone Gradio server is launched.
     """
     # When explicitly requested, expose the EPIC dashboard for reference.
     if os.environ.get("AEROVIGIL_GRADIO_LEGACY") == "1":
@@ -1957,22 +1956,11 @@ def make_timeline_chart():
 
 
 if __name__ == "__main__":
-    # The rich Gradio dashboard is DEPRECATED in favour of the unified
-    # single-port console (Flutter app + FastAPI on :8080). Running this module
-    # now serves a lightweight deprecation notice that redirects operators to
-    # the canonical console, while the headless prediction API (api_name=
-    # "predict") remains registered for backwards compatibility. The full
-    # ``build_interface`` implementation is retained above for reference.
-    import os
-
-    from gradio_app.deprecated import DEPRECATED_CSS, build_deprecated_interface
-
-    demo = build_deprecated_interface()
-    demo.queue(default_concurrency_limit=1).launch(
-        server_name="0.0.0.0",
-        server_port=int(os.environ.get("GRADIO_PORT", "7860")),
-        allowed_paths=[str(ROOT)],
-        strict_cors=False,
-        show_error=True,
-        css=DEPRECATED_CSS,
+    # Do not create a second browser server. The compatibility builders above
+    # remain importable for legacy scripts, while every deployed HTTP surface
+    # is served by src.unified_app on the canonical port.
+    print(
+        "The standalone Gradio server is retired. Start the unified console with:\n"
+        "  python -m src.unified_app\n"
+        "Then open http://localhost:8080/ (legacy requests redirect from /legacy)."
     )
