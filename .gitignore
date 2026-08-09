@@ -37,3 +37,6 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# hardware_agent offline store-and-forward buffer (runtime artifact)
+hardware_agent_buffer.sqlite3*

@@ -24,11 +24,14 @@ from src.utils.schema import BNNState, Telemetry, TurbinePayload
 __all__ = [
     "AdvisoryRequest",
     "AdvisoryResponse",
+    "AgentAskRequest",
+    "AgentReviewRequest",
     "BNNState",
     "FleetRequest",
     "FleetResponse",
     "FleetSummary",
     "HealthResponse",
+    "REVIEW_DECISIONS",
     "Telemetry",
     "TelemetryCompressRequest",
     "TelemetryCompressResponse",
@@ -36,6 +39,7 @@ __all__ = [
     "TelemetryRestoreResponse",
     "TelemetryWindow",
     "TurbinePayload",
+    "TwinScenariosRequest",
     "TwinSimulateRequest",
 ]
 
@@ -182,6 +186,72 @@ class TwinSimulateRequest(BaseModel):
     model: str = "GE-1.5"
     profile: str = Field("nominal", pattern="^(nominal|overload|derated|viscosity_loss)$")
     hours: float = Field(24.0, gt=0.0, le=720.0)
+
+
+class TwinScenariosRequest(BaseModel):
+    """Wire format for POST /twin/scenarios (parallel-futures comparison).
+
+    Runs the requested operating profiles side by side on forked twins so the
+    canonical asset twin is never mutated — the Scenario Lab of the legacy
+    dashboard, rebuilt on the durable twin runtime.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: str = Field(..., min_length=1)
+    model: str = "GE-1.5"
+    profiles: list[str] = Field(
+        default=["nominal", "overload", "derated", "viscosity_loss"],
+        min_length=1,
+        max_length=4,
+    )
+    hours: float = Field(24.0, gt=0.0, le=720.0)
+
+    @model_validator(mode="after")
+    def _check_profiles(self) -> "TwinScenariosRequest":
+        allowed = {"nominal", "overload", "derated", "viscosity_loss"}
+        bad = [p for p in self.profiles if p not in allowed]
+        if bad:
+            raise ValueError(f"unknown profile(s): {', '.join(bad)}")
+        if len(set(self.profiles)) != len(self.profiles):
+            raise ValueError("profiles must be unique")
+        return self
+
+
+# Canonical human-decision choices for the advisory review gate (advisory only).
+REVIEW_DECISIONS = (
+    "Acknowledge evidence",
+    "Request engineering review",
+    "Escalate to reliability lead",
+)
+
+
+class AgentAskRequest(BaseModel):
+    """Wire format for POST /agent/ask (Ask MIKA + KAI)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: str = Field(..., min_length=1)
+    model: str = "GE-1.5"
+    question: str = Field(..., min_length=1, max_length=500)
+
+
+class AgentReviewRequest(BaseModel):
+    """Wire format for POST /agent/review (human decision gate)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: str = Field(..., min_length=1)
+    decision: str = Field(..., description="One of REVIEW_DECISIONS")
+    note: str | None = Field(default=None, max_length=300)
+
+    @model_validator(mode="after")
+    def _check_decision(self) -> "AgentReviewRequest":
+        if self.decision not in REVIEW_DECISIONS:
+            raise ValueError(
+                f"decision must be one of: {' | '.join(REVIEW_DECISIONS)}"
+            )
+        return self
 
 
 class HealthResponse(BaseModel):

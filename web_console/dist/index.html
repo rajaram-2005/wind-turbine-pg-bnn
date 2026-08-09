@@ -227,6 +227,7 @@
     .agent-name { margin-bottom: 8px; font: 800 .69rem ui-monospace, monospace; letter-spacing: .11em; }
     .agent-name.mika { color: var(--pink); }
     .agent-name.kai { color: #72e9ff; }
+    .agent-name.council { color: var(--amber); }
     .agent-finding { color: #b8d1cf; font-size: .78rem; line-height: 1.55; }
     .agent-summary { grid-column: 1 / -1; padding: 12px 14px; border-left: 2px solid var(--teal); color: #a7c6c4; background: rgba(45,212,191,.04); font-size: .75rem; line-height: 1.5; }
     .job-row { display: grid; grid-template-columns: 95px 125px minmax(160px,1fr) 165px; gap: 8px; align-items: center; padding: 10px 4px; border-bottom: 1px solid rgba(255,255,255,.05); cursor: pointer; }
@@ -306,6 +307,37 @@
       </div>
       <div class="panel"><div class="panel-head"><h3>Current state</h3><span class="muted" id="twin-updated">Waiting for asset…</span></div><div class="kpis" id="twin-kpis"></div></div>
       <div class="panel"><div class="panel-head"><h3>MIKA + KAI agent team</h3><span class="muted" id="twin-agreement"></span></div><div class="agent-council" id="twin-agents"><div class="empty">Loading connected agent evidence…</div></div></div>
+      <div class="split">
+        <div class="panel">
+          <div class="panel-head"><h3>Ask MIKA + KAI</h3><span class="muted">POST /api/agent/ask</span></div>
+          <p class="muted">Physics questions route to KAI, maintenance-planning questions to MIKA, everything else to the council. Answers are rebuilt from live twin evidence — never free-form.</p>
+          <label for="agent-question">Operator question</label>
+          <input id="agent-question" placeholder="Why is bearing risk rising? When should engineering review it?" autocomplete="off" />
+          <button class="primary" id="agent-ask-btn">Ask Agent Council</button>
+          <div class="agent-council" id="agent-answer" style="margin-top:12px"><div class="empty">Ask about maintenance timing, physics, uncertainty, or scenarios…</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Human decision gate</h3><span class="muted">POST /api/agent/review</span></div>
+          <p class="muted">Advisory-only operator decisions are kept as a durable audit trail. Nothing here actuates the turbine.</p>
+          <label for="review-decision">Operator decision</label>
+          <select id="review-decision">
+            <option>Acknowledge evidence</option>
+            <option>Request engineering review</option>
+            <option>Escalate to reliability lead</option>
+          </select>
+          <button class="primary" id="review-btn">Record Human Review</button>
+          <div class="muted" id="review-receipt" style="margin-top:10px"></div>
+          <div id="review-trail" style="margin-top:8px"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Scenario lab · parallel futures</h3><span class="muted">POST /api/twin/scenarios</span></div>
+        <p class="muted">Runs every operating profile on a forked twin (the live asset is never mutated) and compares the decision runway side by side.</p>
+        <div class="form-grid"><div><label for="scenario-hours">Horizon (hours)</label><input id="scenario-hours" type="number" value="24" min="1" max="720" /></div></div>
+        <button class="primary" id="scenario-btn">Run scenario comparison</button>
+        <span class="muted" id="scenario-verdict" style="margin-left:12px"></span>
+        <div class="table-wrap" id="scenario-table" style="margin-top:12px"></div>
+      </div>
       <div class="panel"><div class="panel-head"><h3>Durable history</h3><span class="muted" id="twin-history-count"></span></div><div class="table-wrap" id="twin-history"></div></div>
     </section>
 
@@ -401,7 +433,7 @@
     document.querySelectorAll('[data-go]').forEach((button) => button.addEventListener('click', () => showPage(button.dataset.go)));
 
     const overviewCards = [
-      ['◈', 'Digital Twin', 'Current physics state, durable history, and MIKA + KAI evidence for any asset.', 'GET /api/twin/status', 'twin'],
+      ['◈', 'Digital Twin', 'Physics state, MIKA + KAI copilot, human decision gate, scenario lab, and durable history.', 'GET /api/twin/status', 'twin'],
       ['≋', 'Fleet', 'Fleet health aggregates plus generated and persisted advisory reports.', 'GET /api/fleet/summary', 'fleet'],
       ['⌁', 'AeroZip / Hardware', 'WAL-persisted edge and restored telemetry from industrial gateways.', 'GET /api/hardware/latest', 'hardware'],
       ['⇧', 'Ingestion', 'Offline file upload, signed HTTPS import, provenance, and store counts.', 'POST /api/telemetry/upload', 'ingestion'],
@@ -470,6 +502,7 @@
         const rows = history.history || [];
         $('twin-history-count').textContent = `${rows.length} persisted snapshots`;
         $('twin-history').innerHTML = rows.length ? `<table><thead><tr><th>Timestamp</th><th>Source</th><th>RUL</th><th>Wear</th><th>Risk / status</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${esc(dateText(row.timestamp || row.ts))}</td><td>${esc(row.advisory_source)}</td><td>${esc(row.advisory?.predicted_rul_days == null ? '—' : number(row.advisory.predicted_rul_days) + ' d')}</td><td>${esc(number(row.cumulative_wear, 4))}</td><td>${esc(row.agent_team?.risk_level || row.advisory?.risk_level || row.advisory?.status)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No persisted twin snapshots yet. Hardware stream ingestion will populate this history.</div>';
+        loadReviewTrail();
       } catch (error) {
         $('twin-updated').textContent = 'Load failed';
         toast('Twin: ' + error.message, true);
@@ -477,6 +510,84 @@
     }
     $('twin-refresh').addEventListener('click', refreshTwin);
     $('twin-asset').addEventListener('keydown', (event) => { if (event.key === 'Enter') refreshTwin(); });
+
+    // ── MIKA + KAI Agent Copilot (restored from the legacy dashboard) ──
+    const agentBadgeClass = (agent) => ({ MIKA: 'mika', KAI: 'kai' }[agent] || 'council');
+    const agentRole = (agent) => ({
+      MIKA: 'MIKA · MAINTENANCE STRATEGIST',
+      KAI: 'KAI · PHYSICS CONSTRAINT SENTINEL',
+      COUNCIL: 'MIKA + KAI · COUNCIL CONSENSUS',
+    }[agent] || agent);
+
+    async function askAgentCouncil() {
+      const question = $('agent-question').value.trim();
+      const asset = $('twin-asset').value.trim() || 'WTG-001';
+      const model = $('twin-model').value;
+      if (!question) { toast('Enter a question for MIKA + KAI first.', true); return; }
+      $('agent-answer').innerHTML = '<div class="empty"><span class="spin"></span> Consulting the agent council…</div>';
+      try {
+        const data = await api('/api/agent/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asset_id: asset, model, question }),
+        });
+        $('agent-answer').innerHTML = `<div class="agent-card"><div class="agent-name ${agentBadgeClass(data.agent)}">${esc(agentRole(data.agent))}</div><div class="agent-finding">${esc(data.answer)}</div></div><div class="agent-summary">${esc(data.risk_level)} risk · review window ${number(data.review_window_days)} d · ${number(data.agreement_score_pct)}% team agreement<div style="margin-top:8px">${(data.connected_sources || []).map((s) => `<span class="chip">${esc(s)}</span>`).join('')}</div></div>`;
+      } catch (error) {
+        $('agent-answer').innerHTML = `<div class="empty">Council unavailable: ${esc(error.message)}</div>`;
+      }
+    }
+    $('agent-ask-btn').addEventListener('click', askAgentCouncil);
+    $('agent-question').addEventListener('keydown', (event) => { if (event.key === 'Enter') askAgentCouncil(); });
+
+    function renderReviewTrail(trail) {
+      $('review-trail').innerHTML = (trail || []).map((item) => `<span class="chip" title="${esc(dateText(item.ts))}">#${esc(item.sequence)} · ${esc(item.decision)}</span>`).join('');
+    }
+    async function loadReviewTrail() {
+      const asset = $('twin-asset').value.trim() || 'WTG-001';
+      try {
+        const data = await api(`/api/agent/reviews?asset_id=${encodeURIComponent(asset)}&limit=8`);
+        renderReviewTrail((data.reviews || []).slice().reverse().map((row) => ({ sequence: row.id, decision: row.decision, ts: row.ts })));
+      } catch (_) { /* trail is best-effort */ }
+    }
+    async function recordReview() {
+      const asset = $('twin-asset').value.trim() || 'WTG-001';
+      const decision = $('review-decision').value;
+      try {
+        const data = await api('/api/agent/review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asset_id: asset, decision }),
+        });
+        $('review-receipt').textContent = `Recorded #${data.sequence} · ${data.decision} · advisory-only`;
+        renderReviewTrail(data.trail);
+        toast(`Human review #${data.sequence} recorded for ${asset}`);
+      } catch (error) {
+        toast('Review: ' + error.message, true);
+      }
+    }
+    $('review-btn').addEventListener('click', recordReview);
+
+    const riskTone = (risk) => ({ LOW: 'var(--green)', MODERATE: 'var(--amber)', HIGH: '#ff9f43', CRITICAL: 'var(--red)' }[risk] || 'var(--muted)');
+    async function runScenarios() {
+      const asset = $('twin-asset').value.trim() || 'WTG-001';
+      const model = $('twin-model').value;
+      const hours = Number($('scenario-hours').value || 24);
+      $('scenario-verdict').textContent = 'Simulating parallel futures…';
+      $('scenario-table').innerHTML = '';
+      try {
+        const data = await api('/api/twin/scenarios', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asset_id: asset, model, hours }),
+        });
+        $('scenario-verdict').textContent = `Best runway: ${data.best_profile || '—'} · Worst: ${data.worst_profile || '—'} · ${data.hours} h horizon`;
+        $('scenario-table').innerHTML = `<table><thead><tr><th>Profile</th><th>Projected RUL</th><th>Wear Δ</th><th>Bearing L10</th><th>Risk</th><th>Violations</th></tr></thead><tbody>${(data.scenarios || []).map((row) => `<tr><td>${esc(row.profile)}${row.profile === data.best_profile ? ' ★' : ''}</td><td>${row.final_rul_days == null ? '—' : number(row.final_rul_days) + ' d'}</td><td>${number(row.wear_delta_pct, 3)}%</td><td>${row.bearing_l10_hours == null ? '—' : number(row.bearing_l10_hours, 0) + ' h'}</td><td style="color:${riskTone(row.risk_level)}">${esc(row.risk_level || '—')}</td><td>${(row.physics_violations || []).length ? esc(row.physics_violations.join('; ')) : 'none'}</td></tr>`).join('')}</tbody></table>`;
+      } catch (error) {
+        $('scenario-verdict').textContent = '';
+        toast('Scenarios: ' + error.message, true);
+      }
+    }
+    $('scenario-btn').addEventListener('click', runScenarios);
 
     async function refreshFleet() {
       $('fleet-kpis').innerHTML = kpi('Fleet', 'Loading…');

@@ -1098,6 +1098,10 @@ python -m src.unified_app
 |----------|---------|
 | `GET /health` | Unified app, service discovery, and agent-mesh health |
 | `POST /api/model` | Canonical six-signal RUL prediction |
+| `POST /api/agent/ask` | Ask MIKA + KAI — evidence-grounded copilot answers |
+| `POST /api/agent/review` | Human decision gate — durable advisory-only review |
+| `GET /api/agent/reviews` | Audit trail of recorded human reviews |
+| `POST /api/twin/scenarios` | Scenario Lab — parallel operating-profile futures |
 | `GET /api/docs` | Operations OpenAPI UI |
 | `GET /model-api/model/info` | Low-level model metadata |
 | `POST /model-api/predict` | Compatibility low-level prediction |
@@ -1166,7 +1170,7 @@ surface** ready for pilot deployment:
 | Component | What it does | Who it's for |
 |-----------|-------------|--------------|
 | 🧠 **PG-BNN model** | Physics-guided Bayesian RUL prediction with uncertainty | Data scientists, reliability engineers |
-| 🌐 **Unified browser console** | Eight connected operator pages with live MIKA + KAI evidence | Operators, stage demos, investors |
+| 🌐 **Unified browser console** | Connected operator pages with live MIKA + KAI copilot, human decision gate, and scenario lab | Operators, stage demos, investors |
 | 🔌 **Unified FastAPI boundary** | Operations and model endpoints with two mounted OpenAPI docs | Backend engineers, integrators |
 | 💻 **CLI tool** | Command-line inference for scripts and automation | DevOps, field engineers |
 | 🏭 **Digital twin** | Per-asset virtual representation with scenario simulation | Reliability planners, asset managers |
@@ -1195,6 +1199,7 @@ surface** ready for pilot deployment:
 | ✅ Safety contract (advisory-only, enforced in code) | Done |
 | ✅ Meta-learning / Hermes few-shot onboarding agent | Done |
 | ✅ Fleet reporting and advisory pipeline | Done |
+| ✅ MIKA + KAI copilot, human decision gate, and scenario lab restored on the unified API | Done |
 | ✅ 94.2% early-warning accuracy, 100% recall (demo) | Done |
 | 🔜 First pilot fleet validation | **Next — seeking partners** |
 | 🔜 Site-specific calibration on real SCADA data | **Next — seeking partners** |

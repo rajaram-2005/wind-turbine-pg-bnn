@@ -91,6 +91,15 @@ CREATE TABLE IF NOT EXISTS imports (
     source       TEXT NOT NULL,
     ts           REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS reviews (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_id  TEXT NOT NULL,
+    decision  TEXT NOT NULL,
+    note      TEXT,
+    ts        REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_reviews_asset ON reviews (asset_id, id DESC);
 """
 
 
@@ -343,12 +352,42 @@ class Store:
             ).fetchall()
         return [dict(r) for r in rows]
 
+    # ------------------------------------------------------------- reviews
+    def record_review(self, asset_id: str, decision: str, note: (str | None) = None) -> int:
+        """Persist an advisory-only human review decision; returns the row id.
+
+        The human decision gate: every operator acknowledgement / escalation is
+        kept as an auditable row (never actuates anything).
+        """
+        with self._connect() as conn:
+            cur = conn.execute(
+                "INSERT INTO reviews (asset_id, decision, note, ts) VALUES (?, ?, ?, ?)",
+                (asset_id, decision, note, time.time()),
+            )
+            return int(cur.lastrowid)
+
+    def list_reviews(
+        self, asset_id: (str | None) = None, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 500))
+        with self._connect() as conn:
+            if asset_id:
+                rows = conn.execute(
+                    "SELECT * FROM reviews WHERE asset_id = ? ORDER BY id DESC LIMIT ?",
+                    (asset_id, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM reviews ORDER BY id DESC LIMIT ?", (limit,)
+                ).fetchall()
+        return [dict(r) for r in rows]
+
     # --------------------------------------------------------------- stats
     def stats(self) -> dict[str, Any]:
         """Row counts for every table (used by ``/api/system/stats``)."""
         counts: dict[str, int] = {}
         with self._connect() as conn:
-            for table in ("telemetry", "assets", "twin_states", "reports", "imports"):
+            for table in ("telemetry", "assets", "twin_states", "reports", "imports", "reviews"):
                 try:
                     counts[table] = int(
                         conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
