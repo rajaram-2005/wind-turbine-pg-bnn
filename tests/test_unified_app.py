@@ -51,3 +51,42 @@ def test_model_api_is_connected_and_initialized():
         body = response.json()
         assert body["status"] == "healthy"
         assert body["model_loaded"] is True
+
+
+def test_root_serves_complete_eight_page_agent_console():
+    with TestClient(create_app(include_dashboard=False)) as client:
+        response = client.get("/")
+        assert response.status_code == 200
+        html = response.text
+
+    pages = (
+        "overview",
+        "twin",
+        "fleet",
+        "hardware",
+        "ingestion",
+        "jobs",
+        "inference",
+        "system",
+    )
+    assert html.count('<section class="page') == len(pages)
+    for page in pages:
+        assert f'data-page="{page}"' in html
+        assert f'id="page-{page}"' in html
+
+    assert "CYBER PRIME DUAL AGENT" in html
+    assert "MIKA" in html and "KAI" in html
+    assert "SCADA" in html and "PG-BNN" in html and "ISO 281" in html
+    for endpoint in (
+        "/api/twin/status",
+        "/api/twin/history",
+        "/api/fleet/summary",
+        "/api/hardware/latest",
+        "/api/telemetry/upload",
+        "/api/telemetry/import",
+        "/api/jobs/",
+        "/api/model",
+        "/api/system/stats",
+        "/health",
+    ):
+        assert endpoint in html
