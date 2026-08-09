@@ -10,20 +10,25 @@ Routes
 ``/``
     Static AeroVigilAI browser console (compiled web assets).
 ``/api``
-    Integrated advisory API (fleet, twin, AeroZip, reports) plus the canonical
-    gateway routes:
+    The single integrated API: advisory engine, fleet, twin, AeroZip, reports,
+    async job queue, hardware-gateway ingestion, and the PG-BNN model surface:
 
-    * ``POST /api/model``            canonical PG-BNN inference endpoint.
-    * ``ANY  /api/model-api``        308 permanent redirect to ``/api/model``.
+    * ``POST /api/model``            canonical six-signal RUL inference.
+    * ``GET  /api/model/info``       model metadata.
+    * ``POST /api/model/batch``      batch predictions.
+    * ``POST /api/model/stream``     streamed Monte Carlo samples (SSE).
+    * ``POST /api/model/trend``      RUL trend across a telemetry sequence.
     * ``POST /api/jobs/{job_type}``  queue a framework job -> ``job_id``.
     * ``GET  /api/jobs/{job_id}``    job status + recent logs.
     * ``POST /api/hardware/stream``  gateway telemetry ingestion.
-``/model-api``
-    Low-level six-signal PG-BNN prediction API (retained for compatibility).
-``/legacy``
-    Permanent redirect to the canonical browser console at ``/``.
 ``/health``
     Health and route discovery for the complete application.
+
+The legacy standalone model server and Gradio dashboard have been consolidated
+into this one boundary; there is no separate ``/model-api`` or ``/legacy``
+mount. The packaged ``src.aerovigil_pg_bnn`` module is still importable as a
+library and remains runnable standalone, but the canonical deployment exposes
+exactly one API surface.
 
 CORS is configured so the native Flutter console (Windows/macOS/Android/iOS)
 can reach the ``/api`` routes from any localhost/app origin.
@@ -38,10 +43,9 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.aerovigil_pg_bnn.api import app as model_api
+from src.aerovigil_pg_bnn.api import app as _model_app  # lifespan loads the model
 from src.api.app import create_app as create_operations_api
 from src.api.gateway_routes import router as gateway_router
 from src.version import APP_VERSION as VERSION
@@ -64,8 +68,6 @@ def configured_port() -> int:
     return port if 1 <= port <= 65535 else DEFAULT_PORT
 
 
-# Deprecated UI requests permanently return to the canonical console.
-
 # Origins allowed to call the /api surface from the native Flutter clients.
 _CORS_ORIGINS = [
     "http://localhost",
@@ -83,10 +85,11 @@ _CORS_ORIGINS = [
 def create_app(*, include_dashboard: bool = True) -> FastAPI:
     """Build the unified ASGI application.
 
-    ``include_dashboard=False`` skips mounting the deprecated Gradio UI (useful
-    for lightweight probes and tests on machines that installed only the
-    ``api`` optional dependency).
+    ``include_dashboard`` is retained as a deprecated no-op for backwards
+    compatibility: the legacy Gradio dashboard is no longer mounted, so there
+    is nothing left to skip. The canonical deployment exposes one API surface.
     """
+    del include_dashboard  # deprecated; the legacy dashboard is gone.
 
     operations_api = create_operations_api()
     # Attach the canonical gateway routes onto the /api surface.
@@ -94,11 +97,12 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        # Starlette does not automatically run lifespan handlers for mounted
-        # applications. Enter both explicitly so model loading and cleanup are
-        # identical to running either API on its own.
+        # The packaged model app is not mounted, but its lifespan still loads
+        # (and later unloads) the PG-BNN into the shared module globals that
+        # the /api/model* gateway routes read. Enter it explicitly so model
+        # loading is identical to running the model API on its own.
         async with AsyncExitStack() as stack:
-            await stack.enter_async_context(model_api.router.lifespan_context(model_api))
+            await stack.enter_async_context(_model_app.router.lifespan_context(_model_app))
             await stack.enter_async_context(operations_api.router.lifespan_context(operations_api))
             yield
 
@@ -137,11 +141,12 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
                 "operations_api": "/api",
                 "operations_docs": "/api/docs",
                 "model_inference": "/api/model",
-                "model_api": "/model-api",
-                "model_docs": "/model-api/docs",
+                "model_info": "/api/model/info",
+                "model_batch": "/api/model/batch",
+                "model_stream": "/api/model/stream",
+                "model_trend": "/api/model/trend",
                 "jobs": "/api/jobs/{job_type}",
                 "hardware_stream": "/api/hardware/stream",
-                "legacy_dashboard": "/legacy" if include_dashboard else None,
             },
             "digital_twin": {
                 "assets_tracked": len(operations_api.state.twins),
@@ -155,17 +160,8 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
             },
         }
 
-    # Mount APIs before the catch-all static console.
+    # Mount the single API before the catch-all static console.
     application.mount("/api", operations_api, name="operations-api")
-    application.mount("/model-api", model_api, name="model-api")
-
-    # Deprecated Gradio dashboard – permanently return browser traffic to the
-    # one canonical console. The headless compatibility code remains in
-    # gradio_app/deprecated.py for scripts that still import it directly.
-    if include_dashboard:
-        application.add_api_route(
-            "/legacy", _legacy_redirect, methods=["GET"], include_in_schema=False
-        )
 
     # Root path serves the compiled AeroVigilAI browser console.
     if _CONSOLE_DIR.is_dir():
@@ -184,11 +180,6 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
             }
 
     return application
-
-
-def _legacy_redirect() -> RedirectResponse:
-    """Permanently redirect the deprecated UI path to the canonical console."""
-    return RedirectResponse(url="/", status_code=308)
 
 
 app = create_app()

@@ -431,12 +431,14 @@ are available without starting any other server:
 | Unified health/discovery | `/health` |
 | Advisory, fleet, twin, telemetry, reports | `/api` (`/api/docs`) |
 | **Canonical model inference** | `POST /api/model` |
-| Legacy inference alias (308 → `/api/model`) | `ANY /api/model-api` |
+| Model metadata · batch · Monte Carlo stream · trend | `GET /api/model/info` · `POST /api/model/batch` · `POST /api/model/stream` · `POST /api/model/trend` |
 | Framework job queue (train / federated / export / active-sample / explain) | `POST /api/jobs/{job_type}`, `GET /api/jobs/{job_id}` |
 | Hardware gateway ingestion + read-back | `POST /api/hardware/stream`, `GET /api/hardware/latest` |
 | Offline SCADA upload | `POST /api/telemetry/upload` |
-| Low-level PG-BNN prediction (sub-app) | `/model-api` (`/model-api/docs`) |
-| Deprecated Gradio dashboard (redirect notice) | `/legacy` |
+
+The legacy standalone model server (`/model-api`) and deprecated dashboard
+redirect (`/legacy`) were consolidated into this single `/api` surface — one
+process, one port, one OpenAPI document.
 
 CORS is configured so the native **AeroVigil console** (Flutter app in
 `apps/aerovigilai_flutter/`, targeting Windows, macOS, Android and iOS) can call
@@ -873,11 +875,11 @@ Android / iOS) talks to the same endpoints.
 #### Option B: Programmatic API access (same unified process)
 
 Do not start a second API server. Keep the Option A unified application running
-and use its mounted OpenAPI surfaces:
+and use its single OpenAPI surface:
 
-- Operations docs: **http://localhost:8080/api/docs**
-- Low-level model docs: **http://localhost:8080/model-api/docs**
+- API docs (every route, including the model surface): **http://localhost:8080/api/docs**
 - Canonical six-signal inference: `POST /api/model`
+- Batch / streamed Monte Carlo / trend: `POST /api/model/batch` · `/api/model/stream` · `/api/model/trend`
 
 ```bash
 curl -X POST "http://localhost:8080/api/model" \
@@ -893,8 +895,8 @@ curl -X POST "http://localhost:8080/api/model" \
   }'
 ```
 
-The compatibility prediction surface remains mounted under `/model-api`; it is
-not a separate process or port.
+All model capabilities (single, batch, streamed Monte Carlo, and trend
+inference) are served under `/api/model*` — no separate process or port.
 
 #### Option C: Python script (use the model directly)
 
@@ -1118,16 +1120,15 @@ python -m src.unified_app
 |----------|---------|
 | `GET /health` | Unified app, service discovery, and agent-mesh health |
 | `POST /api/model` | Canonical six-signal RUL prediction |
+| `GET /api/model/info` | Model metadata |
+| `POST /api/model/batch` | Batch predictions |
+| `POST /api/model/stream` | Streamed Monte Carlo samples (SSE) |
+| `POST /api/model/trend` | RUL trend across a telemetry sequence |
 | `POST /api/agent/ask` | Ask MIKA + KAI — evidence-grounded copilot answers |
 | `POST /api/agent/review` | Human decision gate — durable advisory-only review |
 | `GET /api/agent/reviews` | Audit trail of recorded human reviews |
 | `POST /api/twin/scenarios` | Scenario Lab — parallel operating-profile futures |
-| `GET /api/docs` | Operations OpenAPI UI |
-| `GET /model-api/model/info` | Low-level model metadata |
-| `POST /model-api/predict` | Compatibility low-level prediction |
-| `POST /model-api/predict/batch` | Batch predictions |
-| `POST /model-api/predict/stream` | Streamed Monte Carlo samples |
-| `GET /model-api/docs` | Low-level model OpenAPI UI |
+| `GET /api/docs` | Single OpenAPI UI for the whole platform |
 
 ```bash
 curl -X POST "http://localhost:8080/api/model" \
@@ -1136,8 +1137,9 @@ curl -X POST "http://localhost:8080/api/model" \
 ```
 
 The operations API—including advisory, digital-twin, telemetry, jobs, hardware,
-and fleet-report endpoints—is mounted at `/api`. The lower-level packaged model
-API is mounted at `/model-api`; neither requires another process or port.
+fleet-report, and the full PG-BNN model surface (`/api/model`, `/api/model/info`,
+`/api/model/batch`, `/api/model/stream`, `/api/model/trend`)—is mounted at
+`/api`. Everything runs in one process on one port.
 
 ## Intended use
 

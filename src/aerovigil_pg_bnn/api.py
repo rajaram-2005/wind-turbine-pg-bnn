@@ -620,5 +620,5 @@ if __name__ == "__main__":
     from src.unified_app import configured_port
 
     # Historical module command, canonical runtime: never create a model-only
-    # server. The low-level API remains available under /model-api.
+    # server. The model surface is served by the unified app under /api/model*.
     uvicorn.run(unified_app, host="0.0.0.0", port=configured_port())

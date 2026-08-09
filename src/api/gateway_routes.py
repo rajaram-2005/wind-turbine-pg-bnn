@@ -5,7 +5,10 @@ These routes are attached to the operations API (mounted at ``/api`` by
 surface on one host and one port:
 
 * ``POST /api/model``            – canonical PG-BNN inference endpoint.
-* ``ANY  /api/model-api``        – permanent (308) redirect to ``/api/model``.
+* ``GET  /api/model/info``       – model metadata.
+* ``POST /api/model/batch``      – batch predictions.
+* ``POST /api/model/stream``     – streamed Monte Carlo samples (SSE).
+* ``POST /api/model/trend``      – RUL trend across a telemetry sequence.
 * ``POST /api/jobs/{job_type}``  – queue a framework job, returns ``job_id``.
 * ``GET  /api/jobs``             – list recent jobs.
 * ``GET  /api/jobs/{job_id}``    – job status + recent execution logs.
@@ -34,10 +37,21 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from src.jobs import ALLOWED_JOB_TYPES, get_job_manager
+
+# Six-signal PG-BNN schemas and handlers, reused so the canonical ``/api``
+# surface exposes the full model capability without a second (legacy) mount.
+from src.aerovigil_pg_bnn.api import (
+    BatchInput,
+    TelemetryInput,
+    TrendInput,
+    model_info,
+    predict_batch,
+    predict_stream,
+    predict_trend,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,14 +89,30 @@ async def model_inference(request: Request) -> dict[str, Any]:
     return result.model_dump() if hasattr(result, "model_dump") else dict(result)
 
 
-@router.api_route(
-    "/model-api",
-    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-    include_in_schema=False,
-)
-async def model_api_redirect() -> RedirectResponse:
-    """Permanent redirect from the legacy ``/api/model-api`` path."""
-    return RedirectResponse(url="/api/model", status_code=308)
+@router.get("/model/info", tags=["model"])
+async def model_metadata() -> Any:
+    """Model metadata for the six-signal PG-BNN (name, inputs, metrics)."""
+    return await model_info()
+
+
+@router.post("/model/batch", tags=["model"])
+async def model_batch(request: Request, batch_input: BatchInput) -> Any:
+    """Batch RUL predictions (up to 1000 samples per request)."""
+    return await predict_batch(request, batch_input)
+
+
+@router.post("/model/stream", tags=["model"])
+async def model_stream(
+    request: Request, input_data: TelemetryInput, n_mcmc_samples: int = 100
+) -> Any:
+    """Stream Monte Carlo RUL samples as Server-Sent Events."""
+    return await predict_stream(request, input_data, n_mcmc_samples=n_mcmc_samples)
+
+
+@router.post("/model/trend", tags=["model"])
+async def model_trend(request: Request, trend_input: TrendInput) -> Any:
+    """RUL trend across a sequence of telemetry readings."""
+    return await predict_trend(request, trend_input)
 
 
 # ------------------------------------------------------------------ jobs
@@ -334,10 +364,11 @@ _STREAM_MODEL_MC_SAMPLES = 24
 def _six_signal_api():
     """Return the model-API module when its six-signal PG-BNN is loaded.
 
-    The unified app mounts ``src.aerovigil_pg_bnn.api`` at ``/model-api`` and
-    loads the bundled demo checkpoint during startup, so the same trained
-    model that answers ``/api/model`` can also advise hardware streams.
-    Returns ``None`` when the model (or its dependencies) is unavailable.
+    The unified app runs the packaged ``src.aerovigil_pg_bnn.api`` lifespan at
+    startup, which loads the bundled demo checkpoint into the shared module
+    globals; the same trained model that answers ``/api/model`` can therefore
+    also advise hardware streams. Returns ``None`` when the model (or its
+    dependencies) is unavailable.
     """
     try:
         from src.aerovigil_pg_bnn import api as six_api

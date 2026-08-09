@@ -304,7 +304,7 @@
         <div class="eyebrow">One app · One process · One port</div>
         <h2>Evidence moves from turbine telemetry to a human decision on port 8080.</h2>
         <p>The console, operational API, PG-BNN model API, durable digital twins, fleet reports, job queue, and compatibility routes share one canonical deployment. MIKA and KAI explain the maintenance and physics evidence without issuing turbine commands.</p>
-        <div class="hero-actions"><button class="primary" data-go="twin">Inspect WTG-001</button><a class="link-button secondary" href="/api/docs">Operations API</a><a class="link-button secondary" href="/model-api/docs">Model API</a></div>
+        <div class="hero-actions"><button class="primary" data-go="twin">Inspect WTG-001</button><a class="link-button secondary" href="/api/docs">API Explorer</a></div>
       </div>
       <div class="grid" id="overview-cards"></div>
     </section>
@@ -414,7 +414,7 @@
     <section class="page" id="page-inference">
       <div class="hero"><div class="eyebrow">PG-BNN inference</div><h2>Six signals in. RUL and uncertainty out.</h2><p>Submit one validated SCADA snapshot to <code>POST /api/model</code>. The Bayesian model response stays advisory-only and includes its confidence interval, risk state, and inference timing.</p></div>
       <div class="split">
-        <div class="panel"><h3>Telemetry snapshot</h3><div class="form-grid" style="margin-top:14px"><div><label for="inf-vibration">Vibration RMS · mm/s</label><input id="inf-vibration" type="number" min="0" max="50" step="0.1" value="2.1" /></div><div><label for="inf-bearing">Bearing temp · °C</label><input id="inf-bearing" type="number" min="20" max="150" step="0.1" value="62" /></div><div><label for="inf-generator">Generator temp · °C</label><input id="inf-generator" type="number" min="20" max="200" step="0.1" value="74" /></div><div><label for="inf-power">Power output · kW</label><input id="inf-power" type="number" min="0" max="5000" step="1" value="1350" /></div><div><label for="inf-wind">Wind speed · m/s</label><input id="inf-wind" type="number" min="0" max="30" step="0.1" value="11" /></div><div><label for="inf-hours">Operating hours</label><input id="inf-hours" type="number" min="0" max="100000" step="1" value="21000" /></div></div><button class="primary" id="inference-btn">Run inference</button><div class="hero-actions"><a class="link-button secondary" href="/model-api/docs">Model docs</a><a class="link-button secondary" href="/api/docs">Operations docs</a><a class="link-button secondary" href="/legacy">Legacy → Console</a></div></div>
+        <div class="panel"><h3>Telemetry snapshot</h3><div class="form-grid" style="margin-top:14px"><div><label for="inf-vibration">Vibration RMS · mm/s</label><input id="inf-vibration" type="number" min="0" max="50" step="0.1" value="2.1" /></div><div><label for="inf-bearing">Bearing temp · °C</label><input id="inf-bearing" type="number" min="20" max="150" step="0.1" value="62" /></div><div><label for="inf-generator">Generator temp · °C</label><input id="inf-generator" type="number" min="20" max="200" step="0.1" value="74" /></div><div><label for="inf-power">Power output · kW</label><input id="inf-power" type="number" min="0" max="5000" step="1" value="1350" /></div><div><label for="inf-wind">Wind speed · m/s</label><input id="inf-wind" type="number" min="0" max="30" step="0.1" value="11" /></div><div><label for="inf-hours">Operating hours</label><input id="inf-hours" type="number" min="0" max="100000" step="1" value="21000" /></div></div><button class="primary" id="inference-btn">Run inference</button><div class="hero-actions"><a class="link-button secondary" href="/api/docs">API docs</a></div></div>
         <div class="panel"><div class="panel-head"><h3>RUL estimate</h3><span class="muted" id="inference-time">Ready</span></div><div class="gauge-wrap"><div class="gauge" id="rul-gauge" style="--gauge:0%"><div class="gauge-value"><strong id="rul-value">—</strong><span>predicted days</span></div></div></div><div id="inference-chips"></div></div>
       </div>
       <div class="panel"><div class="panel-head"><h3>Prediction details</h3><span class="muted">Decision support only</span></div><div class="table-wrap" id="inference-table"><div class="empty">Run inference to inspect the result.</div></div></div>
@@ -750,7 +750,7 @@
       ['⚙', 'Jobs', 'Durable training, evaluation, export, federated, active-learning, and SHAP work.', 'POST /api/jobs/{type}', 'jobs'],
       ['Σ', 'Inference', 'Six-signal PG-BNN prediction with risk and confidence evidence.', 'POST /api/model', 'inference'],
       ['◎', 'System', 'Root health, agent mesh, mounted services, and SQLite statistics.', 'GET /health', 'system'],
-      ['{}', 'API Explorer', 'Interactive OpenAPI references for operations and low-level model services.', '/api/docs · /model-api/docs', null],
+      ['{}', 'API Explorer', 'One interactive OpenAPI reference for the whole platform — advisory, twin, fleet, jobs, hardware, and model routes.', '/api/docs', null],
     ];
     $('overview-cards').innerHTML = overviewCards.map(([icon,title,copy,endpoint,target]) => `<article class="card ${target ? 'clickable' : ''}" ${target ? `data-card-target="${target}"` : ''}><div class="card-icon">${icon}</div><h3>${esc(title)}</h3><p>${esc(copy)}</p><span class="badge">${esc(endpoint)}</span></article>`).join('');
     document.querySelectorAll('[data-card-target]').forEach((card) => card.addEventListener('click', () => showPage(card.dataset.cardTarget)));
@@ -915,7 +915,7 @@
     ];
 
     async function streamMcSamples(inputs, n) {
-      const resp = await fetch(`/model-api/predict/stream?n_mcmc_samples=${n}`, {
+      const resp = await fetch(`/api/model/stream?n_mcmc_samples=${n}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(inputs),
@@ -951,7 +951,7 @@
       let samples = null, label = '';
       if (haveAll) {
         try {
-          note.textContent = 'streaming Monte Carlo samples from /model-api/predict/stream…';
+          note.textContent = 'streaming Monte Carlo samples from /api/model/stream…';
           samples = await streamMcSamples(Object.fromEntries(six.map((k) => [k, latestSignals[k]])), 80);
           label = `${samples.length} live MC samples · six-signal PG-BNN`;
         } catch (_) { samples = null; }
