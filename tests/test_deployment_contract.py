@@ -72,6 +72,8 @@ def test_legacy_launchers_do_not_open_old_network_ports():
     model_api = (ROOT / "src" / "aerovigil_pg_bnn" / "api.py").read_text(encoding="utf-8")
     gradio = (ROOT / "gradio_app" / "app.py").read_text(encoding="utf-8")
     assert "port=8000" not in model_api
+    assert "uvicorn.run(app," not in model_api
+    assert "from src.unified_app import app as unified_app" in model_api
     assert "server_port=" not in gradio
     assert "standalone Gradio server is retired" in gradio
 

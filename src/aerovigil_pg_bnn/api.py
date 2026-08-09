@@ -584,7 +584,9 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 if __name__ == "__main__":
     import uvicorn
 
-    # Compatibility-only standalone runner. Production and operator workflows
-    # use src.unified_app, where this API is mounted at /model-api.
-    port = int(os.environ.get("PORT", os.environ.get("AEROVIGIL_PORT", "8080")))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    from src.unified_app import app as unified_app
+    from src.unified_app import configured_port
+
+    # Historical module command, canonical runtime: never create a model-only
+    # server. The low-level API remains available under /model-api.
+    uvicorn.run(unified_app, host="0.0.0.0", port=configured_port())
