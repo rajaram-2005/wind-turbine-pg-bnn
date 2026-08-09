@@ -2,9 +2,11 @@
 
 AeroVigil v1.0.0 — https://aerovigil.abacusai.app
 
-Run locally::
+Canonical local run (this child API is mounted under ``/api``)::
 
-    uvicorn src.api.app:app --reload
+    uvicorn src.unified_app:app --host 0.0.0.0 --port 8080
+
+The module-level ``app`` remains importable for compatibility and focused tests.
 
 Endpoints
 ---------
@@ -98,7 +100,6 @@ def _connect_agent_team(payload: TurbinePayload, recommendation: dict) -> dict:
         telemetry=payload.telemetry.model_dump(),
     )
     return enforce_safety_contract(enriched)
-
 
 
 def get_or_create_twin(state, asset_id: str, model_key: str = "GE-1.5"):
@@ -351,9 +352,6 @@ def create_app() -> FastAPI:
         recently used twin is evicted before a new asset is admitted.
         """
         return get_or_create_twin(app.state, asset_id, model_key)
-
-
-
 
     def _twin_status_payload(twin) -> dict:
         last = twin.state_history[-1] if twin.state_history else None

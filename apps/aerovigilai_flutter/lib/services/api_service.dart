@@ -23,6 +23,15 @@ class ApiService {
         'Accept': 'application/json',
       };
 
+  // ── system ────────────────────────────────────────────────────────────
+
+  /// Root liveness and service discovery, including the connected MIKA + KAI
+  /// agent mesh shared by the web console and native dashboards.
+  Future<Map<String, dynamic>> getHealth() async {
+    final resp = await http.get(_uri('/health'), headers: _jsonHeaders);
+    return _handle(resp);
+  }
+
   // ── ingestion ─────────────────────────────────────────────────────────
 
   /// Upload an offline USB/CSV file to the ingestion endpoint over HTTPS.

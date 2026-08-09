@@ -54,6 +54,7 @@ LABEL org.opencontainers.image.licenses="MIT"
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONFAULTHANDLER=1
+ENV SERVICE_MODE=all
 ENV APP_HOME=/app
 ENV MODEL_PATH=/app/artifacts/pg_bnn_demo/bnn_demo.pt
 ENV CONFIG_PATH=/app/artifacts/pg_bnn_demo/config.json
@@ -115,6 +116,7 @@ FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu22.04 as gpu
 ARG PYTHON_VERSION=3.11
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV SERVICE_MODE=all
 ENV APP_HOME=/app
 ENV MODEL_PATH=/app/artifacts/pg_bnn_demo/bnn_demo.pt
 ENV CONFIG_PATH=/app/artifacts/pg_bnn_demo/config.json
@@ -156,8 +158,10 @@ RUN chmod +x /entrypoint.sh
 RUN chown -R aerovigil:aerovigil ${APP_HOME}
 USER aerovigil
 
+# Probe the same unified application boundary as the CPU image. CUDA
+# availability is an observability detail, not an application health check.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import torch; print(torch.cuda.is_available())" || exit 1
+    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/health')" || exit 1
 
 EXPOSE ${PORT}
 ENTRYPOINT ["/entrypoint.sh"]

@@ -7,7 +7,7 @@ pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from src.unified_app import create_app  # noqa: E402
+from src.unified_app import configured_port, create_app  # noqa: E402
 
 
 def test_unified_health_discovers_every_surface():
@@ -21,6 +21,14 @@ def test_unified_health_discovers_every_surface():
         assert body["agent_mesh"]["agents"] == ["MIKA", "KAI"]
         assert body["agent_mesh"]["status"] == "connected"
         assert body["agent_mesh"]["evidence_path"][-1] == "HUMAN"
+
+
+def test_health_reports_the_configured_canonical_port(monkeypatch):
+    monkeypatch.setenv("PORT", "9090")
+    with TestClient(create_app(include_dashboard=False)) as client:
+        assert client.get("/health").json()["port"] == 9090
+    monkeypatch.setenv("PORT", "not-a-port")
+    assert configured_port() == 8080
 
 
 def test_operations_api_is_connected_under_one_boundary():
@@ -51,3 +59,49 @@ def test_model_api_is_connected_and_initialized():
         body = response.json()
         assert body["status"] == "healthy"
         assert body["model_loaded"] is True
+
+
+def test_legacy_dashboard_redirects_to_canonical_console():
+    with TestClient(create_app()) as client:
+        response = client.get("/legacy", follow_redirects=False)
+    assert response.status_code == 308
+    assert response.headers["location"] == "/"
+
+
+def test_root_serves_complete_eight_page_agent_console():
+    with TestClient(create_app(include_dashboard=False)) as client:
+        response = client.get("/")
+        assert response.status_code == 200
+        html = response.text
+
+    pages = (
+        "overview",
+        "twin",
+        "fleet",
+        "hardware",
+        "ingestion",
+        "jobs",
+        "inference",
+        "system",
+    )
+    assert html.count('<section class="page') == len(pages)
+    for page in pages:
+        assert f'data-page="{page}"' in html
+        assert f'id="page-{page}"' in html
+
+    assert "CYBER PRIME DUAL AGENT" in html
+    assert "MIKA" in html and "KAI" in html
+    assert "SCADA" in html and "PG-BNN" in html and "ISO 281" in html
+    for endpoint in (
+        "/api/twin/status",
+        "/api/twin/history",
+        "/api/fleet/summary",
+        "/api/hardware/latest",
+        "/api/telemetry/upload",
+        "/api/telemetry/import",
+        "/api/jobs/",
+        "/api/model",
+        "/api/system/stats",
+        "/health",
+    ):
+        assert endpoint in html

@@ -21,7 +21,7 @@ Routes
 ``/model-api``
     Low-level six-signal PG-BNN prediction API (retained for compatibility).
 ``/legacy``
-    Deprecated Gradio dashboard (redirect notice only; headless API retained).
+    Permanent redirect to the canonical browser console at ``/``.
 ``/health``
     Health and route discovery for the complete application.
 
@@ -38,7 +38,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.aerovigil_pg_bnn.api import app as model_api
@@ -53,39 +53,18 @@ _CONSOLE_DIR = Path(__file__).resolve().parents[1] / "web_console" / "dist"
 # Default deployment port for the unified application.
 DEFAULT_PORT = 8080
 
-# Fallback page for the deprecated Gradio dashboard path when the Gradio
-# optional dependency is not installed: a static deprecation notice that
-# auto-redirects to the canonical console. Mirrors gradio_app/deprecated.py.
-_LEGACY_FALLBACK_HTML = """<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta http-equiv="refresh" content="0; url=/" />
-  <title>AeroVigil – dashboard moved</title>
-  <style>
-    body { margin:0; min-height:100vh; display:grid; place-items:center;
-      background:#05121a; color:#e6f2f2; font-family:system-ui,sans-serif; }
-    .card { max-width:640px; text-align:center; padding:48px 32px;
-      background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
-      border-radius:16px; }
-    h1 { color:#2dd4bf; }
-    a { display:inline-block; margin-top:16px; padding:12px 22px; color:#fff;
-      background:linear-gradient(135deg,#0d9488,#06b6d4); border-radius:10px;
-      text-decoration:none; font-weight:600; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>⚠️ This dashboard has moved</h1>
-    <p>The legacy AeroVigil Gradio dashboard is <strong>deprecated</strong>.
-       All operator tooling now lives in the AeroVigilAI browser console on
-       the single canonical deployment at <strong>http://localhost:8080/</strong>.</p>
-    <p>You are being redirected…</p>
-    <a href="/" target="_top">Open the AeroVigilAI console →</a>
-  </div>
-</body>
-</html>
-"""
+
+def configured_port() -> int:
+    """Resolve the canonical port from deployment environment variables."""
+    raw = os.environ.get("PORT", os.environ.get("AEROVIGIL_PORT", str(DEFAULT_PORT)))
+    try:
+        port = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_PORT
+    return port if 1 <= port <= 65535 else DEFAULT_PORT
+
+
+# Deprecated UI requests permanently return to the canonical console.
 
 # Origins allowed to call the /api surface from the native Flutter clients.
 _CORS_ORIGINS = [
@@ -152,7 +131,7 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
             "product": PRODUCT,
             "version": VERSION,
             "advisory_only": True,
-            "port": DEFAULT_PORT,
+            "port": configured_port(),
             "services": {
                 "console": "/",
                 "operations_api": "/api",
@@ -180,19 +159,17 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
     application.mount("/api", operations_api, name="operations-api")
     application.mount("/model-api", model_api, name="model-api")
 
-    # Deprecated Gradio dashboard – visible UI is a redirect notice only. A
-    # static deprecation page with an auto-redirect to the canonical console
-    # is served at /legacy so the route works on every Gradio version (and
-    # when Gradio is not installed at all). The headless Gradio prediction
-    # API stays available for legacy scripts via gradio_app/deprecated.py.
+    # Deprecated Gradio dashboard – permanently return browser traffic to the
+    # one canonical console. The headless compatibility code remains in
+    # gradio_app/deprecated.py for scripts that still import it directly.
     if include_dashboard:
-        application.add_api_route("/legacy", _legacy_fallback, methods=["GET"], include_in_schema=False)
+        application.add_api_route(
+            "/legacy", _legacy_redirect, methods=["GET"], include_in_schema=False
+        )
 
     # Root path serves the compiled AeroVigilAI browser console.
     if _CONSOLE_DIR.is_dir():
-        application.mount(
-            "/", StaticFiles(directory=str(_CONSOLE_DIR), html=True), name="console"
-        )
+        application.mount("/", StaticFiles(directory=str(_CONSOLE_DIR), html=True), name="console")
     else:  # pragma: no cover - console assets absent in minimal installs
 
         @application.get("/", tags=["system"])
@@ -209,9 +186,9 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
     return application
 
 
-def _legacy_fallback() -> HTMLResponse:
-    """Static deprecation notice served when Gradio is not installed."""
-    return HTMLResponse(content=_LEGACY_FALLBACK_HTML, status_code=200)
+def _legacy_redirect() -> RedirectResponse:
+    """Permanently redirect the deprecated UI path to the canonical console."""
+    return RedirectResponse(url="/", status_code=308)
 
 
 app = create_app()
@@ -220,5 +197,4 @@ app = create_app()
 if __name__ == "__main__":  # pragma: no cover - manual launch helper
     import uvicorn
 
-    port = int(os.environ.get("AEROVIGIL_PORT", DEFAULT_PORT))
-    uvicorn.run("src.unified_app:app", host="0.0.0.0", port=port, reload=False)
+    uvicorn.run("src.unified_app:app", host="0.0.0.0", port=configured_port(), reload=False)

@@ -32,6 +32,7 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
   String _source = 'simulated';
   String _advisorySource = '-';
   String _status = '-';
+  Map<String, dynamic> _agentTeam = {};
 
   final List<FlSpot> _rpmSeries = [];
   final List<FlSpot> _tempSeries = [];
@@ -94,6 +95,10 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
       _advisorySource = '${last?['advisory_source'] ?? data['advisory_source'] ?? 'model'}';
       _status = '${adv['status'] ?? ''}';
       _source = 'live: ${data['model_name'] ?? ''}';
+      final rawAgentTeam = last?['agent_team'] ?? data['agent_team'];
+      if (rawAgentTeam is Map) {
+        _agentTeam = Map<String, dynamic>.from(rawAgentTeam);
+      }
 
       // append to history view (latest 5)
       final recTimestamp = last?['timestamp'] ?? '';
@@ -159,6 +164,8 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
           const SizedBox(height: 8),
           Text('Twin asset ${_assetController.text} • advisory source $_advisorySource • $_status',
               style: const TextStyle(color: Colors.white60, fontSize: 12)),
+          const SizedBox(height: 14),
+          _TwinAgentBanner(agentTeam: _agentTeam),
           const SizedBox(height: 20),
 
           // Advisory cards
@@ -281,6 +288,124 @@ class _DigitalTwinScreenState extends State<DigitalTwinScreen> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TwinAgentBanner extends StatelessWidget {
+  const _TwinAgentBanner({required this.agentTeam});
+
+  final Map<String, dynamic> agentTeam;
+
+  @override
+  Widget build(BuildContext context) {
+    final agents = (agentTeam['agents'] as Map?) ?? const {};
+    final mika = (agents['mika'] as Map?) ?? const {};
+    final kai = (agents['kai'] as Map?) ?? const {};
+    final agreement = (agentTeam['agreement_score_pct'] as num?)?.toDouble();
+    final evidence = (agentTeam['connected_sources'] as List?) ?? const [];
+    final hasEvidence = mika.isNotEmpty || kai.isNotEmpty;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0x552DD4BF)),
+        gradient: const LinearGradient(
+          colors: [Color(0x1AF0ABFC), Color(0x1A2DD4BF), Color(0x1A38BDF8)],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.hub_outlined, color: Color(0xFF2DD4BF), size: 18),
+              const SizedBox(width: 8),
+              const Text(
+                'MIKA + KAI · TWIN AGENT TEAM',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1.0),
+              ),
+              const Spacer(),
+              Text(
+                agreement == null ? 'AWAITING EVIDENCE' : '${agreement.toStringAsFixed(1)}% AGREEMENT',
+                style: const TextStyle(color: Color(0xFF4ADE80), fontSize: 10, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (!hasEvidence)
+            const Text(
+              'The twin is connected. Live MIKA and KAI findings appear when the latest state contains advisory evidence.',
+              style: TextStyle(color: Colors.white54, fontSize: 12),
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 720;
+                final cards = [
+                  _AgentFinding(
+                    name: '${mika['name'] ?? 'MIKA'}',
+                    role: '${mika['role'] ?? 'maintenance strategist'}',
+                    finding: '${mika['finding'] ?? 'No maintenance finding available.'}',
+                    color: const Color(0xFFF0ABFC),
+                  ),
+                  _AgentFinding(
+                    name: '${kai['name'] ?? 'KAI'}',
+                    role: '${kai['role'] ?? 'physics constraint sentinel'}',
+                    finding: '${kai['finding'] ?? 'No physics finding available.'}',
+                    color: const Color(0xFF72E9FF),
+                  ),
+                ];
+                if (compact) {
+                  return Column(children: [cards[0], const SizedBox(height: 10), cards[1]]);
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [Expanded(child: cards[0]), const SizedBox(width: 10), Expanded(child: cards[1])],
+                );
+              },
+            ),
+          if (evidence.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              evidence.map((source) => '$source'.replaceAll('_', ' ').toUpperCase()).join('  →  '),
+              style: const TextStyle(color: Colors.white54, fontSize: 10, letterSpacing: 0.5),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AgentFinding extends StatelessWidget {
+  const _AgentFinding({required this.name, required this.role, required this.finding, required this.color});
+
+  final String name;
+  final String role;
+  final String finding;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.035),
+        border: Border.all(color: color.withOpacity(0.22)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('$name · ${role.replaceAll('_', ' ').toUpperCase()}', style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Text(finding, style: const TextStyle(color: Colors.white70, height: 1.4, fontSize: 12)),
         ],
       ),
     );

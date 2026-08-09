@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml ./
 RUN pip install \
         numpy pandas pyyaml pydantic \
-        onnx onnxruntime \
+        onnx onnxruntime onnxscript \
         shap \
         flwr \
         matplotlib \

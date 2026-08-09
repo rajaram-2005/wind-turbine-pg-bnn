@@ -18,14 +18,14 @@ Deliver a confident **5-minute live demo** that makes officers and non-technical
   - `artifacts/pg_bnn_demo/bnn_demo.pt`
   - `artifacts/pg_bnn_demo/config.json`
   - `artifacts/pg_bnn_demo/scaler.npz`
-- Run `python gradio_app/app.py`
-- Test all three presets: healthy, warning, critical
-- Confirm the app reports **Weights source: local artifacts/pg_bnn_demo**
-- Confirm the critical preset lands around **~4 days** mean RUL
+- Run `python -m src.unified_app`
+- Open `http://localhost:8080` and confirm all eight console pages load
+- On **Inference**, run healthy and critical six-signal snapshots
+- Confirm `/health`, `/api/docs`, and `/model-api/docs` share port 8080
 - Keep `docs/assets/aerovigil-demo.mp4` ready as backup
 
 ### 10 minutes before stage time
-- Open the app and leave it on the main prediction view
+- Open the unified console and leave it on the **Inference** page
 - Put the browser in **F11 / full-screen** mode
 - Keep these tabs ready:
   - live app
@@ -59,20 +59,20 @@ Pause. Let the cost land.
 
 | Step | What you click / show | What you say | What the audience should notice |
 |---|---|---|---|
-| 1 | Choose **Healthy turbine** | "This is a machine that looks normal." | Green / low-risk result |
-| 2 | Press **Predict the 45-day outlook** | "The model says there's lots of healthy runway left." | Gauge stays high; histogram mostly right of 45-day line |
-| 3 | Point at histogram width | "This spread is the model being honest about uncertainty." | Uncertainty is visible, not hidden |
-| 4 | Choose **Critical: act now** | "Same turbine family, now after months of hidden degradation." | Sliders jump to harsher values |
-| 5 | Press predict again | "Now the estimate collapses into the red zone." | Red badge, low days remaining |
-| 6 | Point to yellow line | "Anything left of 45 days means schedule the repair now, not later." | Planning threshold is intuitive |
-| 7 | Open the accordion | "If someone is not technical, the UI still teaches them how to read it." | UX feels productized |
+| 1 | Show the live **MIKA + KAI** mesh | "Every page uses one evidence path and one server." | Connected status and animated SCADA → HUMAN path |
+| 2 | Open **Inference** with the healthy values | "This is a machine that looks normal." | Six validated SCADA signals on the same app |
+| 3 | Press **Run inference** | "The model reports healthy runway and its uncertainty." | RUL gauge, risk chips, confidence interval table |
+| 4 | Raise vibration/temperatures/hours to critical values | "Same turbine family, now after hidden degradation." | Input evidence changes visibly |
+| 5 | Run inference again | "Now the estimate contracts into a maintenance window." | Risk and maintenance-review chips update |
+| 6 | Open **Digital Twin** | "MIKA plans the response while KAI explains the physics." | Two live findings, agreement, ISO 281 evidence |
+| 7 | Open **System** | "This is one app—not a collection of disconnected demos." | `/health`, services, twins, and durable rows on port 8080 |
 
 ### Key callouts during the live demo
-- **Healthy -> green** means the machine still has runway.
-- **Critical -> red** means the machine is inside an urgent response window.
-- **Distribution spread = honesty**. Wider histogram = lower certainty.
-- **45-day line** is the maintenance-planning trigger.
-- **Accordion** proves the UI is explainable, not just technical.
+- **Healthy → green** means the machine still has runway.
+- **Critical → red** means the machine is inside an urgent response window.
+- **Confidence interval = honesty**. Wider uncertainty means more human review.
+- **MIKA + KAI** connect maintenance planning to physics evidence.
+- **System health** proves every browser/API surface shares one process and port.
 
 ---
 
@@ -84,7 +84,7 @@ Pause. Let the cost land.
 
 ## 45-second engineering credibility section
 
-> "This is not just a slide deck model. The repo already includes the model package, FastAPI endpoints, CLI tools, a digital twin workflow, telemetry compression, onboarding logic, and this offline-capable Gradio demo. Even the narrated video is rendered from real model inference, not canned screenshots." 
+> "This is not just a slide deck model. The repo includes the model package, one FastAPI deployment boundary, an eight-page browser console, CLI tools, digital twins, telemetry compression, onboarding logic, and durable jobs. Even the narrated video is rendered from real model inference, not canned screenshots."
 
 ---
 
@@ -114,7 +114,7 @@ For the demo, no. It uses standard SCADA-style signals the turbine already emits
 
 ### 5) "What happens with no internet?"
 **Answer:**
-The demo still works. We train and load local weights from `artifacts/pg_bnn_demo` and the Gradio app prefers those automatically.
+The demo still works. The unified app loads local weights from `artifacts/pg_bnn_demo`; the browser console and every API are served locally on port 8080.
 
 ### 6) "How far ahead does it warn?"
 **Answer:**

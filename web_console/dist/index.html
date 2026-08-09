@@ -3,343 +3,622 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AeroVigilAI Console</title>
+  <meta name="theme-color" content="#06151d" />
+  <title>AeroVigilAI · Cyber Prime Console</title>
   <style>
-    :root { color-scheme: dark; }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      background: radial-gradient(1200px 600px at 70% -10%, #0e3a3a 0%, #071b22 45%, #05121a 100%);
-      color: #e6f2f2; min-height: 100vh;
+    :root {
+      color-scheme: dark;
+      --bg: #041119;
+      --surface: rgba(10, 32, 42, .82);
+      --surface-2: rgba(14, 42, 52, .72);
+      --line: rgba(151, 222, 221, .12);
+      --line-hot: rgba(45, 212, 191, .42);
+      --text: #e8f5f4;
+      --muted: #8dafaf;
+      --teal: #2dd4bf;
+      --cyan: #38bdf8;
+      --pink: #f0abfc;
+      --amber: #fbbf24;
+      --red: #fb7185;
+      --green: #4ade80;
+      --shadow: 0 18px 60px rgba(0, 0, 0, .25);
     }
-    header { padding: 22px 28px; display: flex; align-items: center; gap: 14px;
-      border-bottom: 1px solid rgba(255,255,255,.06); }
-    .logo { width: 40px; height: 40px; border-radius: 10px;
-      background: linear-gradient(135deg,#0d9488,#06b6d4); box-shadow: 0 8px 24px rgba(13,148,136,.4); }
-    h1 { font-size: 1.15rem; margin: 0; letter-spacing: .3px; }
-    .sub { color: #7fd7d0; font-size: .8rem; }
-    nav { display: flex; gap: 8px; padding: 14px 24px 0; flex-wrap: wrap; }
-    nav button { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
-      color: #bfd9d9; padding: 8px 16px; border-radius: 999px; cursor: pointer; font-size: .85rem; }
-    nav button.active { background: rgba(13,148,136,.25); border-color: #0d9488; color: #7ff0e4; }
-    nav button:hover { border-color: rgba(13,148,136,.6); }
-    main { max-width: 1080px; margin: 0 auto; padding: 28px 24px 80px; }
-    section.page { display: none; }
-    section.page.active { display: block; }
-    .hero h2 { font-size: 1.7rem; margin: 0 0 10px; }
-    .hero p { color: #a9c6c6; max-width: 700px; line-height: 1.6; }
-    .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); margin-top: 26px; }
-    .card { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07);
-      border-radius: 14px; padding: 20px; transition: transform .15s, border-color .15s; }
-    .card h3 { margin: 0 0 6px; font-size: 1rem; }
-    .card p { margin: 0; color: #9fbdbd; font-size: .85rem; line-height: 1.5; }
-    .badge { display:inline-block; margin-top:14px; font-size:.72rem; color:#7fd7d0;
-      border:1px solid rgba(127,215,208,.35); padding:3px 8px; border-radius:999px; }
-    .panel { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
-      border-radius: 14px; padding: 20px; margin-top: 18px; }
-    .panel h3 { margin: 0 0 12px; font-size: 1rem; }
-    label { display:block; font-size:.8rem; color:#9fbdbd; margin: 10px 0 6px; }
-    select, input[type=text], input[type=url] { width: 100%; background: #0a1f28; color: #e6f2f2;
-      border: 1px solid rgba(255,255,255,.14); border-radius: 10px; padding: 10px 12px; font-size: .9rem; }
-    button.primary { margin-top: 14px; background: linear-gradient(135deg,#0d9488,#06b6d4);
-      color: #fff; border: none; border-radius: 10px; padding: 11px 22px; font-weight: 600; cursor: pointer; }
-    button.primary:disabled { opacity: .45; cursor: not-allowed; }
-    .job-row { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,.05);
-      cursor:pointer; }
-    .job-row:hover { background: rgba(255,255,255,.03); }
-    .status-pill { font-size:.72rem; padding:3px 10px; border-radius:999px; min-width:88px; text-align:center; }
-    .status-Pending { background: rgba(245,158,11,.15); color:#fbbf24; }
-    .status-Running { background: rgba(96,165,250,.15); color:#93c5fd; }
-    .status-Completed { background: rgba(34,197,94,.15); color:#4ade80; }
-    .status-Failed { background: rgba(239,68,68,.15); color:#f87171; }
-    pre.log { background:#06131b; border:1px solid rgba(255,255,255,.08); border-radius:10px;
-      padding:14px; max-height: 380px; overflow:auto; font-size:.78rem; line-height:1.5; white-space: pre-wrap; }
-    .muted { color:#6f9494; font-size:.8rem; }
-    footer { text-align:center; color:#6f9494; font-size:.78rem; padding: 20px; }
-    code { background: rgba(255,255,255,.08); padding: 2px 6px; border-radius: 6px; }
-    .spin { display:inline-block; width:12px; height:12px; border:2px solid rgba(255,255,255,.2);
-      border-top-color:#2dd4bf; border-radius:50%; animation: rot .8s linear infinite; margin-right:8px; }
-    @keyframes rot { to { transform: rotate(360deg); } }
-    .toast { position: fixed; right: 20px; bottom: 20px; background: #0c2029; border:1px solid rgba(13,148,136,.5);
-      color:#7ff0e4; padding: 12px 18px; border-radius: 10px; opacity:0; transition: opacity .3s; max-width: 420px; }
-    .toast.show { opacity: 1; }
-    .toast.error { border-color: rgba(239,68,68,.5); color:#f87171; }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow-x: hidden;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(900px 520px at 82% -5%, rgba(8, 145, 137, .22), transparent 68%),
+        radial-gradient(700px 500px at 8% 20%, rgba(14, 116, 144, .13), transparent 70%),
+        linear-gradient(160deg, #061820 0%, var(--bg) 54%, #050e16 100%);
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      opacity: .16;
+      pointer-events: none;
+      background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: linear-gradient(to bottom, black, transparent 80%);
+    }
+    button, input, select { font: inherit; }
+    a { color: #74e8de; }
+    code { padding: 2px 7px; border-radius: 6px; color: #a7f3d0; background: rgba(45,212,191,.09); }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 18px clamp(18px, 4vw, 42px);
+      border-bottom: 1px solid var(--line);
+      background: rgba(3, 14, 21, .62);
+      backdrop-filter: blur(18px);
+    }
+    .logo {
+      position: relative;
+      width: 44px;
+      height: 44px;
+      flex: 0 0 auto;
+      border: 1px solid rgba(94,234,212,.5);
+      border-radius: 13px;
+      background: linear-gradient(145deg, rgba(45,212,191,.33), rgba(14,116,144,.16));
+      box-shadow: 0 0 30px rgba(45,212,191,.18);
+    }
+    .logo::before, .logo::after { content: ""; position: absolute; background: #5eead4; border-radius: 999px; }
+    .logo::before { width: 4px; height: 29px; left: 20px; top: 7px; transform: rotate(24deg); }
+    .logo::after { width: 26px; height: 4px; left: 9px; top: 20px; transform: rotate(-24deg); }
+    .brand { min-width: 0; }
+    .brand h1 { margin: 0; font-size: clamp(1rem, 2.5vw, 1.2rem); letter-spacing: .02em; }
+    .brand p { margin: 3px 0 0; color: #73cfc8; font: 700 .7rem/1.3 ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; }
+    .header-status { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .76rem; }
+    .live-dot { width: 8px; height: 8px; border-radius: 99px; background: var(--green); box-shadow: 0 0 13px var(--green); animation: pulse 1.8s ease-in-out infinite; }
+    .live-dot.degraded { background: var(--red); box-shadow: 0 0 13px var(--red); }
+    @keyframes pulse { 50% { opacity: .38; transform: scale(.78); } }
+
+    .agent-mesh {
+      margin: 18px auto 0;
+      width: min(1180px, calc(100% - 32px));
+      overflow: hidden;
+      border: 1px solid rgba(45,212,191,.25);
+      border-radius: 15px;
+      background: linear-gradient(100deg, rgba(240,171,252,.065), rgba(45,212,191,.08) 45%, rgba(56,189,248,.065));
+      box-shadow: 0 0 50px rgba(45,212,191,.06);
+    }
+    .mesh-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px 9px; }
+    .mesh-title { color: #d8fffa; font: 800 .76rem ui-monospace, monospace; letter-spacing: .12em; }
+    .mesh-title .mika { color: var(--pink); }
+    .mesh-title .kai { color: #72e9ff; }
+    .mesh-state { margin-left: auto; color: var(--green); font: 700 .68rem ui-monospace, monospace; text-transform: uppercase; }
+    .mesh-path { display: flex; align-items: center; gap: 8px; padding: 0 16px 13px; overflow-x: auto; scrollbar-width: thin; }
+    .mesh-node { position: relative; flex: 0 0 auto; color: #a9caca; font: 700 .66rem ui-monospace, monospace; letter-spacing: .06em; }
+    .mesh-arrow { position: relative; width: 36px; height: 1px; flex: 0 0 36px; overflow: hidden; background: rgba(94,234,212,.17); }
+    .mesh-arrow::after { content: ""; position: absolute; inset: 0; width: 50%; background: linear-gradient(90deg, transparent, var(--teal), transparent); animation: evidence 1.8s linear infinite; }
+    @keyframes evidence { from { transform: translateX(-110%); } to { transform: translateX(220%); } }
+
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      gap: 7px;
+      width: min(1180px, 100%);
+      margin: 14px auto 0;
+      padding: 10px 16px;
+      overflow-x: auto;
+      background: rgba(4, 17, 25, .83);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      backdrop-filter: blur(16px);
+      scrollbar-width: none;
+    }
+    nav button {
+      flex: 0 0 auto;
+      border: 1px solid transparent;
+      border-radius: 9px;
+      padding: 8px 12px;
+      color: #9bbbbb;
+      background: transparent;
+      cursor: pointer;
+      font-size: .78rem;
+      transition: .18s ease;
+    }
+    nav button:hover { color: #d9f7f4; background: rgba(255,255,255,.035); }
+    nav button.active { color: #b8fff5; border-color: rgba(45,212,191,.28); background: rgba(45,212,191,.1); }
+
+    main { width: min(1180px, 100%); margin: 0 auto; padding: 26px 16px 80px; }
+    .page { display: none; animation: enter .25s ease-out; }
+    .page.active { display: block; }
+    @keyframes enter { from { opacity: 0; transform: translateY(7px); } }
+    .hero { padding: clamp(18px, 3vw, 28px) 0 6px; }
+    .eyebrow { margin-bottom: 7px; color: var(--teal); font: 800 .7rem ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase; }
+    .hero h2 { margin: 0; max-width: 860px; font-size: clamp(1.6rem, 4.5vw, 2.55rem); line-height: 1.08; letter-spacing: -.03em; }
+    .hero p { max-width: 780px; margin: 12px 0 0; color: #a4c1c1; line-height: 1.65; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 17px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(235px, 1fr)); gap: 14px; margin-top: 20px; }
+    .card, .panel {
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .card { min-height: 170px; padding: 19px; transition: transform .18s ease, border-color .18s ease; }
+    .card.clickable { cursor: pointer; }
+    .card.clickable:hover { transform: translateY(-3px); border-color: var(--line-hot); }
+    .card-icon { display: grid; place-items: center; width: 34px; height: 34px; margin-bottom: 13px; border-radius: 10px; color: var(--teal); background: rgba(45,212,191,.1); }
+    .card h3, .panel h3 { margin: 0; font-size: .96rem; }
+    .card p { min-height: 44px; margin: 7px 0 0; color: var(--muted); font-size: .82rem; line-height: 1.55; }
+    .badge { display: inline-block; margin-top: 13px; padding: 4px 8px; border: 1px solid rgba(94,234,212,.25); border-radius: 999px; color: #88e7df; font: 700 .65rem ui-monospace, monospace; }
+    .panel { margin-top: 16px; padding: clamp(16px, 3vw, 22px); }
+    .panel-head { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+    .panel-head .muted { margin-left: auto; }
+    .muted { color: var(--muted); font-size: .78rem; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; }
+    .kpi { padding: 15px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+    .kpi-label { color: var(--muted); font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; }
+    .kpi-value { margin-top: 6px; color: #efffff; font-size: 1.45rem; font-weight: 750; overflow-wrap: anywhere; }
+    .kpi-note { margin-top: 4px; color: #709393; font-size: .68rem; }
+    .split { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr); gap: 16px; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 15px; }
+    label { display: block; margin-bottom: 6px; color: #98b8b8; font-size: .73rem; }
+    input, select {
+      width: 100%;
+      padding: 10px 11px;
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: 9px;
+      outline: none;
+      color: var(--text);
+      background: #071a23;
+      transition: border-color .15s;
+    }
+    input:focus, select:focus { border-color: rgba(45,212,191,.6); }
+    input[type=file] { padding: 8px; }
+    button.primary, .link-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-height: 38px;
+      margin-top: 13px;
+      padding: 9px 16px;
+      border: 0;
+      border-radius: 9px;
+      color: #03201e;
+      background: linear-gradient(135deg, #5eead4, #22d3ee);
+      font-weight: 800;
+      font-size: .78rem;
+      text-decoration: none;
+      cursor: pointer;
+      box-shadow: 0 7px 24px rgba(45,212,191,.16);
+    }
+    button.secondary, .link-button.secondary { color: #bfe6e2; border: 1px solid var(--line-hot); background: rgba(45,212,191,.06); box-shadow: none; }
+    button.primary:disabled { opacity: .45; cursor: wait; }
+    .table-wrap { max-width: 100%; overflow: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .75rem; }
+    th { color: #8bafad; text-align: left; font-size: .67rem; text-transform: uppercase; letter-spacing: .06em; }
+    th, td { padding: 10px 9px; border-bottom: 1px solid rgba(255,255,255,.055); vertical-align: top; }
+    td { color: #c8dfdd; }
+    tr:last-child td { border-bottom: 0; }
+    pre {
+      max-height: 410px;
+      margin: 0;
+      padding: 14px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: #b9d9d5;
+      background: #031018;
+      font: .72rem/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .status-pill, .chip { display: inline-flex; align-items: center; padding: 4px 9px; border-radius: 999px; font-size: .68rem; font-weight: 750; }
+    .chip { margin: 3px 4px 3px 0; color: #b5dfdb; border: 1px solid var(--line); background: rgba(255,255,255,.035); }
+    .status-Pending { color: var(--amber); background: rgba(251,191,36,.11); }
+    .status-Running { color: var(--cyan); background: rgba(56,189,248,.11); }
+    .status-Completed { color: var(--green); background: rgba(74,222,128,.11); }
+    .status-Failed { color: var(--red); background: rgba(251,113,133,.11); }
+    .agent-council { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+    .agent-card { padding: 15px; border: 1px solid rgba(255,255,255,.09); border-radius: 12px; background: rgba(255,255,255,.025); }
+    .agent-name { margin-bottom: 8px; font: 800 .69rem ui-monospace, monospace; letter-spacing: .11em; }
+    .agent-name.mika { color: var(--pink); }
+    .agent-name.kai { color: #72e9ff; }
+    .agent-finding { color: #b8d1cf; font-size: .78rem; line-height: 1.55; }
+    .agent-summary { grid-column: 1 / -1; padding: 12px 14px; border-left: 2px solid var(--teal); color: #a7c6c4; background: rgba(45,212,191,.04); font-size: .75rem; line-height: 1.5; }
+    .job-row { display: grid; grid-template-columns: 95px 125px minmax(160px,1fr) 165px; gap: 8px; align-items: center; padding: 10px 4px; border-bottom: 1px solid rgba(255,255,255,.05); cursor: pointer; }
+    .job-row:hover { background: rgba(255,255,255,.025); }
+    .gauge-wrap { display: grid; place-items: center; min-height: 230px; }
+    .gauge { position: relative; display: grid; place-items: center; width: 190px; height: 190px; border-radius: 50%; background: conic-gradient(var(--teal) var(--gauge, 0%), rgba(255,255,255,.07) 0); box-shadow: inset 0 0 35px rgba(0,0,0,.3), 0 0 45px rgba(45,212,191,.08); }
+    .gauge::after { content: ""; position: absolute; width: 150px; height: 150px; border-radius: 50%; background: #071a22; }
+    .gauge-value { position: relative; z-index: 1; text-align: center; }
+    .gauge-value strong { display: block; font-size: 2rem; }
+    .gauge-value span { color: var(--muted); font-size: .7rem; }
+    .empty { padding: 22px; color: var(--muted); text-align: center; }
+    .spin { display: inline-block; width: 12px; height: 12px; margin-right: 7px; border: 2px solid rgba(255,255,255,.2); border-top-color: var(--teal); border-radius: 50%; animation: rotate .75s linear infinite; }
+    @keyframes rotate { to { transform: rotate(360deg); } }
+    footer { padding: 25px 16px 34px; color: #648181; text-align: center; font-size: .72rem; }
+    .toast { position: fixed; right: 18px; bottom: 18px; z-index: 50; max-width: min(440px, calc(100% - 36px)); padding: 12px 16px; border: 1px solid rgba(45,212,191,.45); border-radius: 10px; color: #b8fff5; background: #082029; box-shadow: var(--shadow); opacity: 0; pointer-events: none; transform: translateY(8px); transition: .2s; }
+    .toast.show { opacity: 1; transform: none; }
+    .toast.error { color: #fecdd3; border-color: rgba(251,113,133,.45); }
+    @media (max-width: 760px) {
+      .header-status { display: none; }
+      .split, .form-grid { grid-template-columns: 1fr; }
+      .agent-council { grid-template-columns: 1fr; }
+      .agent-summary { grid-column: auto; }
+      .job-row { grid-template-columns: 90px 1fr; }
+      .job-row > :nth-child(3), .job-row > :nth-child(4) { display: none; }
+      nav { width: calc(100% - 20px); border-radius: 12px; }
+    }
   </style>
 </head>
 <body>
   <header>
-    <div class="logo"></div>
-    <div>
-      <h1>AeroVigilAI &mdash; Unified Console</h1>
-      <div class="sub">Physics-Guided Bayesian Predictive Maintenance &bull; Decision-support only</div>
+    <div class="logo" aria-hidden="true"></div>
+    <div class="brand">
+      <h1>AeroVigilAI · Unified Console</h1>
+      <p>Physics-guided Bayesian fleet intelligence</p>
     </div>
+    <div class="header-status"><span class="live-dot" id="header-live-dot"></span><span id="header-status">Connecting to :8080</span></div>
   </header>
-  <nav id="nav">
+
+  <aside class="agent-mesh" aria-live="polite">
+    <div class="mesh-head">
+      <span class="live-dot" id="mesh-dot"></span>
+      <div class="mesh-title">CYBER PRIME DUAL AGENT · <span class="mika">MIKA</span> + <span class="kai">KAI</span></div>
+      <div class="mesh-state" id="mesh-state">CONNECTING</div>
+    </div>
+    <div class="mesh-path" id="mesh-path">
+      <span class="mesh-node">SCADA</span><span class="mesh-arrow"></span><span class="mesh-node">PG-BNN</span><span class="mesh-arrow"></span><span class="mesh-node">ISO 281</span><span class="mesh-arrow"></span><span class="mesh-node">TWIN</span><span class="mesh-arrow"></span><span class="mesh-node">FLEET</span><span class="mesh-arrow"></span><span class="mesh-node">HUMAN</span>
+    </div>
+  </aside>
+
+  <nav id="nav" aria-label="Console sections">
     <button data-page="overview" class="active">Overview</button>
-    <button data-page="jobs">Async Jobs</button>
+    <button data-page="twin">Digital Twin</button>
     <button data-page="fleet">Fleet</button>
-    <button data-page="hardware">Hardware</button>
+    <button data-page="hardware">AeroZip / Hardware</button>
+    <button data-page="ingestion">Ingestion</button>
+    <button data-page="jobs">Jobs</button>
+    <button data-page="inference">Inference</button>
+    <button data-page="system">System</button>
   </nav>
+
   <main>
     <section class="page active" id="page-overview">
       <div class="hero">
-        <h2>One canonical deployment, port 8080</h2>
-        <p>This is the compiled entry point for the AeroVigilAI browser console. The native
-           Flutter clients and this web console both talk to the same API surface under
-           <code>/api</code>. Model inference is served at <code>POST /api/model</code>.</p>
+        <div class="eyebrow">One app · One process · One port</div>
+        <h2>Evidence moves from turbine telemetry to a human decision on port 8080.</h2>
+        <p>The console, operational API, PG-BNN model API, durable digital twins, fleet reports, job queue, and compatibility routes share one canonical deployment. MIKA and KAI explain the maintenance and physics evidence without issuing turbine commands.</p>
+        <div class="hero-actions"><button class="primary" data-go="twin">Inspect WTG-001</button><a class="link-button secondary" href="/api/docs" target="_blank" rel="noopener">Operations API</a><a class="link-button secondary" href="/model-api/docs" target="_blank" rel="noopener">Model API</a></div>
       </div>
-      <section class="grid" id="cards"></section>
+      <div class="grid" id="overview-cards"></div>
     </section>
 
-    <section class="page" id="page-jobs">
-      <div class="hero">
-        <h2>Framework job queue</h2>
-        <p>Queue train / evaluate / export / federated / active-learning / SHAP jobs on the
-           durable queue (<code>POST /api/jobs/{type}</code>) and follow their live logs
-           (<code>GET /api/jobs/{id}</code>).</p>
-      </div>
+    <section class="page" id="page-twin">
+      <div class="hero"><div class="eyebrow">Durable digital twin</div><h2>Asset state, physics, and dual-agent consensus.</h2><p><code>GET /api/twin/status</code> hydrates each asset through the shared twin registry; <code>GET /api/twin/history</code> reads its durable SQLite snapshots.</p></div>
       <div class="panel">
-        <h3>Queue a job</h3>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-          <div>
-            <label for="job-type">Job type</label>
-            <select id="job-type">
-              <option value="train">train — physics-guided PG-BNN training</option>
-              <option value="evaluate">evaluate — RMSE / NLL / calibration</option>
-              <option value="export">export — ONNX edge export</option>
-              <option value="federated">federated — fleet FedAvg run</option>
-              <option value="active-learning">active-learning — uncertainty sampling</option>
-              <option value="explain">explain — physics SHAP report</option>
-            </select>
-          </div>
-          <div>
-            <label for="job-args">Extra CLI args (optional, space-separated)</label>
-            <input id="job-args" type="text" placeholder="--rounds 1 --clients 1" />
-          </div>
-        </div>
-        <button class="primary" id="queue-btn">Queue job</button>
+        <div class="form-grid"><div><label for="twin-asset">Asset ID</label><input id="twin-asset" value="WTG-001" autocomplete="off" /></div><div><label for="twin-model">Turbine model</label><select id="twin-model"><option value="GE-1.5">GE 1.5</option><option value="Vestas-V90">Vestas V90</option><option value="Siemens-SWT-2.3">Siemens SWT 2.3</option></select></div></div>
+        <button class="primary" id="twin-refresh">Refresh twin</button>
       </div>
-      <div class="panel">
-        <h3>Recent jobs <span class="muted" id="jobs-refresh-hint"></span></h3>
-        <div id="jobs-list"><span class="muted">Loading…</span></div>
-      </div>
-      <div class="panel" id="job-detail-panel" style="display:none">
-        <h3>Job detail <span id="job-detail-id" class="muted"></span></h3>
-        <div id="job-detail-body"></div>
-      </div>
+      <div class="panel"><div class="panel-head"><h3>Current state</h3><span class="muted" id="twin-updated">Waiting for asset…</span></div><div class="kpis" id="twin-kpis"></div></div>
+      <div class="panel"><div class="panel-head"><h3>MIKA + KAI agent team</h3><span class="muted" id="twin-agreement"></span></div><div class="agent-council" id="twin-agents"><div class="empty">Loading connected agent evidence…</div></div></div>
+      <div class="panel"><div class="panel-head"><h3>Durable history</h3><span class="muted" id="twin-history-count"></span></div><div class="table-wrap" id="twin-history"></div></div>
     </section>
 
     <section class="page" id="page-fleet">
-      <div class="hero">
-        <h2>Fleet summary</h2>
-        <p>Live aggregate from the durable store — every hardware stream updates these rows
-           automatically (<code>GET /api/fleet/summary</code>).</p>
-      </div>
-      <div class="panel" id="fleet-summary"></div>
-      <div class="panel" id="fleet-report-panel">
-        <h3>Fleet report <span class="muted">(GET /api/fleet/report)</span></h3>
-        <pre class="log" id="fleet-report-body"><span class="muted">Loading…</span></pre>
-      </div>
+      <div class="hero"><div class="eyebrow">Fleet intelligence</div><h2>Aggregate health, risk, and persisted reports.</h2><p>The fleet surface combines <code>/api/fleet/summary</code>, the generated markdown report, and the durable <code>/api/reports</code> index.</p></div>
+      <div class="panel"><div class="panel-head"><h3>Fleet summary</h3><button class="primary secondary" id="fleet-refresh" style="margin:0 0 0 auto">Refresh</button></div><div class="kpis" id="fleet-kpis"></div><div class="table-wrap" id="fleet-assets" style="margin-top:14px"></div></div>
+      <div class="split"><div class="panel"><div class="panel-head"><h3>Generated fleet report</h3><span class="muted">GET /api/fleet/report</span></div><pre id="fleet-report">Loading…</pre></div><div class="panel"><div class="panel-head"><h3>Persisted reports</h3><span class="muted" id="reports-count"></span></div><div id="reports-list"></div></div></div>
     </section>
 
     <section class="page" id="page-hardware">
-      <div class="hero">
-        <h2>Hardware gateway stream</h2>
-        <p>Most recent persisted readings from the industrial gateways (MQTT / Modbus / OPC-UA /
-           HTTPS) via <code>GET /api/hardware/latest</code>. Readings persist to SQLite and
-           update the digital twins + fleet reports automatically.</p>
+      <div class="hero"><div class="eyebrow">AeroZip + field gateways</div><h2>WAL-backed telemetry from the hardware edge.</h2><p>Latest MQTT, Modbus, OPC-UA, HTTPS, and restored AeroZip signals are normalized and persisted before updating twins and fleet state.</p></div>
+      <div class="panel"><div class="panel-head"><h3>Latest readings</h3><span class="muted" id="hardware-count"></span><button class="primary secondary" id="hardware-refresh" style="margin:0">Refresh</button></div><div class="kpis" id="hardware-kpis"></div><div class="table-wrap" id="hardware-table" style="margin-top:14px"></div></div>
+    </section>
+
+    <section class="page" id="page-ingestion">
+      <div class="hero"><div class="eyebrow">Offline + cloud ingestion</div><h2>Bring SCADA exports into one auditable intake.</h2><p>Upload local CSV/AeroZip files or ask the server to retrieve a signed HTTPS object URL. Import provenance and durable-store counts remain visible below.</p></div>
+      <div class="split">
+        <div class="panel"><h3>File upload</h3><p class="muted">POST /api/telemetry/upload · source=console</p><label for="upload-file" style="margin-top:15px">SCADA / AeroZip file</label><input id="upload-file" type="file" accept=".csv,.json,.zip,.aerozip" /><button class="primary" id="upload-btn">Upload file</button><div class="muted" id="upload-result" style="margin-top:10px"></div></div>
+        <div class="panel"><h3>Signed cloud import</h3><p class="muted">POST /api/telemetry/import · HTTPS only</p><label for="import-url" style="margin-top:15px">Pre-signed S3, GCS, or Azure URL</label><input id="import-url" type="url" placeholder="https://storage.example/scada.csv?signature=…" /><button class="primary" id="import-btn">Import URL</button><div class="muted" id="import-result" style="margin-top:10px"></div></div>
       </div>
-      <div class="panel">
-        <h3>Latest readings <span id="hw-count" class="muted"></span></h3>
-        <pre class="log" id="hw-body"><span class="muted">Loading…</span></pre>
+      <div class="panel"><div class="panel-head"><h3>Recent imports</h3><span class="muted" id="imports-count"></span><button class="primary secondary" id="imports-refresh" style="margin:0">Refresh</button></div><div class="table-wrap" id="imports-table"></div></div>
+      <div class="panel"><div class="panel-head"><h3>Durable system counts</h3><span class="muted">GET /api/system/stats</span></div><div class="kpis" id="ingestion-stats"></div></div>
+    </section>
+
+    <section class="page" id="page-jobs">
+      <div class="hero"><div class="eyebrow">Durable job control</div><h2>Queue, claim, and inspect framework jobs.</h2><p>Pending work is stored in <code>jobs.sqlite3</code> with WAL-safe claiming. Run inline, or set <code>AV_JOB_MODE=worker</code> and optionally connect a Redis broker.</p></div>
+      <div class="panel"><div class="form-grid"><div><label for="job-type">Job type</label><select id="job-type"><option value="train">train · PG-BNN training</option><option value="evaluate">evaluate · calibration metrics</option><option value="export">export · ONNX edge model</option><option value="federated">federated · fleet FedAvg</option><option value="active-learning">active-learning · uncertainty sample</option><option value="explain">explain · physics SHAP</option></select></div><div><label for="job-args">Additional CLI arguments</label><input id="job-args" placeholder="--rounds 1 --clients 1" /></div></div><button class="primary" id="queue-btn">Queue job</button></div>
+      <div class="panel"><div class="panel-head"><h3>Recent jobs</h3><span class="muted" id="jobs-count"></span><button class="primary secondary" id="jobs-refresh" style="margin:0">Refresh</button></div><div id="jobs-list"></div></div>
+      <div class="panel" id="job-detail-panel" hidden><div class="panel-head"><h3>Job detail</h3><span class="muted" id="job-detail-id"></span></div><div id="job-detail"></div></div>
+    </section>
+
+    <section class="page" id="page-inference">
+      <div class="hero"><div class="eyebrow">PG-BNN inference</div><h2>Six signals in. RUL and uncertainty out.</h2><p>Submit one validated SCADA snapshot to <code>POST /api/model</code>. The Bayesian model response stays advisory-only and includes its confidence interval, risk state, and inference timing.</p></div>
+      <div class="split">
+        <div class="panel"><h3>Telemetry snapshot</h3><div class="form-grid" style="margin-top:14px"><div><label for="inf-vibration">Vibration RMS · mm/s</label><input id="inf-vibration" type="number" min="0" max="50" step="0.1" value="2.1" /></div><div><label for="inf-bearing">Bearing temp · °C</label><input id="inf-bearing" type="number" min="20" max="150" step="0.1" value="62" /></div><div><label for="inf-generator">Generator temp · °C</label><input id="inf-generator" type="number" min="20" max="200" step="0.1" value="74" /></div><div><label for="inf-power">Power output · kW</label><input id="inf-power" type="number" min="0" max="5000" step="1" value="1350" /></div><div><label for="inf-wind">Wind speed · m/s</label><input id="inf-wind" type="number" min="0" max="30" step="0.1" value="11" /></div><div><label for="inf-hours">Operating hours</label><input id="inf-hours" type="number" min="0" max="100000" step="1" value="21000" /></div></div><button class="primary" id="inference-btn">Run inference</button><div class="hero-actions"><a class="link-button secondary" href="/model-api/docs" target="_blank" rel="noopener">Model docs</a><a class="link-button secondary" href="/api/docs" target="_blank" rel="noopener">Operations docs</a><a class="link-button secondary" href="/legacy">Legacy → Console</a></div></div>
+        <div class="panel"><div class="panel-head"><h3>RUL estimate</h3><span class="muted" id="inference-time">Ready</span></div><div class="gauge-wrap"><div class="gauge" id="rul-gauge" style="--gauge:0%"><div class="gauge-value"><strong id="rul-value">—</strong><span>predicted days</span></div></div></div><div id="inference-chips"></div></div>
       </div>
+      <div class="panel"><div class="panel-head"><h3>Prediction details</h3><span class="muted">Decision support only</span></div><div class="table-wrap" id="inference-table"><div class="empty">Run inference to inspect the result.</div></div></div>
+    </section>
+
+    <section class="page" id="page-system">
+      <div class="hero"><div class="eyebrow">Runtime health</div><h2>One deployment boundary, fully discoverable.</h2><p>The root health probe reports the connected agent mesh, digital-twin registry, and every mounted service. Durable row counts come from the operational store.</p></div>
+      <div class="panel"><div class="panel-head"><h3>Service health</h3><span class="muted" id="system-health-time"></span><button class="primary secondary" id="system-refresh" style="margin:0">Refresh</button></div><div class="kpis" id="system-kpis"></div></div>
+      <div class="split"><div class="panel"><div class="panel-head"><h3>Connected services</h3></div><div class="table-wrap" id="services-table"></div></div><div class="panel"><div class="panel-head"><h3>Durable store</h3></div><div class="kpis" id="system-stats"></div></div></div>
+      <div class="panel"><div class="panel-head"><h3>Health payload</h3><span class="muted">GET /health</span></div><pre id="health-json">Loading…</pre></div>
     </section>
   </main>
-  <footer>AeroVigilAI &copy; <span id="y"></span> &bull; Advisory-only — not a safety instrumented system.</footer>
-  <div class="toast" id="toast"></div>
+
+  <footer>AeroVigilAI · Advisory-only decision support · MIKA and KAI issue no turbine commands · © <span id="year"></span></footer>
+  <div class="toast" id="toast" role="status"></div>
 
   <script>
+    'use strict';
     const $ = (id) => document.getElementById(id);
-    document.getElementById('y').textContent = new Date().getFullYear();
-
-    let toastTimer = null;
-    function toast(msg, isError = false) {
-      const t = $('toast');
-      t.textContent = msg;
-      t.className = 'toast show' + (isError ? ' error' : '');
+    const esc = (value) => String(value ?? '—').replace(/[&<>'"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+    const number = (value, digits = 1) => value == null || Number.isNaN(Number(value)) ? '—' : Number(value).toFixed(digits);
+    const dateText = (value, epoch = false) => {
+      if (value == null || value === '') return '—';
+      const date = new Date(epoch ? Number(value) * 1000 : value);
+      return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+    };
+    $('year').textContent = new Date().getFullYear();
+    let toastTimer;
+    function toast(message, error = false) {
+      const node = $('toast');
+      node.textContent = message;
+      node.className = 'toast show' + (error ? ' error' : '');
       clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => (t.className = 'toast'), 4000);
+      toastTimer = setTimeout(() => { node.className = 'toast'; }, 4200);
     }
-
-    async function api(path, opts = {}) {
-      const resp = await fetch(path, opts);
-      if (!resp.ok) {
+    async function api(path, options = {}) {
+      const response = await fetch(path, options);
+      if (!response.ok) {
         let detail = '';
-        try { detail = (await resp.json()).detail || ''; } catch (_) {}
-        throw new Error(`${resp.status} ${detail}`.trim());
+        try { const body = await response.json(); detail = body.detail || JSON.stringify(body); } catch (_) { detail = await response.text(); }
+        throw new Error(`${response.status} ${detail}`.trim());
       }
-      const ct = resp.headers.get('content-type') || '';
-      if (ct.includes('application/json')) return resp.json();
-      return resp.text();
+      const type = response.headers.get('content-type') || '';
+      return type.includes('json') ? response.json() : response.text();
+    }
+    function kpi(label, value, note = '') {
+      return `<div class="kpi"><div class="kpi-label">${esc(label)}</div><div class="kpi-value">${esc(value)}</div>${note ? `<div class="kpi-note">${esc(note)}</div>` : ''}</div>`;
+    }
+    function showPage(page) {
+      document.querySelectorAll('.page').forEach((node) => node.classList.toggle('active', node.id === `page-${page}`));
+      document.querySelectorAll('#nav button').forEach((button) => button.classList.toggle('active', button.dataset.page === page));
+      history.replaceState(null, '', `#${page}`);
+      window.scrollTo({top: 0, behavior: 'smooth'});
+      const loaders = {twin: refreshTwin, fleet: refreshFleet, hardware: refreshHardware, ingestion: refreshImports, jobs: refreshJobs, system: refreshSystem};
+      loaders[page]?.();
+    }
+    document.querySelectorAll('#nav button').forEach((button) => button.addEventListener('click', () => showPage(button.dataset.page)));
+    document.querySelectorAll('[data-go]').forEach((button) => button.addEventListener('click', () => showPage(button.dataset.go)));
+
+    const overviewCards = [
+      ['◈', 'Digital Twin', 'Current physics state, durable history, and MIKA + KAI evidence for any asset.', 'GET /api/twin/status', 'twin'],
+      ['≋', 'Fleet', 'Fleet health aggregates plus generated and persisted advisory reports.', 'GET /api/fleet/summary', 'fleet'],
+      ['⌁', 'AeroZip / Hardware', 'WAL-persisted edge and restored telemetry from industrial gateways.', 'GET /api/hardware/latest', 'hardware'],
+      ['⇧', 'Ingestion', 'Offline file upload, signed HTTPS import, provenance, and store counts.', 'POST /api/telemetry/upload', 'ingestion'],
+      ['⚙', 'Jobs', 'Durable training, evaluation, export, federated, active-learning, and SHAP work.', 'POST /api/jobs/{type}', 'jobs'],
+      ['Σ', 'Inference', 'Six-signal PG-BNN prediction with risk and confidence evidence.', 'POST /api/model', 'inference'],
+      ['◎', 'System', 'Root health, agent mesh, mounted services, and SQLite statistics.', 'GET /health', 'system'],
+      ['{}', 'API Explorer', 'Interactive OpenAPI references for operations and low-level model services.', '/api/docs · /model-api/docs', null],
+    ];
+    $('overview-cards').innerHTML = overviewCards.map(([icon,title,copy,endpoint,target]) => `<article class="card ${target ? 'clickable' : ''}" ${target ? `data-card-target="${target}"` : ''}><div class="card-icon">${icon}</div><h3>${esc(title)}</h3><p>${esc(copy)}</p><span class="badge">${esc(endpoint)}</span></article>`).join('');
+    document.querySelectorAll('[data-card-target]').forEach((card) => card.addEventListener('click', () => showPage(card.dataset.cardTarget)));
+
+    let healthPayload = null;
+    async function refreshHealth() {
+      try {
+        healthPayload = await api('/health');
+        const mesh = healthPayload.agent_mesh || {};
+        const connected = mesh.status === 'connected';
+        $('header-live-dot').classList.toggle('degraded', !connected);
+        $('mesh-dot').classList.toggle('degraded', !connected);
+        $('header-status').textContent = `${healthPayload.status} · v${healthPayload.version} · :${healthPayload.port}`;
+        $('mesh-state').textContent = `${mesh.status || 'unknown'} · ${mesh.team_id || 'agent mesh'}`;
+        $('mesh-state').style.color = connected ? 'var(--green)' : 'var(--red)';
+        const path = Array.isArray(mesh.evidence_path) ? mesh.evidence_path : [];
+        if (path.length) $('mesh-path').innerHTML = path.map((node, i) => `<span class="mesh-node">${esc(node)}</span>${i < path.length - 1 ? '<span class="mesh-arrow"></span>' : ''}`).join('');
+        return healthPayload;
+      } catch (error) {
+        $('header-live-dot').classList.add('degraded');
+        $('mesh-dot').classList.add('degraded');
+        $('header-status').textContent = 'Disconnected';
+        $('mesh-state').textContent = 'DEGRADED · ' + error.message;
+        $('mesh-state').style.color = 'var(--red)';
+        throw error;
+      }
     }
 
-    // ---- navigation ----
-    document.querySelectorAll('#nav button').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('#nav button').forEach((b) => b.classList.remove('active'));
-        document.querySelectorAll('section.page').forEach((s) => s.classList.remove('active'));
-        btn.classList.add('active');
-        $('page-' + btn.dataset.page).classList.add('active');
-        if (btn.dataset.page === 'jobs') refreshJobs();
-        if (btn.dataset.page === 'fleet') refreshFleet();
-        if (btn.dataset.page === 'hardware') refreshHardware();
-      });
+    function twinTeam(data) { return data.agent_team || data.last_state?.agent_team || data.last_state?.advisory?.agent_team || null; }
+    async function refreshTwin() {
+      const asset = $('twin-asset').value.trim() || 'WTG-001';
+      const model = $('twin-model').value;
+      $('twin-updated').innerHTML = '<span class="spin"></span>Loading';
+      try {
+        const [state, history] = await Promise.all([
+          api(`/api/twin/status?asset_id=${encodeURIComponent(asset)}&model=${encodeURIComponent(model)}`),
+          api(`/api/twin/history?asset_id=${encodeURIComponent(asset)}&limit=40`),
+        ]);
+        const last = state.last_state || {};
+        const telemetry = last.telemetry || {};
+        const advisory = last.advisory || {};
+        $('twin-updated').textContent = `Updated ${dateText(state.last_updated)} · ${state.n_state_records || 0} in-memory records`;
+        $('twin-kpis').innerHTML = [
+          kpi('Asset', state.asset_id, state.model_name),
+          kpi('Predicted RUL', advisory.predicted_rul_days == null ? 'Not available' : `${number(advisory.predicted_rul_days)} d`, last.advisory_source || state.advisory_source || 'physics state'),
+          kpi('Cumulative wear', number(state.cumulative_wear, 4), 'normalized 0–1'),
+          kpi('Bearing L10', last.bearing_l10_hours == null ? '—' : `${number(last.bearing_l10_hours, 0)} h`, 'ISO 281'),
+          kpi('Vibration', telemetry.vibration_mms == null ? '—' : `${number(telemetry.vibration_mms, 2)} mm/s`),
+          kpi('Temperature', telemetry.temperature_c == null ? '—' : `${number(telemetry.temperature_c)} °C`),
+        ].join('');
+        const team = twinTeam(state);
+        if (team?.agents) {
+          $('twin-agreement').textContent = `${number(team.agreement_score_pct)}% agreement · ${team.risk_level || '—'} risk`;
+          $('twin-agents').innerHTML = `<div class="agent-card"><div class="agent-name mika">MIKA · MAINTENANCE STRATEGIST</div><div class="agent-finding">${esc(team.agents.mika?.finding)}</div></div><div class="agent-card"><div class="agent-name kai">KAI · PHYSICS CONSTRAINT SENTINEL</div><div class="agent-finding">${esc(team.agents.kai?.finding)}</div></div><div class="agent-summary">${esc(team.shared_summary)}<div style="margin-top:8px">${(team.connected_sources || []).map((s) => `<span class="chip">${esc(s)}</span>`).join('')}</div></div>`;
+        } else {
+          $('twin-agreement').textContent = 'Awaiting advisory evidence';
+          $('twin-agents').innerHTML = '<div class="empty">Twin state is connected; agent findings appear when advisory evidence is available.</div>';
+        }
+        const rows = history.history || [];
+        $('twin-history-count').textContent = `${rows.length} persisted snapshots`;
+        $('twin-history').innerHTML = rows.length ? `<table><thead><tr><th>Timestamp</th><th>Source</th><th>RUL</th><th>Wear</th><th>Risk / status</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${esc(dateText(row.timestamp || row.ts))}</td><td>${esc(row.advisory_source)}</td><td>${esc(row.advisory?.predicted_rul_days == null ? '—' : number(row.advisory.predicted_rul_days) + ' d')}</td><td>${esc(number(row.cumulative_wear, 4))}</td><td>${esc(row.agent_team?.risk_level || row.advisory?.risk_level || row.advisory?.status)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No persisted twin snapshots yet. Hardware stream ingestion will populate this history.</div>';
+      } catch (error) {
+        $('twin-updated').textContent = 'Load failed';
+        toast('Twin: ' + error.message, true);
+      }
+    }
+    $('twin-refresh').addEventListener('click', refreshTwin);
+    $('twin-asset').addEventListener('keydown', (event) => { if (event.key === 'Enter') refreshTwin(); });
+
+    async function refreshFleet() {
+      $('fleet-kpis').innerHTML = kpi('Fleet', 'Loading…');
+      try {
+        const [summary, report, reports] = await Promise.all([api('/api/fleet/summary'), api('/api/fleet/report'), api('/api/reports?limit=12')]);
+        $('fleet-kpis').innerHTML = [kpi('Assets tracked', summary.n_assets ?? 0), kpi('At risk (<104d)', summary.at_risk_count ?? 0), kpi('Mean RUL', summary.mean_rul_days == null ? '—' : `${number(summary.mean_rul_days)} d`), kpi('Mean health', summary.mean_health_score == null ? '—' : `${number(summary.mean_health_score)}%`)].join('');
+        const assets = summary.turbines || [];
+        $('fleet-assets').innerHTML = assets.length ? `<table><thead><tr><th>Asset</th><th>Status</th><th>Health</th><th>RUL</th><th>Availability</th><th>Gateway</th><th>Last seen</th></tr></thead><tbody>${assets.map((row) => `<tr><td>${esc(row.turbine_id)}</td><td><span class="chip">${esc(row.status)}</span></td><td>${esc(number(row.health_score))}%</td><td>${esc(number(row.predicted_rul_days))} d</td><td>${esc(number(row.availability))}%</td><td>${esc(row.gateway_id)}</td><td>${esc(dateText(row.last_seen))}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No fleet assets yet. Stream gateway telemetry to populate the durable fleet.</div>';
+        $('fleet-report').textContent = report;
+        const persisted = reports.reports || [];
+        $('reports-count').textContent = `${persisted.length} records`;
+        $('reports-list').innerHTML = persisted.length ? persisted.map((row) => `<div style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05)"><strong style="font-size:.78rem">${esc(row.title || row.kind)}</strong><div class="muted" style="margin-top:5px">${esc(row.kind)} · ${esc(dateText(row.ts, true))}</div></div>`).join('') : '<div class="empty">No persisted reports yet.</div>';
+      } catch (error) { toast('Fleet: ' + error.message, true); }
+    }
+    $('fleet-refresh').addEventListener('click', refreshFleet);
+
+    async function refreshHardware() {
+      $('hardware-count').innerHTML = '<span class="spin"></span>Loading';
+      try {
+        const data = await api('/api/hardware/latest?limit=150');
+        const rows = data.readings || [];
+        const gateways = new Set(rows.map((r) => r.gateway_id).filter(Boolean));
+        const turbines = new Set(rows.map((r) => r.turbine_id).filter(Boolean));
+        const signals = new Set(rows.map((r) => r.signal).filter(Boolean));
+        $('hardware-count').textContent = `${data.count || rows.length} WAL-persisted readings`;
+        $('hardware-kpis').innerHTML = [kpi('Readings shown', rows.length), kpi('Gateways', gateways.size), kpi('Turbines', turbines.size), kpi('Signals', signals.size)].join('');
+        $('hardware-table').innerHTML = rows.length ? `<table><thead><tr><th>Timestamp</th><th>Gateway</th><th>Turbine</th><th>Signal</th><th>Value</th><th>Quality</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${esc(dateText(row.ts || row.timestamp))}</td><td>${esc(row.gateway_id)}</td><td>${esc(row.turbine_id)}</td><td><code>${esc(row.signal)}</code></td><td>${esc(row.value)} ${esc(row.unit || '')}</td><td>${esc(row.quality || 'good')}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No hardware readings yet. Start hardware_agent.py or POST /api/hardware/stream.</div>';
+      } catch (error) { $('hardware-count').textContent = 'Load failed'; toast('Hardware: ' + error.message, true); }
+    }
+    $('hardware-refresh').addEventListener('click', refreshHardware);
+
+    async function refreshImports() {
+      try {
+        const [imports, stats] = await Promise.all([api('/api/imports?limit=30'), api('/api/system/stats')]);
+        const rows = imports.imports || [];
+        $('imports-count').textContent = `${imports.count || rows.length} records`;
+        $('imports-table').innerHTML = rows.length ? `<table><thead><tr><th>Time</th><th>Filename</th><th>Source</th><th>Type</th><th>Bytes</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${esc(dateText(row.ts, true))}</td><td>${esc(row.filename)}</td><td><span class="chip">${esc(row.source)}</span></td><td>${esc(row.content_type)}</td><td>${esc(Number(row.size_bytes || 0).toLocaleString())}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No imports recorded yet.</div>';
+        $('ingestion-stats').innerHTML = Object.entries(stats.tables || {}).map(([name, count]) => kpi(name.replaceAll('_', ' '), count)).join('') + kpi('Jobs', stats.jobs ?? '—');
+      } catch (error) { toast('Imports: ' + error.message, true); }
+    }
+    $('imports-refresh').addEventListener('click', refreshImports);
+    $('upload-btn').addEventListener('click', async () => {
+      const file = $('upload-file').files[0];
+      if (!file) return toast('Choose a file before uploading.', true);
+      const button = $('upload-btn'); button.disabled = true; button.textContent = 'Uploading…';
+      try {
+        const form = new FormData(); form.append('source', 'console'); form.append('file', file);
+        const result = await api('/api/telemetry/upload', {method:'POST', body:form});
+        $('upload-result').textContent = `Recorded ${result.filename} · ${Number(result.bytes || 0).toLocaleString()} bytes · import ${result.import_id}`;
+        toast('Upload recorded in durable import history.'); refreshImports();
+      } catch (error) { toast('Upload: ' + error.message, true); }
+      finally { button.disabled = false; button.textContent = 'Upload file'; }
+    });
+    $('import-btn').addEventListener('click', async () => {
+      const url = $('import-url').value.trim();
+      if (!url) return toast('Enter a signed HTTPS URL.', true);
+      const button = $('import-btn'); button.disabled = true; button.textContent = 'Importing…';
+      try {
+        const result = await api('/api/telemetry/import', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url})});
+        $('import-result').textContent = `Imported ${result.filename} · ${Number(result.bytes || 0).toLocaleString()} bytes · import ${result.import_id}`;
+        toast('Cloud import recorded.'); refreshImports();
+      } catch (error) { toast('Cloud import: ' + error.message, true); }
+      finally { button.disabled = false; button.textContent = 'Import URL'; }
     });
 
-    // ---- overview cards ----
-    const cards = [
-      ['Model Inference', 'Canonical PG-BNN inference with mean + epistemic/aleatoric heads.', 'POST /api/model'],
-      ['Digital Twin', 'Live generator RPM, gearbox temperature and simulation metrics.', 'GET /api/twin/status'],
-      ['Fleet Reports', 'Aggregate fleet health across farms, paginated.', 'GET /api/fleet/report'],
-      ['AeroZip Telemetry', 'Compression ratio, bandwidth reduction and restoration status.', 'POST /api/telemetry/compress'],
-      ['Async Jobs', 'Queue train / evaluate / export / federated / active-learning / SHAP jobs.', 'POST /api/jobs/{type}'],
-      ['Hardware Stream', 'Normalized gateway telemetry ingestion (MQTT/Modbus/OPC-UA).', 'POST /api/hardware/stream'],
-    ];
-    const el = $('cards');
-    for (const [t, d, e] of cards) {
-      const c = document.createElement('div');
-      c.className = 'card';
-      c.innerHTML = `<h3>${t}</h3><p>${d}</p><span class="badge">${e}</span>`;
-      el.appendChild(c);
-    }
-    fetch('/health').then((r) => r.json()).then((h) => {
-      const c = document.createElement('div');
-      c.className = 'card';
-      c.innerHTML = `<h3>System</h3><p>Status: ${h.status} &bull; v${h.version}</p><span class="badge">GET /health</span>`;
-      el.appendChild(c);
-    }).catch(() => {});
-
-    // ---- jobs ----
-    const JOB_TYPES = ['train', 'evaluate', 'export', 'federated', 'active-learning', 'explain'];
-
-    async function queueJob() {
-      const btn = $('queue-btn');
-      const jobType = $('job-type').value;
-      const raw = $('job-args').value.trim();
-      const args = raw ? raw.split(/\s+/) : [];
-      btn.disabled = true;
-      btn.textContent = 'Queuing…';
-      try {
-        const resp = await api('/api/jobs/' + jobType, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ args }),
-        });
-        toast(`Job ${jobType} queued → ${resp.job_id} (${resp.status})`);
-        $('job-args').value = '';
-        refreshJobs();
-        selectJob(resp.job_id);
-      } catch (e) {
-        toast('Queue failed: ' + e.message, true);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Queue job';
-      }
-    }
-    $('queue-btn').addEventListener('click', queueJob);
-
+    let selectedJob = null;
     let jobPoll = null;
     async function refreshJobs() {
       try {
-        const data = await api('/api/jobs?limit=15');
-        const list = $('jobs-list');
-        if (!data.jobs || !data.jobs.length) {
-          list.innerHTML = '<span class="muted">No jobs yet — queue one above.</span>';
-          return;
-        }
-        list.innerHTML = '';
-        for (const j of data.jobs) {
-          const row = document.createElement('div');
-          row.className = 'job-row';
-          row.innerHTML = `
-            <span class="status-pill status-${j.status}">${j.status}</span>
-            <code>${j.job_type}</code>
-            <span class="muted" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${j.job_id}</span>
-            <span class="muted">${new Date(j.created_at * 1000).toLocaleString()}</span>`;
-          row.addEventListener('click', () => selectJob(j.job_id));
-          list.appendChild(row);
-        }
-      } catch (e) {
-        $('jobs-list').innerHTML = `<span class="muted">Could not load jobs: ${e.message}</span>`;
-      }
+        const data = await api('/api/jobs?limit=30');
+        const jobs = data.jobs || [];
+        $('jobs-count').textContent = `${data.count || jobs.length} jobs`;
+        $('jobs-list').innerHTML = jobs.length ? jobs.map((job) => `<div class="job-row" data-job="${esc(job.job_id)}"><span class="status-pill status-${esc(job.status)}">${esc(job.status)}</span><code>${esc(job.job_type)}</code><span class="muted">${esc(job.job_id)}</span><span class="muted">${esc(dateText(job.created_at, true))}</span></div>`).join('') : '<div class="empty">No jobs yet. Queue one above.</div>';
+        document.querySelectorAll('[data-job]').forEach((row) => row.addEventListener('click', () => selectJob(row.dataset.job)));
+      } catch (error) { $('jobs-list').innerHTML = `<div class="empty">${esc(error.message)}</div>`; }
     }
-
     async function selectJob(jobId) {
-      const panel = $('job-detail-panel');
-      const body = $('job-detail-body');
-      panel.style.display = 'block';
-      $('job-detail-id').textContent = `— ${jobId}`;
-      body.innerHTML = '<span class="spin"></span><span class="muted">Loading…</span>';
+      selectedJob = jobId;
+      $('job-detail-panel').hidden = false;
+      $('job-detail-id').textContent = jobId;
       clearInterval(jobPoll);
       const poll = async () => {
+        if (selectedJob !== jobId) return;
         try {
-          const j = await api('/api/jobs/' + jobId);
-          body.innerHTML = `
-            <div style="margin-bottom:10px">
-              <span class="status-pill status-${j.status}">${j.status}</span>
-              <span class="muted"> type: ${j.job_type} &bull; created: ${new Date(j.created_at * 1000).toLocaleString()}</span>
-              ${j.result ? '<span class="muted"> &bull; result: <code>' + JSON.stringify(j.result) + '</code></span>' : ''}
-            </div>
-            <pre class="log">${(j.logs || []).join('\n') || '<span class="muted">(no logs yet)</span>'}</pre>`;
-          body.querySelector('pre').scrollTop = body.querySelector('pre').scrollHeight;
-          if (j.status === 'Completed' || j.status === 'Failed') clearInterval(jobPoll);
-        } catch (e) {
-          body.innerHTML = `<span class="muted">Could not load job: ${e.message}</span>`;
-          clearInterval(jobPoll);
-        }
+          const job = await api('/api/jobs/' + encodeURIComponent(jobId));
+          $('job-detail').innerHTML = `<div style="margin-bottom:11px"><span class="status-pill status-${esc(job.status)}">${esc(job.status)}</span> <span class="chip">${esc(job.job_type)}</span> <span class="muted">updated ${esc(dateText(job.updated_at, true))}</span></div>${job.result ? `<pre style="margin-bottom:10px">${esc(JSON.stringify(job.result, null, 2))}</pre>` : ''}<pre>${esc((job.logs || []).join('\n') || '(no logs yet)')}</pre>`;
+          if (job.status === 'Completed' || job.status === 'Failed') clearInterval(jobPoll);
+        } catch (error) { $('job-detail').innerHTML = `<div class="empty">${esc(error.message)}</div>`; clearInterval(jobPoll); }
       };
-      await poll();
-      jobPoll = setInterval(poll, 2000);
+      await poll(); jobPoll = setInterval(poll, 2000);
     }
+    $('jobs-refresh').addEventListener('click', refreshJobs);
+    $('queue-btn').addEventListener('click', async () => {
+      const type = $('job-type').value;
+      const args = $('job-args').value.trim() ? $('job-args').value.trim().split(/\s+/) : [];
+      const button = $('queue-btn'); button.disabled = true; button.textContent = 'Queuing…';
+      try {
+        const result = await api('/api/jobs/' + encodeURIComponent(type), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({args})});
+        toast(`${result.job_type} queued · ${result.job_id}`); $('job-args').value = ''; await refreshJobs(); selectJob(result.job_id);
+      } catch (error) { toast('Queue: ' + error.message, true); }
+      finally { button.disabled = false; button.textContent = 'Queue job'; }
+    });
 
-    // ---- fleet ----
-    async function refreshFleet() {
+    $('inference-btn').addEventListener('click', async () => {
+      const payload = {
+        vibration_rms: Number($('inf-vibration').value), bearing_temp: Number($('inf-bearing').value), generator_temp: Number($('inf-generator').value),
+        power_output: Number($('inf-power').value), wind_speed: Number($('inf-wind').value), operating_hours: Number($('inf-hours').value), n_mcmc_samples: 32,
+      };
+      const button = $('inference-btn'); button.disabled = true; button.innerHTML = '<span class="spin"></span>Running PG-BNN';
       try {
-        const s = await api('/api/fleet/summary');
-        const sum = $('fleet-summary');
-        sum.innerHTML = `
-          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap:12px;">
-            <div><div class="muted">Assets tracked</div><div style="font-size:1.6rem;font-weight:700">${s.n_assets}</div></div>
-            <div><div class="muted">At risk (&lt;104d)</div><div style="font-size:1.6rem;font-weight:700">${s.at_risk_count}</div></div>
-            <div><div class="muted">Mean RUL</div><div style="font-size:1.6rem;font-weight:700">${s.mean_rul_days ?? '—'}</div></div>
-            <div><div class="muted">Mean health</div><div style="font-size:1.6rem;font-weight:700">${s.mean_health_score ?? '—'}</div></div>
-          </div>`;
-      } catch (e) {
-        $('fleet-summary').innerHTML = `<span class="muted">Could not load fleet summary: ${e.message}</span>`;
-      }
+        const result = await api('/api/model', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+        const rul = Number(result.predicted_rul_days || 0);
+        $('rul-value').textContent = number(rul);
+        $('rul-gauge').style.setProperty('--gauge', `${Math.max(0, Math.min(100, rul / 365 * 100))}%`);
+        $('inference-time').textContent = `${number(result.inference_time_ms, 2)} ms · 32 MC samples`;
+        $('inference-chips').innerHTML = `<span class="chip">${esc(result.risk_level)} risk</span><span class="chip">σ ${esc(number(result.uncertainty_days, 2))} d</span><span class="chip">${result.maintenance_recommended ? 'maintenance review' : 'routine monitor'}</span>`;
+        const fields = [['Predicted RUL', `${number(result.predicted_rul_days, 2)} days`], ['Uncertainty', `${number(result.uncertainty_days, 2)} days`], ['95% confidence interval', (result.confidence_interval_95 || []).map((v) => number(v, 2)).join(' – ') + ' days'], ['Risk level', result.risk_level], ['Maintenance recommended', result.maintenance_recommended ? 'Yes — human review required' : 'No — continue monitoring'], ['Inference time', `${number(result.inference_time_ms, 3)} ms`]];
+        $('inference-table').innerHTML = `<table><thead><tr><th>Output</th><th>Value</th></tr></thead><tbody>${fields.map(([name,value]) => `<tr><td>${esc(name)}</td><td>${esc(value)}</td></tr>`).join('')}</tbody></table>`;
+        toast('PG-BNN inference complete.');
+      } catch (error) { toast('Inference: ' + error.message, true); }
+      finally { button.disabled = false; button.textContent = 'Run inference'; }
+    });
+
+    async function refreshSystem() {
+      $('system-health-time').innerHTML = '<span class="spin"></span>Refreshing';
       try {
-        const md = await api('/api/fleet/report');
-        $('fleet-report-body').textContent = md;
-      } catch (e) {
-        $('fleet-report-body').textContent = 'Could not load fleet report: ' + e.message;
-      }
+        const [health, stats] = await Promise.all([refreshHealth(), api('/api/system/stats')]);
+        const mesh = health.agent_mesh || {};
+        const twin = health.digital_twin || {};
+        $('system-health-time').textContent = `Checked ${new Date().toLocaleTimeString()}`;
+        $('system-kpis').innerHTML = [kpi('Application', health.status, `v${health.version}`), kpi('Canonical port', health.port), kpi('Agent mesh', mesh.status, (mesh.agents || []).join(' + ')), kpi('Twins tracked', twin.assets_tracked ?? 0, `cap ${twin.max_assets ?? '—'}`)].join('');
+        $('services-table').innerHTML = `<table><thead><tr><th>Service</th><th>Path</th></tr></thead><tbody>${Object.entries(health.services || {}).filter(([,path]) => path).map(([name,path]) => `<tr><td>${esc(name.replaceAll('_',' '))}</td><td><a href="${esc(path.replace('{job_type}','train'))}" target="_blank" rel="noopener">${esc(path)}</a></td></tr>`).join('')}</tbody></table>`;
+        $('system-stats').innerHTML = Object.entries(stats.tables || {}).map(([name,count]) => kpi(name.replaceAll('_',' '), count)).join('') + kpi('Jobs', stats.jobs ?? '—') + kpi('Journal', 'WAL');
+        $('health-json').textContent = JSON.stringify(health, null, 2);
+      } catch (error) { $('system-health-time').textContent = 'Health check failed'; $('health-json').textContent = error.message; }
     }
+    $('system-refresh').addEventListener('click', refreshSystem);
 
-    // ---- hardware ----
-    async function refreshHardware() {
-      try {
-        const data = await api('/api/hardware/latest?limit=100');
-        $('hw-count').textContent = `— ${data.count} readings persisted`;
-        const rows = (data.readings || [])
-          .map((r) => `${r.timestamp}  ${r.gateway_id}  ${r.turbine_id ?? '—'}  ${r.signal} = ${r.value} ${r.unit ?? ''} [${r.quality}]`)
-          .reverse().join('\n');
-        $('hw-body').textContent = rows || '(no readings yet)';
-      } catch (e) {
-        $('hw-body').textContent = 'Could not load readings: ' + e.message;
-      }
-    }
-
-    refreshJobs();
+    refreshHealth().catch(() => {});
+    setInterval(() => refreshHealth().catch(() => {}), 15000);
+    const initial = location.hash.slice(1);
+    if (['overview','twin','fleet','hardware','ingestion','jobs','inference','system'].includes(initial)) showPage(initial);
   </script>
 </body>
 </html>

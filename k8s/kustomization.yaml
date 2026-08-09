@@ -5,13 +5,13 @@ namespace: aerovigil
 
 resources:
   - namespace.yaml
+  - serviceaccount.yaml
   - configmap.yaml
   - secret.yaml
+  - pvc.yaml
   - deployment.yaml
   - service.yaml
   - ingress.yaml
-  - hpa.yaml
-  - servicemonitor.yaml
 
 images:
   - name: aerovigilai/wind-turbine-pg-bnn

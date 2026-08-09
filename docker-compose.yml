@@ -19,6 +19,11 @@ services:
       - LOG_LEVEL=info
       - AEROVIGIL_STORE_DB=/app/artifacts/aerovigil.sqlite3
       - AV_JOB_DB=/app/artifacts/jobs.sqlite3
+      - AV_TWIN_MAX_ASSETS=1024
+      - AV_STREAM_HEURISTIC=1
+      # Optional promoted 25-feature advisory bundle; the bundled six-signal
+      # model remains available through /api/model and /model-api.
+      - AV_MODEL_PATH=${AV_MODEL_PATH:-}
     volumes:
       - ./artifacts:/app/artifacts
       - ./config.json:/app/config.json:ro
@@ -61,6 +66,9 @@ services:
       - AEROVIGIL_PORT=8080
       - AEROVIGIL_STORE_DB=/app/artifacts/aerovigil.sqlite3
       - AV_JOB_DB=/app/artifacts/jobs.sqlite3
+      - AV_TWIN_MAX_ASSETS=1024
+      - AV_STREAM_HEURISTIC=1
+      - AV_MODEL_PATH=${AV_MODEL_PATH:-}
     volumes:
       - ./artifacts:/app/artifacts
       - ./config.json:/app/config.json:ro
