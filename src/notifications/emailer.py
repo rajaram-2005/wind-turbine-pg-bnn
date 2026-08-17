@@ -144,11 +144,18 @@ class AlertTracker:
     def __init__(self, path: str | Path | None = None) -> None:
         self.path = Path(path) if path else None
         self._state: dict[str, dict[str, Any]] = {}
+        self._suppressed: dict[str, dict[str, Any]] = {}
         if self.path and self.path.exists():
             try:
-                self._state = json.loads(self.path.read_text(encoding="utf-8"))
+                blob = json.loads(self.path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
-                self._state = {}
+                blob = {}
+            # v2 layout: {"alerts": {...}, "suppressed": {...}}; v1 was a flat dict.
+            if isinstance(blob, dict) and "alerts" in blob:
+                self._state = blob.get("alerts") or {}
+                self._suppressed = blob.get("suppressed") or {}
+            else:
+                self._state = blob if isinstance(blob, dict) else {}
 
     def _key(self, asset_id: str, fault_id: str) -> str:
         return f"{asset_id}:{fault_id}"
@@ -164,6 +171,10 @@ class AlertTracker:
         if severity not in SEVERITY_RANK:
             return False
         now = now or datetime.now(timezone.utc)
+        # Maintenance mode: the asset is being worked on — all alerts are
+        # silenced until the crew removes the suppression.
+        if asset_id in self._suppressed:
+            return False
         entry = self._state.get(self._key(asset_id, fault_id))
         if entry is None:
             return True
@@ -262,11 +273,43 @@ class AlertTracker:
         if self.path:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self.path.write_text(
-                json.dumps(self._state, indent=2, sort_keys=True), encoding="utf-8"
+                json.dumps(
+                    {"alerts": self._state, "suppressed": self._suppressed},
+                    indent=2,
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
             )
 
     def to_dict(self) -> dict:
         return dict(self._state)
+
+    # -- maintenance mode / suppression ------------------------------------ #
+    def suppress_asset(self, asset_id: str, reason: str = "", operator: str = "") -> None:
+        """Put an asset in maintenance mode: all its alerts are silenced."""
+        self._suppressed[asset_id] = {
+            "reason": reason,
+            "operator": operator,
+            "since": datetime.now(timezone.utc).isoformat(),
+        }
+        self._persist()
+
+    def unsuppress_asset(self, asset_id: str) -> bool:
+        """Take an asset out of maintenance mode; True when it was suppressed."""
+        if asset_id not in self._suppressed:
+            return False
+        self._suppressed.pop(asset_id)
+        self._persist()
+        return True
+
+    def is_suppressed(self, asset_id: str) -> bool:
+        return asset_id in self._suppressed
+
+    def suppressed_assets(self) -> list[dict]:
+        """Every asset currently in maintenance mode (newest first)."""
+        items = [{"asset_id": asset_id, **entry} for asset_id, entry in self._suppressed.items()]
+        items.sort(key=lambda item: item.get("since") or "", reverse=True)
+        return items
 
 
 # --------------------------------------------------------------------------- #
@@ -442,6 +485,18 @@ class EmailNotifier:
         if self.config.effective_mode == "off":
             return []
         results: list[NotificationResult] = []
+        if self.tracker.is_suppressed(report.asset_id):
+            # Maintenance mode: surface the suppression as a skipped result so
+            # operators can see alerts were intentionally held back.
+            return [
+                NotificationResult(
+                    subject=f"suppressed: {report.asset_id}",
+                    recipients=self.config.alert_recipients,
+                    channel="skipped",
+                    delivered=False,
+                    detail="asset in maintenance mode — alerts suppressed",
+                )
+            ]
         for fault in report.faults:
             if fault.severity not in self.config.alert_severities:
                 continue

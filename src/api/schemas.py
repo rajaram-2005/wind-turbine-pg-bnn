@@ -35,10 +35,12 @@ __all__ = [
     "FleetResponse",
     "FleetSummary",
     "HealthResponse",
+    "LimitsRequest",
     "NotificationSendRequest",
     "NotificationSendResponse",
     "NotificationStatusResponse",
     "REVIEW_DECISIONS",
+    "SimulateRequest",
     "Telemetry",
     "TelemetryCompressRequest",
     "TelemetryCompressResponse",
@@ -182,6 +184,24 @@ class WorkOrderRequest(BaseModel):
     telemetry: dict[str, Any] = Field(..., description="Telemetry snapshot dict")
 
 
+class SimulateRequest(BaseModel):
+    """Generate a deterministic demo telemetry snapshot and detect faults."""
+
+    asset_id: str = Field("WTG-DEMO", min_length=1)
+    model_key: str = Field("GE-1.5", min_length=1)
+    scenario: str = Field("healthy", pattern="^(healthy|faulty|critical|random)$")
+    seed: int = Field(0, ge=0, le=2**31 - 1)
+    notify: bool = Field(False, description="Send email/webhook alerts for the result")
+
+
+class LimitsRequest(BaseModel):
+    """Set per-asset detection-limit overrides."""
+
+    asset_id: str = Field(..., min_length=1)
+    overrides: dict[str, Any] = Field(..., description="Numeric limit overrides")
+    operator: str = Field("", description="Operator id for the audit trail")
+
+
 class TelemetryCompressRequest(BaseModel):
     """Wire format for POST /telemetry/compress (AeroZip)."""
 
@@ -291,6 +311,7 @@ class TwinSimulateRequest(BaseModel):
 
     asset_id: str = Field(..., min_length=1)
     model: str = "GE-1.5"
+    farm: str = Field("", description="Optional farm grouping")
     profile: str = Field("nominal", pattern="^(nominal|overload|derated|viscosity_loss)$")
     hours: float = Field(24.0, gt=0.0, le=720.0)
 

@@ -100,6 +100,27 @@ CREATE TABLE IF NOT EXISTS reviews (
     ts        REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_reviews_asset ON reviews (asset_id, id DESC);
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts        REAL NOT NULL,
+    asset_id  TEXT,
+    channel   TEXT NOT NULL,
+    subject   TEXT,
+    severity  TEXT,
+    fault_id  TEXT,
+    delivered INTEGER NOT NULL DEFAULT 0,
+    detail    TEXT,
+    ts_iso    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_asset ON notifications (asset_id, id DESC);
+
+CREATE TABLE IF NOT EXISTS limits_overrides (
+    asset_id   TEXT PRIMARY KEY,
+    overrides  TEXT NOT NULL,
+    operator   TEXT,
+    updated_at REAL NOT NULL
+);
 """
 
 
@@ -263,10 +284,14 @@ class Store:
         with self._connect() as conn:
             conn.execute(
                 "INSERT INTO twin_states (asset_id, payload, ts) VALUES (?, ?, ?)",
-                (asset_id, json.dumps(payload, default=str), payload.get("timestamp") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())),
+                (
+                    asset_id,
+                    json.dumps(payload, default=str),
+                    payload.get("timestamp") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                ),
             )
 
-    def latest_twin_state(self, asset_id: str) -> (dict[str, Any] | None):
+    def latest_twin_state(self, asset_id: str) -> dict[str, Any] | None:
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT payload FROM twin_states WHERE asset_id = ? ORDER BY id DESC LIMIT 1",
@@ -299,7 +324,7 @@ class Store:
                 (kind, title, body, json.dumps(meta) if meta else None, time.time()),
             )
 
-    def latest_report(self, kind: str) -> (dict[str, Any] | None):
+    def latest_report(self, kind: str) -> dict[str, Any] | None:
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT * FROM reports WHERE kind = ? ORDER BY id DESC LIMIT 1", (kind,)
@@ -366,9 +391,7 @@ class Store:
             )
             return int(cur.lastrowid)
 
-    def list_reviews(
-        self, asset_id: (str | None) = None, limit: int = 50
-    ) -> list[dict[str, Any]]:
+    def list_reviews(self, asset_id: (str | None) = None, limit: int = 50) -> list[dict[str, Any]]:
         limit = max(1, min(int(limit), 500))
         with self._connect() as conn:
             if asset_id:
@@ -389,9 +412,7 @@ class Store:
         with self._connect() as conn:
             for table in ("telemetry", "assets", "twin_states", "reports", "imports", "reviews"):
                 try:
-                    counts[table] = int(
-                        conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-                    )
+                    counts[table] = int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
                 except sqlite3.Error:  # pragma: no cover - schema drift guard
                     counts[table] = 0
         return {
@@ -400,8 +421,119 @@ class Store:
             "tables": counts,
         }
 
+    # ------------------------------------------------------- notifications
+    def record_notification(
+        self,
+        channel: str,
+        subject: str,
+        *,
+        asset_id: (str | None) = None,
+        severity: (str | None) = None,
+        fault_id: (str | None) = None,
+        delivered: bool = False,
+        detail: (str | None) = None,
+        ts_iso: (str | None) = None,
+    ) -> None:
+        """Persist one notification attempt (alert / report / test)."""
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO notifications (ts, asset_id, channel, subject, severity,"
+                " fault_id, delivered, detail, ts_iso)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    time.time(),
+                    asset_id,
+                    channel,
+                    subject[:300],
+                    severity,
+                    fault_id,
+                    1 if delivered else 0,
+                    (detail or "")[:500],
+                    ts_iso,
+                ),
+            )
 
-_SINGLETON: (Store | None) = None
+    def list_notifications(
+        self,
+        *,
+        asset_id: (str | None) = None,
+        channel: (str | None) = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Recent notification history, newest first."""
+        limit = max(1, min(int(limit), 1000))
+        sql = "SELECT * FROM notifications"
+        clauses: list[str] = []
+        params: list[Any] = []
+        if asset_id:
+            clauses.append("asset_id = ?")
+            params.append(asset_id)
+        if channel:
+            clauses.append("channel = ?")
+            params.append(channel)
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        out = []
+        for row in rows:
+            rec = dict(row)
+            rec["delivered"] = bool(rec["delivered"])
+            out.append(rec)
+        return out
+
+    # ------------------------------------------------------ limits overrides
+    def set_limits_override(
+        self,
+        asset_id: str,
+        overrides: dict[str, float],
+        operator: (str | None) = None,
+    ) -> None:
+        """Persist per-asset detection-limit overrides (JSON)."""
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO limits_overrides (asset_id, overrides, operator, updated_at)"
+                " VALUES (?, ?, ?, ?)"
+                " ON CONFLICT(asset_id) DO UPDATE SET overrides=excluded.overrides,"
+                " operator=excluded.operator, updated_at=excluded.updated_at",
+                (asset_id, json.dumps(overrides), operator, time.time()),
+            )
+
+    def get_limits_override(self, asset_id: str) -> dict[str, float] | None:
+        """Per-asset overrides, or None when unset."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM limits_overrides WHERE asset_id = ?", (asset_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        rec = dict(row)
+        rec["overrides"] = json.loads(rec["overrides"])
+        return rec
+
+    def list_limits_overrides(self) -> list[dict[str, Any]]:
+        """Every persisted override row (newest first)."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM limits_overrides ORDER BY updated_at DESC"
+            ).fetchall()
+        out = []
+        for row in rows:
+            rec = dict(row)
+            rec["overrides"] = json.loads(rec["overrides"])
+            out.append(rec)
+        return out
+
+    def clear_limits_override(self, asset_id: str) -> bool:
+        """Remove per-asset overrides; True when something was removed."""
+        with self._connect() as conn:
+            cursor = conn.execute("DELETE FROM limits_overrides WHERE asset_id = ?", (asset_id,))
+        return cursor.rowcount > 0
+
+
+_SINGLETON: Store | None = None
 
 
 def get_store() -> Store:

@@ -231,19 +231,23 @@ _BELOW_CRIT_MAP = {
 class _Limits:
     """Resolved detection limits (spec-aware, with generic fallbacks)."""
 
-    def __init__(self, spec) -> None:
+    def __init__(self, spec, overrides: dict[str, float] | None = None) -> None:
         if spec is None:
             self.vibration_limit_mms = DEFAULT_VIBRATION_LIMIT_MMS
             self.temperature_limit_c = DEFAULT_TEMPERATURE_LIMIT_C
             self.rpm_limit_hss = DEFAULT_RPM_LIMIT_HSS
             self.viscosity_min_cst = DEFAULT_VISCOSITY_MIN_CST
             self.viscosity_max_cst = DEFAULT_VISCOSITY_MAX_CST
-            return
-        self.vibration_limit_mms = float(spec.vibration_limit_mms)
-        self.temperature_limit_c = float(spec.temperature_limit_c)
-        self.rpm_limit_hss = float(spec.rpm_limit_hss)
-        self.viscosity_min_cst = float(spec.viscosity_min_cst)
-        self.viscosity_max_cst = float(spec.viscosity_max_cst)
+        else:
+            self.vibration_limit_mms = float(spec.vibration_limit_mms)
+            self.temperature_limit_c = float(spec.temperature_limit_c)
+            self.rpm_limit_hss = float(spec.rpm_limit_hss)
+            self.viscosity_min_cst = float(spec.viscosity_min_cst)
+            self.viscosity_max_cst = float(spec.viscosity_max_cst)
+        if overrides:
+            from src.faults.limits import apply_overrides
+
+            apply_overrides(self, overrides)
 
 
 # --------------------------------------------------------------------------- #
@@ -1463,13 +1467,25 @@ _RULES: dict[str, Callable[[dict, _Limits], tuple[Severity, float, dict] | None]
 class FaultDetector:
     """Whole-turbine fault detector over one or more telemetry snapshots."""
 
-    def __init__(self, spec=None) -> None:
-        self._limits = _Limits(spec)
+    def __init__(self, spec=None, overrides: dict[str, float] | None = None) -> None:
+        self._limits = _Limits(spec, overrides=overrides)
         self._spec = spec
+        self._overrides = dict(overrides) if overrides else {}
 
     @property
     def spec(self):
         return self._spec
+
+    @property
+    def effective_limits(self) -> dict[str, float]:
+        """The resolved detection limits (spec + overrides) for reporting."""
+        return {
+            "vibration_limit_mms": self._limits.vibration_limit_mms,
+            "temperature_limit_c": self._limits.temperature_limit_c,
+            "rpm_limit_hss": self._limits.rpm_limit_hss,
+            "viscosity_min_cst": self._limits.viscosity_min_cst,
+            "viscosity_max_cst": self._limits.viscosity_max_cst,
+        }
 
     def detect(
         self,

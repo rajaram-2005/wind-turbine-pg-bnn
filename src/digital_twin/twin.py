@@ -68,11 +68,13 @@ class WindTurbineDigitalTwin:
         *,
         max_history: int = DEFAULT_MAX_HISTORY,
         notifier=None,
+        fault_detector_overrides: dict[str, float] | None = None,
     ):
         if max_history < 1:
             raise ValueError(f"max_history must be >= 1, got {max_history}")
         self.asset_id = asset_id
         self.spec = spec
+        self.farm: str = ""  # optional farm grouping (set by the API registry)
         self.state_history: list[dict[str, Any]] = []
         self.max_history: int = max_history
         self.cumulative_wear: float = 0.0  # Normalized wear index (0.0 = brand new, 1.0 = failure)
@@ -81,7 +83,7 @@ class WindTurbineDigitalTwin:
         self._telemetry_buffer: deque[dict[str, float]] = deque(maxlen=_ADVISORY_BUFFER_MAX)
         self.serving_model = None
         # Whole-turbine fault detection (taxonomy + oil analysis + rules).
-        self.fault_detector = FaultDetector(spec)
+        self.fault_detector = FaultDetector(spec, overrides=fault_detector_overrides)
         self.last_fault_report: FaultReport | None = None
         # Optional email notifier: raises CRITICAL/HIGH alerts on new findings.
         self.notifier = notifier

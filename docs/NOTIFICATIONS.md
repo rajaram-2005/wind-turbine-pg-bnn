@@ -201,3 +201,33 @@ ls artifacts/notifications/*.eml
 | Emails landing in spam | Set `AV_SMTP_FROM` to a real address, add SPF/DKIM records |
 | Too many alerts | Raise `cooldown_hours` for the noisy severity |
 | Alerts missing | Confirm the fault severity is in `alert_severities` and the tracker state file wasn't manually reset |
+
+## Maintenance mode (alert suppression)
+
+While the crew works on a turbine, put it into maintenance mode — detection
+keeps running, but all email/webhook alerts for that asset are held back and
+shown as suppressed:
+
+```bash
+# Silence alerts for WTG-001 (reason + operator recorded)
+curl -X POST "http://localhost:8080/api/notifications/suppress?asset_id=WTG-001&reason=gearbox+swap&operator=crew-7"
+
+# See who is in maintenance mode
+curl http://localhost:8080/api/notifications/suppressions
+
+# Alerts resume
+curl -X POST "http://localhost:8080/api/notifications/unsuppress?asset_id=WTG-001"
+```
+
+While suppressed, `POST /api/notifications/send` still works but returns a
+`skipped` notification whose detail says "asset in maintenance mode", so the
+hold-back is visible to operators.
+
+## Notification history
+
+Every email/webhook attempt is persisted to the durable store:
+
+```bash
+curl "http://localhost:8080/api/notifications/history?limit=100"
+curl "http://localhost:8080/api/notifications/history?asset_id=WTG-001&channel=eml"
+```

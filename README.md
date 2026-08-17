@@ -278,6 +278,27 @@ Everything below runs in the one unified deployment (`src/unified_app.py` →
 * **Connectivity tests** — `POST /api/notifications/email/test` and
   `POST /api/notifications/webhooks/test`.
 
+* **Maintenance mode** — put an asset into maintenance and all its alerts are
+  silenced (visible as suppressed) until the crew removes it:
+  `POST /api/notifications/suppress?asset_id=…&reason=…` (+ `/unsuppress`,
+  `GET /api/notifications/suppressions`).
+* **Notification history** — every email/webhook attempt is logged to the
+  durable store: `GET /api/notifications/history?asset_id=…`.
+* **Detection-limit tuning** — operators adjust per-asset thresholds at
+  runtime (`PUT /api/faults/limits`, `GET` / `DELETE` too); persisted and
+  applied to the digital twin and detect calls.
+* **Fleet export** — `GET /api/fleet/export?format=csv|json&farm=…` downloads
+  the fleet health snapshot; `GET /api/reports/fleet.html` and
+  `GET /api/reports/asset/{id}.html` download printable HTML reports.
+* **Maintenance plan** — `GET /api/maintenance/plan?days=30&farm=…` rolls
+  work orders + RUL forecasts onto a weekly calendar with hours and
+  energy-at-risk (MWh).
+* **Farm grouping** — assets register a farm (`farm` on twin simulate);
+  plan/trends/export filter by it.
+* **Scenario simulator** — `POST /api/simulate/snapshot` generates
+  deterministic healthy/faulty/critical/random snapshots, runs detection and
+  optionally pages alerts — perfect for demos and testing the pipeline.
+
 ## Configuration guide
 
 All knobs live in `configs/default.yaml` (validated by

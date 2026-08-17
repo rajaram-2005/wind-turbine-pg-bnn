@@ -483,3 +483,38 @@ def test_run_digest_emails_fleet_report(eml_dir):
     assert list(eml_dir.glob("*.eml"))
     # No twins -> nothing sent.
     assert run_digest({}, notifier, title="x") is None
+
+
+# --------------------------------------------------------------------------- #
+# Maintenance mode (alert suppression)                                         #
+# --------------------------------------------------------------------------- #
+def test_suppress_asset_silences_alerts(tmp_path):
+    tracker = AlertTracker(tmp_path / "state.json")
+    tracker.suppress_asset("WTG-M", reason="gearbox replacement", operator="crew")
+    assert tracker.is_suppressed("WTG-M")
+    assert not tracker.should_send("WTG-M", "GB-02", "CRITICAL")
+    assert tracker.suppressed_assets()[0]["reason"] == "gearbox replacement"
+    assert tracker.unsuppress_asset("WTG-M") is True
+    assert not tracker.is_suppressed("WTG-M")
+    assert tracker.unsuppress_asset("WTG-M") is False  # already cleared
+
+
+def test_process_report_returns_suppressed_result(notifier):
+    notifier.tracker.suppress_asset("WTG-A", reason="service")
+    report = FaultDetector().detect(FAULTY, asset_id="WTG-A")
+    results = notifier.process_report(report)
+    assert len(results) == 1
+    assert results[0].channel == "skipped"
+    assert "maintenance mode" in results[0].detail
+
+
+def test_suppression_persists_across_instances(tmp_path):
+    path = tmp_path / "state.json"
+    tracker = AlertTracker(path)
+    tracker.suppress_asset("WTG-P", reason="test")
+    tracker2 = AlertTracker(path)
+    assert tracker2.is_suppressed("WTG-P")
+    # Old v1 flat state files still load (backward compatible).
+    path.write_text('{"WTG-O:GB-02": {"severity": "HIGH", "count": 1}}', encoding="utf-8")
+    tracker3 = AlertTracker(path)
+    assert tracker3.should_send("WTG-O", "GB-02", "CRITICAL")  # escalation
