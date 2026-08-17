@@ -26,7 +26,9 @@ __all__ = [
     "AdvisoryResponse",
     "AgentAskRequest",
     "AgentReviewRequest",
+    "AlertAckRequest",
     "BNNState",
+    "DigestRequest",
     "FaultDetectRequest",
     "FaultDetectResponse",
     "FleetRequest",
@@ -46,6 +48,7 @@ __all__ = [
     "TurbinePayload",
     "TwinScenariosRequest",
     "TwinSimulateRequest",
+    "WorkOrderRequest",
 ]
 
 
@@ -150,8 +153,33 @@ class NotificationStatusResponse(BaseModel):
     cooldown_hours: dict[str, float]
     tracked_alerts: int
     advisory_only: bool
+    webhooks: dict[str, Any] = Field(default_factory=dict)
+    digest: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class AlertAckRequest(BaseModel):
+    """Operator action on a tracked alert (acknowledge or resolve)."""
+
+    asset_id: str = Field(..., min_length=1)
+    fault_id: str = Field(..., min_length=1, description="e.g. GB-02")
+    operator: str = Field("", description="Operator id/email for the audit trail")
+
+
+class DigestRequest(BaseModel):
+    """Manual trigger for the fleet health digest."""
+
+    title: str | None = None
+    recipients: list[str] | None = Field(None, max_length=50)
+
+
+class WorkOrderRequest(BaseModel):
+    """Generate a maintenance work order from a telemetry snapshot."""
+
+    asset_id: str = Field("WTG-000", min_length=1)
+    model_key: str = Field("GE-1.5", min_length=1)
+    telemetry: dict[str, Any] = Field(..., description="Telemetry snapshot dict")
 
 
 class TelemetryCompressRequest(BaseModel):
@@ -287,7 +315,7 @@ class TwinScenariosRequest(BaseModel):
     hours: float = Field(24.0, gt=0.0, le=720.0)
 
     @model_validator(mode="after")
-    def _check_profiles(self) -> "TwinScenariosRequest":
+    def _check_profiles(self) -> TwinScenariosRequest:
         allowed = {"nominal", "overload", "derated", "viscosity_loss"}
         bad = [p for p in self.profiles if p not in allowed]
         if bad:
@@ -325,11 +353,9 @@ class AgentReviewRequest(BaseModel):
     note: str | None = Field(default=None, max_length=300)
 
     @model_validator(mode="after")
-    def _check_decision(self) -> "AgentReviewRequest":
+    def _check_decision(self) -> AgentReviewRequest:
         if self.decision not in REVIEW_DECISIONS:
-            raise ValueError(
-                f"decision must be one of: {' | '.join(REVIEW_DECISIONS)}"
-            )
+            raise ValueError(f"decision must be one of: {' | '.join(REVIEW_DECISIONS)}")
         return self
 
 

@@ -314,6 +314,17 @@ class DeploymentConfig(BaseModel):
     edge: EdgeDeploymentConfig = Field(default_factory=EdgeDeploymentConfig)
 
 
+class DigestSettings(BaseModel):
+    """Scheduled fleet health digest (runs inside the unified app)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    hour_utc: int = Field(6, ge=0, le=23)
+    title: str = "Fleet health digest"
+    recipients: list[str] = Field(default_factory=list)
+
+
 class NotificationsConfig(BaseModel):
     """Email alert/report defaults (secrets stay in ``AV_*`` env vars).
 
@@ -336,6 +347,9 @@ class NotificationsConfig(BaseModel):
         default_factory=lambda: {"CRITICAL": 6.0, "HIGH": 24.0, "MEDIUM": 168.0}
     )
     alert_severities: list[str] = Field(default_factory=lambda: ["CRITICAL", "HIGH"])
+    webhooks: list[str] = Field(default_factory=list)
+    webhook_severities: list[str] = Field(default_factory=lambda: ["CRITICAL", "HIGH"])
+    digest: DigestSettings = Field(default_factory=DigestSettings)
 
 
 class AppConfig(BaseModel):

@@ -258,6 +258,26 @@ python main.py notify --fleet examples/fleet.csv --report --subject "Daily healt
 API: `POST /api/notifications/send`, `GET /api/notifications/status`.
 See [`docs/NOTIFICATIONS.md`](docs/NOTIFICATIONS.md) for the full policy.
 
+### ⚙️ More in the single app
+
+Everything below runs in the one unified deployment (`src/unified_app.py` →
+`/api`):
+
+* **Webhook alerts** — the same alerts are POSTed to Slack / Teams / generic
+  webhooks (`AV_WEBHOOK_URLS`).
+* **Alert workflow** — list, acknowledge and resolve open alerts
+  (`GET /api/notifications/alerts`, `POST .../ack`, `POST .../resolve`).
+* **Scheduled fleet digest** — the app emails the daily fleet health report
+  itself (`AV_DIGEST_ENABLED=1`, `AV_DIGEST_HOUR=6`); no external cron.
+* **Fault history & trends** — per-asset fault timeline
+  (`GET /api/faults/history`) and fleet roll-ups (`GET /api/faults/trends`).
+* **Maintenance work orders** — `POST /api/maintenance/workorder` turns any
+  snapshot into a prioritized work order (priority, target date, actions,
+  involved sensors, inspection checklist), persisted and listable via
+  `GET /api/maintenance/workorders`.
+* **Connectivity tests** — `POST /api/notifications/email/test` and
+  `POST /api/notifications/webhooks/test`.
+
 ## Configuration guide
 
 All knobs live in `configs/default.yaml` (validated by

@@ -158,3 +158,15 @@ notifications:
     HIGH: 24.0
     MEDIUM: 168.0
   alert_severities: [CRITICAL, HIGH]  # severities that page immediately
+  # Webhook alerts (Slack / Teams / generic). URLs normally come from env
+  # AV_WEBHOOK_URLS; this list is the YAML alternative (non-secret).
+  webhooks: []
+  # webhooks:
+  #   - https://hooks.slack.com/services/XXX/YYY/ZZZ
+  webhook_severities: [CRITICAL, HIGH]
+  # Scheduled fleet digest (runs inside the unified app, no external cron).
+  digest:
+    enabled: false            # set AV_DIGEST_ENABLED=1 or true here
+    hour_utc: 6               # AV_DIGEST_HOUR
+    title: "Fleet health digest"
+    recipients: []            # AV_DIGEST_RECIPIENTS; falls back to report_recipients

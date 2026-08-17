@@ -167,6 +167,16 @@ class AlertTracker:
         entry = self._state.get(self._key(asset_id, fault_id))
         if entry is None:
             return True
+        # Escalation: same fault, higher severity → alert immediately,
+        # even when the previous alert was acknowledged or in cooldown.
+        if SEVERITY_RANK.get(severity, 0) > SEVERITY_RANK.get(entry.get("severity", ""), 0):
+            return True
+        # Acknowledged or resolved alerts are silenced until they escalate or
+        # re-appear after resolution.
+        if entry.get("acknowledged"):
+            return False
+        if entry.get("resolved"):
+            return False
         cooldown = DEFAULT_COOLDOWN_HOURS.get(severity, float("inf"))
         if not cooldown or cooldown == float("inf"):
             return False
@@ -176,9 +186,6 @@ class AlertTracker:
         try:
             last_dt = datetime.fromisoformat(last)
         except ValueError:
-            return True
-        # Escalation: same fault, higher severity → alert immediately.
-        if SEVERITY_RANK.get(severity, 0) > SEVERITY_RANK.get(entry.get("severity", ""), 0):
             return True
         return now - last_dt >= timedelta(hours=cooldown)
 
@@ -195,16 +202,68 @@ class AlertTracker:
             "last_sent": now.isoformat(),
             "count": self._state.get(self._key(asset_id, fault_id), {}).get("count", 0) + 1,
         }
-        if self.path:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(
-                json.dumps(self._state, indent=2, sort_keys=True), encoding="utf-8"
-            )
+        self._persist()
 
     def clear(self) -> None:
         self._state = {}
         if self.path and self.path.exists():
             self.path.unlink(missing_ok=True)
+
+    # -- operator workflow -------------------------------------------------- #
+    def acknowledge(self, asset_id: str, fault_id: str, operator: str = "") -> bool:
+        """Acknowledge an open alert: it stops re-alerting until escalation or
+        resolution. Returns True when an alert existed to acknowledge."""
+        key = self._key(asset_id, fault_id)
+        if key not in self._state:
+            return False
+        self._state[key]["acknowledged"] = True
+        self._state[key]["acknowledged_at"] = datetime.now(timezone.utc).isoformat()
+        self._state[key]["operator"] = operator
+        self._persist()
+        return True
+
+    def resolve(self, asset_id: str, fault_id: str, operator: str = "") -> bool:
+        """Mark an alert resolved (fault fixed). A future re-detection of the
+        same fault starts a fresh alert cycle. Returns True when removed."""
+        key = self._key(asset_id, fault_id)
+        if key not in self._state:
+            return False
+        entry = self._state.pop(key)
+        entry["resolved"] = True
+        entry["resolved_at"] = datetime.now(timezone.utc).isoformat()
+        entry["operator"] = operator
+        self._state[f"{key}::resolved"] = entry  # keep an audit trail
+        self._persist()
+        return True
+
+    def open_alerts(self) -> list[dict]:
+        """Every tracked alert that has not been resolved (newest first)."""
+        items = []
+        for key, entry in self._state.items():
+            if key.endswith("::resolved"):
+                continue
+            asset_id, fault_id = key.split(":", 1)
+            items.append(
+                {
+                    "asset_id": asset_id,
+                    "fault_id": fault_id,
+                    "severity": entry.get("severity"),
+                    "last_sent": entry.get("last_sent"),
+                    "count": entry.get("count", 0),
+                    "acknowledged": bool(entry.get("acknowledged")),
+                    "acknowledged_at": entry.get("acknowledged_at"),
+                    "operator": entry.get("operator", ""),
+                }
+            )
+        items.sort(key=lambda item: item.get("last_sent") or "", reverse=True)
+        return items
+
+    def _persist(self) -> None:
+        if self.path:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.path.write_text(
+                json.dumps(self._state, indent=2, sort_keys=True), encoding="utf-8"
+            )
 
     def to_dict(self) -> dict:
         return dict(self._state)
@@ -526,3 +585,19 @@ class EmailNotifier:
             "tracked_alerts": len(self.tracker.to_dict()),
             "advisory_only": True,
         }
+
+    def deliver_test(self, recipients: Sequence[str] | None = None) -> NotificationResult:
+        """Send a connectivity-test email to the alert recipients."""
+        subject = "[AeroVigil TEST] notification channel check"
+        html = (
+            "<html><body><h3>AeroVigil notification test</h3>"
+            "<p>If you can read this, the email channel is working.</p>"
+            "<p><em>Advisory only — AeroVigil never sends commands to the turbine.</em></p>"
+            "</body></html>"
+        )
+        text = (
+            "AeroVigil notification test.\n"
+            "If you can read this, the email channel is working.\n"
+            "Advisory only — AeroVigil never sends commands to the turbine."
+        )
+        return self.deliver(subject, html, text, recipients=recipients)

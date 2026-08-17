@@ -39,6 +39,9 @@ can reach the ``/api`` routes from any localhost/app origin.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -112,6 +115,46 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
     # Attach the canonical gateway routes onto the /api surface.
     operations_api.include_router(gateway_router)
 
+    async def _digest_loop() -> None:
+        """Daily fleet health digest scheduler (no external cron required).
+
+        Reads ``AV_DIGEST_ENABLED`` / ``AV_DIGEST_HOUR``; sleeps precisely to
+        the next occurrence of the hour and emails the fleet health digest
+        built from every tracked twin.  Failures are logged, never raised.
+        """
+        from src.notifications.digest import DigestConfig, next_digest_delay, run_digest
+
+        config = DigestConfig()
+        if not config.enabled:
+            return
+
+        logger = logging.getLogger("aerovigil.digest")
+        while True:
+            delay = next_digest_delay(config.hour)
+            logger.info("fleet digest scheduled in %.0f s (hour %d UTC)", delay, config.hour)
+            await asyncio.sleep(delay)
+            try:
+                from src.notifications import EmailNotifier
+
+                notifier = EmailNotifier()
+                result = run_digest(
+                    operations_api.state.twins,
+                    notifier,
+                    title=config.title,
+                    recipients=config.recipients or None,
+                )
+                if result is None:
+                    logger.info("digest skipped: no twin fault reports yet")
+                else:
+                    logger.info(
+                        "fleet digest sent: channel=%s delivered=%s",
+                        result.channel,
+                        result.delivered,
+                    )
+            except Exception as exc:  # noqa: BLE001 - scheduler must survive
+                logger.error("fleet digest failed: %s", exc)
+                await asyncio.sleep(3600.0)
+
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         # The packaged model app is not mounted, but its lifespan still loads
@@ -121,7 +164,13 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
         async with AsyncExitStack() as stack:
             await stack.enter_async_context(_model_app.router.lifespan_context(_model_app))
             await stack.enter_async_context(operations_api.router.lifespan_context(operations_api))
-            yield
+            task = asyncio.create_task(_digest_loop())
+            try:
+                yield
+            finally:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
 
     application = FastAPI(
         title="AeroVigil unified application",
@@ -165,6 +214,16 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
                 "model_trend": "/api/model/trend",
                 "jobs": "/api/jobs/{job_type}",
                 "hardware_stream": "/api/hardware/stream",
+                "faults_detect": "/api/faults/detect",
+                "faults_catalog": "/api/faults/catalog",
+                "faults_sensors": "/api/faults/sensors",
+                "faults_history": "/api/faults/history",
+                "faults_trends": "/api/faults/trends",
+                "notifications_send": "/api/notifications/send",
+                "notifications_alerts": "/api/notifications/alerts",
+                "notifications_digest": "/api/notifications/digest",
+                "notifications_webhooks": "/api/notifications/webhooks/status",
+                "workorders": "/api/maintenance/workorder",
             },
             "digital_twin": {
                 "assets_tracked": len(operations_api.state.twins),
@@ -191,9 +250,7 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
     # bundle can never linger in a browser/proxy cache after an upgrade.
     _vendor_dir = _CONSOLE_DIR / "vendor"
     if _vendor_dir.is_dir():
-        application.mount(
-            "/vendor", _NoCacheStaticFiles(directory=str(_vendor_dir)), name="vendor"
-        )
+        application.mount("/vendor", _NoCacheStaticFiles(directory=str(_vendor_dir)), name="vendor")
 
     # Root path serves the compiled AeroVigilAI browser console.
     if _CONSOLE_DIR.is_dir():

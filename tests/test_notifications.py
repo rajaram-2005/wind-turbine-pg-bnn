@@ -226,20 +226,260 @@ def test_twin_update_state_alerts_via_notifier(eml_dir):
         "WTG-TWN", get_spec("NREL-5MW"), notifier=EmailNotifier(config=config)
     )
     healthy = Telemetry(
-        vibration_mms=2.0, temperature_c=55.0, rpm=950.0,
-        oil_viscosity_cst=32.0, load_pct=70.0,
+        vibration_mms=2.0,
+        temperature_c=55.0,
+        rpm=950.0,
+        oil_viscosity_cst=32.0,
+        load_pct=70.0,
     )
     rec = twin.update_state(healthy)
     assert rec["notifications"] == []
     degraded = Telemetry(
-        vibration_mms=9.0, temperature_c=60.0, rpm=1000.0,
-        oil_viscosity_cst=5.0, load_pct=90.0,
+        vibration_mms=9.0,
+        temperature_c=60.0,
+        rpm=1000.0,
+        oil_viscosity_cst=5.0,
+        load_pct=90.0,
     )
     rec2 = twin.update_state(degraded)
     assert rec2["notifications"], "twin must email alerts on severe faults"
     assert all(n["delivered"] for n in rec2["notifications"])
-    assert any("CRITICAL" in n["subject"] or "HIGH" in n["subject"]
-               for n in rec2["notifications"])
+    assert any("CRITICAL" in n["subject"] or "HIGH" in n["subject"] for n in rec2["notifications"])
     # Repeating the same state does not re-alert (dedupe).
     rec3 = twin.update_state(degraded)
     assert rec3["notifications"] == []
+
+
+# --------------------------------------------------------------------------- #
+# Alert workflow: acknowledge / resolve                                        #
+# --------------------------------------------------------------------------- #
+def test_acknowledge_stops_realerting(tmp_path):
+    tracker = AlertTracker(tmp_path / "state.json")
+    tracker.record("WTG-1", "GB-02", "HIGH")
+    assert tracker.acknowledge("WTG-1", "GB-02", operator="ops-1") is True
+    assert not tracker.should_send("WTG-1", "GB-02", "HIGH")
+    # Escalation still breaks through an acknowledgement.
+    assert tracker.should_send("WTG-1", "GB-02", "CRITICAL")
+    assert tracker.acknowledge("WTG-X", "GB-02") is False  # unknown
+
+
+def test_resolve_clears_and_allows_fresh_alert(tmp_path):
+    tracker = AlertTracker(tmp_path / "state.json")
+    tracker.record("WTG-1", "GB-02", "HIGH")
+    assert tracker.resolve("WTG-1", "GB-02", operator="crew-7") is True
+    # Resolved means a brand-new detection alerts again.
+    assert tracker.should_send("WTG-1", "GB-02", "HIGH")
+    assert tracker.open_alerts() == []
+    assert len(tracker.to_dict()) == 1  # audit trail kept
+
+
+def test_open_alerts_lists_unresolved_with_state(tmp_path):
+    tracker = AlertTracker(tmp_path / "state.json")
+    tracker.record("WTG-1", "GB-02", "HIGH")
+    tracker.record("WTG-1", "RB-07", "CRITICAL")
+    tracker.acknowledge("WTG-1", "GB-02", operator="ops")
+    open_alerts = tracker.open_alerts()
+    by_fault = {a["fault_id"]: a for a in open_alerts}
+    assert set(by_fault) == {"GB-02", "RB-07"}
+    assert by_fault["GB-02"]["acknowledged"] is True
+    assert by_fault["RB-07"]["acknowledged"] is False
+    assert by_fault["RB-07"]["severity"] == "CRITICAL"
+
+
+# --------------------------------------------------------------------------- #
+# Webhook alerts                                                               #
+# --------------------------------------------------------------------------- #
+def test_detect_format():
+    from src.notifications.webhooks import detect_format
+
+    assert detect_format("https://hooks.slack.com/services/T00/B00/xxx") == "slack"
+    assert detect_format("https://outlook.office.com/webhook/abc") == "teams"
+    assert detect_format("https://example.com/hook") == "generic"
+
+
+def test_build_payload_formats():
+    from src.notifications.webhooks import build_payload
+
+    report = FaultDetector().detect(FAULTY, asset_id="WTG-A")
+    slack = build_payload(report, "slack", "SUBJ")
+    assert slack["attachments"][0]["color"] in ("danger", "warning")
+    teams = build_payload(report, "teams", "SUBJ")
+    assert teams["attachments"][0]["content"]["type"] == "AdaptiveCard"
+    generic = build_payload(report, "generic", "SUBJ")
+    assert generic["subject"] == "SUBJ"
+    assert generic["advisory_only"] is True
+    assert generic["faults"][0]["fault_id"] == report.faults[0].fault_id
+
+
+def _local_webhook_server():
+    """Tiny HTTP server capturing POSTed webhook payloads."""
+    import json as _json
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    received: list[dict] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):  # noqa: N802
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length)
+            received.append(
+                {
+                    "path": self.path,
+                    "body": _json.loads(raw.decode("utf-8")),
+                    "content_type": self.headers.get("Content-Type"),
+                }
+            )
+            self.send_response(200)
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(b"ok")
+
+        def log_message(self, *args):  # silence
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, received, thread
+
+
+def test_webhook_process_report_posts_slack_payload():
+    from src.notifications.webhooks import WebhookNotifier
+
+    server, received, thread = _local_webhook_server()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/hook"
+        tracker = AlertTracker()
+        notifier = WebhookNotifier(urls=[url], tracker=tracker)
+        report = FaultDetector().detect(FAULTY, asset_id="WTG-A")
+        results = notifier.process_report(report)
+        assert results, "expected webhook deliveries for CRITICAL/HIGH"
+        assert all(r.delivered for r in results)
+        assert any(r.format == "generic" for r in results)  # local URL
+        assert received, "server must have received payloads"
+        payload = received[0]["body"]
+        assert "AeroVigil" in payload["subject"]
+        assert payload["advisory_only"] is True
+        assert payload["faults"], "payload must carry the detected faults"
+        # Dedupe: same snapshot again -> no second delivery.
+        notifier.process_report(report)
+        before = len(received)
+        notifier.process_report(report)
+        assert len(received) == before
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_webhook_disabled_without_urls():
+    from src.notifications.webhooks import WebhookNotifier
+
+    notifier = WebhookNotifier(urls=[])
+    report = FaultDetector().detect(FAULTY, asset_id="WTG-A")
+    assert notifier.process_report(report) == []
+    assert notifier.status()["n_webhooks"] == 0
+
+
+def test_webhook_delivery_failure_is_reported():
+    from src.notifications.webhooks import WebhookNotifier
+
+    notifier = WebhookNotifier(urls=["http://127.0.0.1:1/nope"], timeout_s=1.0)
+    report = FaultDetector().detect(FAULTY, asset_id="WTG-A")
+    results = notifier.process_report(report)
+    assert results
+    assert all(not r.delivered for r in results)
+    assert results[0].detail  # error message captured
+
+
+def test_webhook_from_env(monkeypatch):
+    from src.notifications.webhooks import WebhookNotifier
+
+    monkeypatch.setenv("AV_WEBHOOK_URLS", "https://hooks.slack.com/services/a/b/c")
+    monkeypatch.setenv("AV_WEBHOOK_MODE", "on")
+    notifier = WebhookNotifier.from_env()
+    assert notifier.enabled is True
+    assert notifier.urls == ["https://hooks.slack.com/services/a/b/c"]
+    assert notifier.status()["formats"] == ["slack"]
+
+
+# --------------------------------------------------------------------------- #
+# Digest scheduling                                                            #
+# --------------------------------------------------------------------------- #
+def test_next_digest_delay():
+    from datetime import datetime, timezone
+
+    from src.notifications.digest import next_digest_delay
+
+    now = datetime(2026, 8, 17, 12, 30, 0, tzinfo=timezone.utc)
+    delay = next_digest_delay(6, now=now)
+    assert delay == pytest.approx(17.5 * 3600)  # next 06:00 UTC
+    delay_same_hour = next_digest_delay(12, now=now)
+    assert delay_same_hour == pytest.approx(23.5 * 3600)  # already past -> tomorrow
+    delay_earlier = next_digest_delay(14, now=now)
+    assert delay_earlier == pytest.approx(1.5 * 3600)
+    with pytest.raises(ValueError):
+        next_digest_delay(24, now=now)
+
+
+def test_digest_config_from_env(monkeypatch):
+    from src.notifications.digest import DigestConfig
+
+    monkeypatch.setenv("AV_DIGEST_ENABLED", "1")
+    monkeypatch.setenv("AV_DIGEST_HOUR", "5")
+    monkeypatch.setenv("AV_DIGEST_RECIPIENTS", "a@b.c; c@d.e")
+    monkeypatch.setenv("AV_DIGEST_TITLE", "Nightly")
+    config = DigestConfig()
+    assert config.enabled is True
+    assert config.hour == 5
+    assert config.recipients == ("a@b.c", "c@d.e")
+    assert config.title == "Nightly"
+    assert config.to_dict()["enabled"] is True
+
+
+def test_build_fleet_digest_collects_reports():
+    from src.digital_twin.specs import get_spec
+    from src.digital_twin.twin import WindTurbineDigitalTwin
+    from src.notifications.digest import build_fleet_digest
+    from src.utils.schema import Telemetry
+
+    twins = {}
+    for asset in ("WTG-D1", "WTG-D2"):
+        twin = WindTurbineDigitalTwin(asset, get_spec("NREL-5MW"))
+        twin.update_state(
+            Telemetry(
+                vibration_mms=2.0,
+                temperature_c=55.0,
+                rpm=950.0,
+                oil_viscosity_cst=32.0,
+                load_pct=70.0,
+            )
+        )
+        twins[asset] = twin
+    reports = build_fleet_digest(twins)
+    assert [r.asset_id for r in reports] == ["WTG-D1", "WTG-D2"]
+    assert all(r.overall_status == "OK" for r in reports)
+
+
+def test_run_digest_emails_fleet_report(eml_dir):
+    from src.digital_twin.specs import get_spec
+    from src.digital_twin.twin import WindTurbineDigitalTwin
+    from src.notifications.digest import run_digest
+    from src.utils.schema import Telemetry
+
+    twin = WindTurbineDigitalTwin("WTG-D1", get_spec("NREL-5MW"))
+    twin.update_state(
+        Telemetry(
+            vibration_mms=2.0, temperature_c=55.0, rpm=950.0, oil_viscosity_cst=32.0, load_pct=70.0
+        )
+    )
+    config = NotificationConfig(
+        mode="eml", report_recipients=("m@example.com",), artifact_dir=eml_dir
+    )
+    notifier = EmailNotifier(config=config)
+    result = run_digest({"WTG-D1": twin}, notifier, title="Test digest")
+    assert result is not None and result.delivered is True
+    assert "Test digest" in result.subject
+    assert list(eml_dir.glob("*.eml"))
+    # No twins -> nothing sent.
+    assert run_digest({}, notifier, title="x") is None

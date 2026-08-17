@@ -9,8 +9,8 @@ system (`src/notifications/emailer.py`).
 
 | Severity | Behaviour | Re-alert cooldown |
 | --- | --- | --- |
-| CRITICAL | Instant email `[AeroVigil CRITICAL] …` | 6 hours |
-| HIGH | Instant email `[AeroVigil HIGH] …` | 24 hours |
+| CRITICAL | Instant email + webhook `[AeroVigil CRITICAL] …` | 6 hours |
+| HIGH | Instant email + webhook `[AeroVigil HIGH] …` | 24 hours |
 | MEDIUM | Digest only (health report) | — |
 | LOW | Digest only (health report) | — |
 
@@ -23,6 +23,11 @@ Rules:
    last sent, a new alert fires immediately, ignoring the cooldown.
 4. **Suppression check** — suppression released with no fire evidence is
    reported as a fire-suppression system fault (NS-07), not a fire.
+5. **Acknowledge / resolve** — operators can acknowledge an alert (it stops
+   re-alerting until it escalates) or resolve it (a future re-detection
+   starts a fresh alert cycle). Escalation always breaks through.
+6. **Webhooks** — every alert is also POSTed to the configured Slack / Teams
+   / generic webhook URLs (same dedupe rules).
 
 ## What each email contains
 
@@ -32,6 +37,47 @@ Rules:
   alternative included. Every email carries the advisory-only banner.
 * **Health report email** — one row per asset: status, health score, oil
   score, fault count, top findings.
+
+## Webhooks (Slack / Teams / generic)
+
+```bash
+export AV_WEBHOOK_URLS='https://hooks.slack.com/services/T00/B00/xxx; https://outlook.office.com/webhook/…'
+export AV_WEBHOOK_SEVERITIES='CRITICAL,HIGH'   # optional
+export AV_WEBHOOK_MODE=on                       # on | off
+```
+
+Formats are auto-detected from the URL (Slack blocks, Teams adaptive cards,
+plain JSON otherwise). Test with `POST /api/notifications/webhooks/test`.
+
+## Scheduled fleet digest (built into the app — no cron needed)
+
+```bash
+export AV_DIGEST_ENABLED=1          # turn on the daily digest
+export AV_DIGEST_HOUR=6             # UTC hour
+export AV_DIGEST_RECIPIENTS='maint@yourfarm.com'   # falls back to report recipients
+export AV_DIGEST_TITLE='Daily fleet health'
+```
+
+The unified app's background scheduler emails the fleet health digest once a
+day, built from every tracked twin. Trigger it manually with
+`POST /api/notifications/digest`.
+
+## Alert workflow (operator)
+
+```bash
+# Open alerts (ack state included)
+curl http://localhost:8080/api/notifications/alerts
+
+# Acknowledge — stops re-alerting until escalation or resolution
+curl -X POST http://localhost:8080/api/notifications/alerts/ack   -H 'Content-Type: application/json'   -d '{"asset_id":"WTG-001","fault_id":"GB-02","operator":"ops-1"}'
+
+# Resolve — fault fixed; a future re-detection alerts fresh
+curl -X POST http://localhost:8080/api/notifications/alerts/resolve   -H 'Content-Type: application/json'   -d '{"asset_id":"WTG-001","fault_id":"GB-02","operator":"crew-7"}'
+
+# Connectivity tests
+curl -X POST http://localhost:8080/api/notifications/email/test
+curl -X POST http://localhost:8080/api/notifications/webhooks/test
+```
 
 ## Configuration
 
@@ -50,6 +96,13 @@ Secrets go in the environment (`AV_*`); non-secrets can live in
 | `AV_ALERT_RECIPIENTS` | — | Comma/`;` separated alert recipients |
 | `AV_REPORT_RECIPIENTS` | — | Comma/`;` separated digest recipients |
 | `AV_NOTIFY_DIR` | `artifacts/notifications` | `.eml` fallback + alert state location |
+| `AV_WEBHOOK_URLS` | — | Comma/`;` separated webhook URLs (Slack/Teams/generic) |
+| `AV_WEBHOOK_MODE` | `on` if URLs set | `on` \| `off` |
+| `AV_WEBHOOK_SEVERITIES` | `CRITICAL,HIGH` | Severities that page webhooks |
+| `AV_DIGEST_ENABLED` | `0` | Run the daily fleet digest inside the app |
+| `AV_DIGEST_HOUR` | `6` | UTC hour of the digest |
+| `AV_DIGEST_RECIPIENTS` | — | Digest recipients (falls back to report recipients) |
+| `AV_DIGEST_TITLE` | `Fleet health digest` | Digest email subject |
 
 YAML equivalent (`configs/default.yaml`):
 
@@ -93,6 +146,15 @@ curl -X POST http://localhost:8080/api/notifications/send \
 
 # Notifier configuration (no secrets)
 curl http://localhost:8080/api/notifications/status
+```
+
+### Maintenance work orders
+
+Generate a prioritized work order from any snapshot (persisted in the
+durable store and listed via `GET /api/maintenance/workorders`):
+
+```bash
+curl -X POST http://localhost:8080/api/maintenance/workorder   -H 'Content-Type: application/json' -d @examples/fault_payload.json
 ```
 
 ### Digital twin

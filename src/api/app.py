@@ -26,6 +26,7 @@ without a trained feature-extraction pipeline).
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 from collections import OrderedDict
 from pathlib import Path
@@ -41,6 +42,8 @@ from src.api.schemas import (
     AdvisoryResponse,
     AgentAskRequest,
     AgentReviewRequest,
+    AlertAckRequest,
+    DigestRequest,
     FaultDetectRequest,
     FaultDetectResponse,
     FleetRequest,
@@ -56,6 +59,7 @@ from src.api.schemas import (
     TelemetryRestoreResponse,
     TwinScenariosRequest,
     TwinSimulateRequest,
+    WorkOrderRequest,
 )
 from src.eval.calibration import expected_asset_utilization
 from src.models.predictor import run_advisory
@@ -134,6 +138,16 @@ def _connect_agent_team(payload: TurbinePayload, recommendation: dict) -> dict:
         telemetry=payload.telemetry.model_dump(),
     )
     return enforce_safety_contract(enriched)
+
+
+def _fault_name(fault_id: str) -> str:
+    """Human name for a fault id (best-effort)."""
+    try:
+        from src.faults.taxonomy import get_fault
+
+        return get_fault(fault_id).name
+    except KeyError:
+        return fault_id
 
 
 def get_or_create_twin(state, asset_id: str, model_key: str = "GE-1.5"):
@@ -532,12 +546,21 @@ def create_app() -> FastAPI:
         recipients = (req.recipient,) if req.recipient else None
         if req.force_report or not report.faults:
             result = notifier.send_health_report(
-                [report], title=req.subject or f"Health report — {req.asset_id}",
+                [report],
+                title=req.subject or f"Health report — {req.asset_id}",
                 recipients=recipients,
             )
             notifications = [result.to_dict()] if result else []
         else:
             notifications = [n.to_dict() for n in notifier.process_report(report)]
+            # Also page webhooks (Slack/Teams/generic) for the same report.
+            from src.notifications.webhooks import WebhookNotifier
+
+            webhook_results = WebhookNotifier.from_env().process_report(report)
+            notifications.extend(
+                {"channel": "webhook", "delivered": r.delivered, **r.to_dict()}
+                for r in webhook_results
+            )
         delivered = bool(notifications) and all(n["delivered"] for n in notifications)
         body = {
             "asset_id": req.asset_id,
@@ -552,10 +575,277 @@ def create_app() -> FastAPI:
     def notifications_status() -> NotificationStatusResponse:
         """Notifier configuration summary (recipients, mode, cooldowns)."""
         from src.notifications import EmailNotifier
+        from src.notifications.digest import DigestConfig
+        from src.notifications.webhooks import WebhookNotifier
 
         status = EmailNotifier().status()
+        status["webhooks"] = WebhookNotifier.from_env().status()
+        status["digest"] = DigestConfig().to_dict()
         enforce_safety_contract(status)
         return NotificationStatusResponse(**status)
+
+    # ------------------------------------------------------------------ #
+    # Alert workflow: open alerts, acknowledge, resolve                   #
+    # ------------------------------------------------------------------ #
+    @app.get("/notifications/alerts")
+    def notifications_alerts() -> dict:
+        """Every tracked, unresolved alert (with ack state)."""
+        from src.notifications import EmailNotifier
+
+        alerts = EmailNotifier().tracker.open_alerts()
+        body = {"n_open": len(alerts), "alerts": alerts}
+        enforce_safety_contract(body)
+        return body
+
+    @app.post("/notifications/alerts/ack")
+    def notifications_alerts_ack(req: AlertAckRequest) -> dict:
+        """Acknowledge an alert: it stops re-alerting until escalation/resolution."""
+        from src.notifications import EmailNotifier
+
+        tracker = EmailNotifier().tracker
+        acknowledged = tracker.acknowledge(req.asset_id, req.fault_id, operator=req.operator)
+        body = {
+            "acknowledged": acknowledged,
+            "message": (
+                f"alert {req.asset_id}:{req.fault_id} acknowledged"
+                if acknowledged
+                else "no tracked alert for this asset/fault"
+            ),
+            "open_alerts": tracker.open_alerts(),
+        }
+        enforce_safety_contract(body)
+        return body
+
+    @app.post("/notifications/alerts/resolve")
+    def notifications_alerts_resolve(req: AlertAckRequest) -> dict:
+        """Resolve an alert (fault fixed): a future re-detection re-alerts."""
+        from src.notifications import EmailNotifier
+
+        tracker = EmailNotifier().tracker
+        resolved = tracker.resolve(req.asset_id, req.fault_id, operator=req.operator)
+        body = {
+            "resolved": resolved,
+            "message": (
+                f"alert {req.asset_id}:{req.fault_id} resolved"
+                if resolved
+                else "no tracked alert for this asset/fault"
+            ),
+            "open_alerts": tracker.open_alerts(),
+        }
+        enforce_safety_contract(body)
+        return body
+
+    # ------------------------------------------------------------------ #
+    # Webhook alerts (Slack / Teams / generic)                            #
+    # ------------------------------------------------------------------ #
+    @app.get("/notifications/webhooks/status")
+    def notifications_webhooks_status() -> dict:
+        """Webhook alert configuration summary."""
+        from src.notifications.webhooks import WebhookNotifier
+
+        body = WebhookNotifier.from_env().status()
+        enforce_safety_contract(body)
+        return body
+
+    @app.post("/notifications/email/test")
+    def notifications_email_test() -> dict:
+        """Send a connectivity-test email to the alert recipients."""
+        from src.notifications import EmailNotifier
+
+        result = EmailNotifier().deliver_test()
+        body = {"result": result.to_dict()}
+        enforce_safety_contract(body)
+        return body
+
+    @app.post("/notifications/webhooks/test")
+    def notifications_webhooks_test() -> dict:
+        """Send a test message to every configured webhook."""
+        from src.faults.detector import FaultDetector
+        from src.notifications.webhooks import WebhookNotifier
+
+        notifier = WebhookNotifier.from_env()
+        if not notifier.urls:
+            raise HTTPException(
+                status_code=422, detail="no webhook URLs configured (AV_WEBHOOK_URLS)"
+            )
+        sample = FaultDetector().detect(
+            {
+                "vibration_mms": 9.0,
+                "temperature_c": 60.0,
+                "rpm": 1000.0,
+                "oil_viscosity_cst": 5.0,
+                "load_pct": 90.0,
+            },
+            asset_id="WTG-WEBHOOK-TEST",
+            timestamp="test",
+        )
+        results = notifier.send_message(sample, "[AeroVigil TEST] webhook connectivity check")
+        body = {"results": [r.to_dict() for r in results]}
+        enforce_safety_contract(body)
+        return body
+
+    # ------------------------------------------------------------------ #
+    # Fleet digest (manual trigger; the app schedules it daily)           #
+    # ------------------------------------------------------------------ #
+    @app.post("/notifications/digest")
+    def notifications_digest(req: DigestRequest | None = None) -> dict:
+        """Email the fleet health digest now (all tracked twins)."""
+        from src.notifications import EmailNotifier
+        from src.notifications.digest import run_digest
+
+        notifier = EmailNotifier()
+        recipients = tuple(req.recipients) if req and req.recipients else None
+        result = run_digest(
+            app.state.twins,
+            notifier,
+            title=(req.title if req else None) or None,
+            recipients=recipients,
+        )
+        if result is None:
+            raise HTTPException(
+                status_code=422,
+                detail="no twins with fault reports to digest (ingest telemetry first)",
+            )
+        body = {"result": result.to_dict(), "n_assets": len(app.state.twins)}
+        enforce_safety_contract(body)
+        return body
+
+    # ------------------------------------------------------------------ #
+    # Fault history & fleet trends                                        #
+    # ------------------------------------------------------------------ #
+    @app.get("/faults/history")
+    def faults_history(asset_id: str = "WTG-001", limit: int = 50) -> dict:
+        """Fault timeline for one asset (from the twin registry + durable store)."""
+        from src.data.store import get_store
+
+        timeline: list[dict] = []
+        twin = app.state.twins.get(asset_id)
+        if twin is not None:
+            for rec in twin.state_history[-limit:]:
+                fault_report = rec.get("fault_report") or {}
+                timeline.append(
+                    {
+                        "timestamp": rec.get("timestamp"),
+                        "health_score": fault_report.get("health_score"),
+                        "overall_status": fault_report.get("overall_status"),
+                        "n_faults": (fault_report.get("summary") or {}).get("n_faults", 0),
+                        "fault_ids": [f["fault_id"] for f in fault_report.get("faults", [])],
+                    }
+                )
+        if not timeline:
+            try:
+                for rec in get_store().twin_history(asset_id, limit=limit):
+                    fault_report = (rec.get("payload") or {}).get("fault_report") or {}
+                    timeline.append(
+                        {
+                            "timestamp": rec.get("ts"),
+                            "health_score": fault_report.get("health_score"),
+                            "overall_status": fault_report.get("overall_status"),
+                            "n_faults": (fault_report.get("summary") or {}).get("n_faults", 0),
+                            "fault_ids": [f["fault_id"] for f in fault_report.get("faults", [])],
+                        }
+                    )
+            except Exception:  # noqa: BLE001 - history is best-effort
+                pass
+        body = {"asset_id": asset_id, "n_records": len(timeline), "timeline": timeline}
+        enforce_safety_contract(body)
+        return body
+
+    @app.get("/faults/trends")
+    def faults_trends() -> dict:
+        """Fleet-wide fault roll-up across every tracked twin."""
+        from collections import Counter
+
+        fault_counts: Counter = Counter()
+        subsystem_counts: Counter = Counter()
+        severity_counts: Counter = Counter()
+        health_scores: list[float] = []
+        assets: list[dict] = []
+        for twin in app.state.twins.values():
+            report = twin.last_fault_report
+            if report is None:
+                continue
+            health_scores.append(report.health_score)
+            assets.append(
+                {
+                    "asset_id": twin.asset_id,
+                    "status": report.overall_status,
+                    "health_score": round(report.health_score, 1),
+                    "n_faults": report.n_faults,
+                }
+            )
+            for fault in report.faults:
+                fault_counts[fault.fault_id] += 1
+                subsystem_counts[fault.subsystem_label] += 1
+                severity_counts[fault.severity] += 1
+        body = {
+            "n_assets": len(assets),
+            "fleet_avg_health": round(sum(health_scores) / len(health_scores), 1)
+            if health_scores
+            else None,
+            "severity_rollup": dict(severity_counts),
+            "top_faults": [
+                {"fault_id": fid, "count": count, "name": _fault_name(fid)}
+                for fid, count in fault_counts.most_common(10)
+            ],
+            "subsystem_rollup": dict(sorted(subsystem_counts.items(), key=lambda kv: -kv[1])),
+            "assets": assets,
+        }
+        enforce_safety_contract(body)
+        return body
+
+    # ------------------------------------------------------------------ #
+    # Maintenance work orders                                             #
+    # ------------------------------------------------------------------ #
+    @app.post("/maintenance/workorder")
+    def maintenance_workorder(req: WorkOrderRequest) -> dict:
+        """Generate (and persist) a maintenance work order from a snapshot."""
+        from datetime import datetime, timezone
+
+        from src.digital_twin.specs import get_spec
+        from src.faults.detector import FaultDetector
+        from src.maintenance import WorkOrderGenerator
+
+        try:
+            spec = get_spec(req.model_key)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        report = FaultDetector(spec).detect(
+            dict(req.telemetry),
+            asset_id=req.asset_id,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+        work_order = WorkOrderGenerator().generate(report)
+        body = work_order.to_dict()
+        try:
+            from src.data.store import get_store
+
+            get_store().record_report(
+                kind="workorder",
+                title=work_order.wo_id,
+                body=json.dumps(body, indent=2),
+                meta={"asset_id": req.asset_id, "priority": work_order.priority},
+            )
+        except Exception:  # noqa: BLE001 - persistence must never break the request
+            pass
+        enforce_safety_contract(body)
+        return body
+
+    @app.get("/maintenance/workorders")
+    def maintenance_workorders(limit: int = 20) -> dict:
+        """Work orders generated by this app (newest first)."""
+        from src.data.store import get_store
+
+        records = get_store().list_reports(kind="workorder", limit=limit)
+        orders = []
+        for record in records:
+            try:
+                orders.append(json.loads(record["body"]))
+            except (ValueError, TypeError):
+                continue
+        body = {"n_workorders": len(orders), "workorders": orders}
+        enforce_safety_contract(body)
+        return body
 
     @app.get("/twin/status")
     def twin_status(asset_id: str = "WTG-001", model: str = "GE-1.5") -> dict:
