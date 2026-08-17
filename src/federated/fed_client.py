@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable
 
 import numpy as np
 import torch
@@ -73,15 +73,13 @@ class FlowerFederatedClient(_ClientBase):
     def __init__(
         self,
         model: PhysicsGuidedBNN,
-        train_data: Tuple[torch.Tensor, torch.Tensor],
-        val_data: Tuple[torch.Tensor, torch.Tensor],
-        config: Optional[FederatedConfig] = None,
-        physics_fn: Optional[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
+        train_data: tuple[torch.Tensor, torch.Tensor],
+        val_data: tuple[torch.Tensor, torch.Tensor],
+        config: FederatedConfig | None = None,
+        physics_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None = None,
     ) -> None:
         if fl is None:
-            raise ImportError(
-                "flwr is required for federated training: pip install flwr"
-            )
+            raise ImportError("flwr is required for federated training: pip install flwr")
         self.model = model
         self.x_train, self.y_train = train_data
         self.x_val, self.y_val = val_data
@@ -89,20 +87,18 @@ class FlowerFederatedClient(_ClientBase):
         self.physics_fn = physics_fn
 
     # ── Flower NumPyClient API ───────────────────────────────────────────
-    def get_parameters(self, config: Dict) -> List[np.ndarray]:
+    def get_parameters(self, config: dict) -> list[np.ndarray]:
         """Return current model parameters as a list of numpy arrays."""
         return [p.detach().cpu().numpy() for p in self.model.state_dict().values()]
 
-    def set_parameters(self, parameters: List[np.ndarray]) -> None:
+    def set_parameters(self, parameters: list[np.ndarray]) -> None:
         """Load aggregated parameters received from the server."""
         state = self.model.state_dict()
         for key, array in zip(state.keys(), parameters):
             state[key] = torch.as_tensor(array)
         self.model.load_state_dict(state)
 
-    def fit(
-        self, parameters: List[np.ndarray], config: Dict
-    ) -> Tuple[List[np.ndarray], int, Dict]:
+    def fit(self, parameters: list[np.ndarray], config: dict) -> tuple[list[np.ndarray], int, dict]:
         """One round of local training on this farm's SCADA data."""
         self.set_parameters(parameters)
         n = self.x_train.shape[0]
@@ -110,21 +106,23 @@ class FlowerFederatedClient(_ClientBase):
         loss_fn = PGBNNLoss(self.config.beta_kl, self.config.lambda_physics, num_batches)
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.config.lr)
 
-        last: Dict[str, float] = {}
+        last: dict[str, float] = {}
         for _ in range(int(config.get("local_epochs", self.config.local_epochs))):
             perm = torch.randperm(n)
             for b in range(num_batches):
                 idx = perm[b * self.config.batch_size : (b + 1) * self.config.batch_size]
                 last = train_step(
-                    self.model, loss_fn, optimizer,
-                    self.x_train[idx], self.y_train[idx], physics_fn=self.physics_fn,
+                    self.model,
+                    loss_fn,
+                    optimizer,
+                    self.x_train[idx],
+                    self.y_train[idx],
+                    physics_fn=self.physics_fn,
                 )
         logger.info("local fit done: %s", last)
         return self.get_parameters(config), n, {f"train_{k}": v for k, v in last.items()}
 
-    def evaluate(
-        self, parameters: List[np.ndarray], config: Dict
-    ) -> Tuple[float, int, Dict]:
+    def evaluate(self, parameters: list[np.ndarray], config: dict) -> tuple[float, int, dict]:
         """Evaluate aggregated weights locally, reporting physics metrics."""
         self.set_parameters(parameters)
         self.model.eval()
@@ -132,18 +130,14 @@ class FlowerFederatedClient(_ClientBase):
             mean, log_var = self.model(self.x_val, sample=False)
             nll = float(PGBNNLoss.gaussian_nll(mean, log_var, self.y_val))
             rmse = float(torch.sqrt(torch.mean((mean - self.y_val) ** 2)))
-            phys = (
-                float(self.physics_fn(mean, self.x_val))
-                if self.physics_fn is not None
-                else 0.0
-            )
+            phys = float(self.physics_fn(mean, self.x_val)) if self.physics_fn is not None else 0.0
         # Physics-aware aggregation: the server strategy can weight clients
         # by 1 / (1 + physics_loss) using this reported metric.
         metrics = {"nll": nll, "rmse": rmse, "physics_loss": phys}
         return nll, int(self.x_val.shape[0]), metrics
 
 
-def start_client(client: "FlowerFederatedClient") -> None:
+def start_client(client: FlowerFederatedClient) -> None:
     """Connect a farm client to the federated server and start training.
 
     Args:

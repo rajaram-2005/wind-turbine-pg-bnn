@@ -14,9 +14,8 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import torch
 
@@ -43,9 +42,9 @@ class MaintenanceAlert:
     epistemic_std: float
     aleatoric_std: float
     threshold: float
-    features: Optional[List[float]] = None
+    features: list[float] | None = None
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Serialise the alert to a JSON-compatible dict."""
         return {
             "sample_index": self.sample_index,
@@ -86,10 +85,10 @@ class UncertaintySampler:
         self.num_mc_samples = num_mc_samples
         self.sample_budget = sample_budget
         self.use_mc_dropout = use_mc_dropout
-        self.alert_log: List[MaintenanceAlert] = []
+        self.alert_log: list[MaintenanceAlert] = []
 
     @torch.no_grad()
-    def estimate_uncertainty(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def estimate_uncertainty(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
         """MC sampling of epistemic + aleatoric uncertainty.
 
         Args:
@@ -121,7 +120,7 @@ class UncertaintySampler:
             "total_std": (epistemic_var + aleatoric_var).sqrt(),
         }
 
-    def query(self, x: torch.Tensor, log_features: bool = False) -> Dict:
+    def query(self, x: torch.Tensor, log_features: bool = False) -> dict:
         """Flag high-epistemic-uncertainty samples for labelling/inspection.
 
         Args:

@@ -17,7 +17,7 @@ Uncertainty decomposition:
 from __future__ import annotations
 
 import math
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable
 
 import torch
 import torch.nn as nn
@@ -99,11 +99,10 @@ class BayesianLinear(nn.Module):
         Returns:
             Scalar KL divergence for this layer.
         """
+
         def _kl(mu: torch.Tensor, sigma: torch.Tensor) -> torch.Tensor:
             sp = self.prior_sigma
-            return (
-                torch.log(sp / sigma) + (sigma.pow(2) + mu.pow(2)) / (2.0 * sp**2) - 0.5
-            ).sum()
+            return (torch.log(sp / sigma) + (sigma.pow(2) + mu.pow(2)) / (2.0 * sp**2) - 0.5).sum()
 
         return _kl(self.weight_mu, self.weight_sigma) + _kl(self.bias_mu, self.bias_sigma)
 
@@ -126,7 +125,7 @@ class PhysicsGuidedBNN(nn.Module):
     def __init__(
         self,
         in_features: int,
-        hidden_dims: Optional[List[int]] = None,
+        hidden_dims: list[int] | None = None,
         out_features: int = 1,
         prior_sigma: float = 1.0,
         dropout: float = 0.1,
@@ -144,9 +143,7 @@ class PhysicsGuidedBNN(nn.Module):
         # Head outputs [mean, log_var] for each target → aleatoric uncertainty.
         self.head = BayesianLinear(dims[-1], 2 * out_features, prior_sigma)
 
-    def forward(
-        self, x: torch.Tensor, sample: bool = True
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor, sample: bool = True) -> tuple[torch.Tensor, torch.Tensor]:
         """Single stochastic forward pass.
 
         Args:
@@ -172,9 +169,7 @@ class PhysicsGuidedBNN(nn.Module):
         return kl + self.head.kl_divergence()
 
     @torch.no_grad()
-    def predict(
-        self, x: torch.Tensor, num_samples: int = 64
-    ) -> Dict[str, torch.Tensor]:
+    def predict(self, x: torch.Tensor, num_samples: int = 64) -> dict[str, torch.Tensor]:
         """Monte-Carlo predictive distribution with uncertainty decomposition.
 
         Args:
@@ -260,8 +255,8 @@ class PGBNNLoss(nn.Module):
         mean: torch.Tensor,
         log_var: torch.Tensor,
         target: torch.Tensor,
-        physics_loss: Optional[torch.Tensor] = None,
-    ) -> Dict[str, torch.Tensor]:
+        physics_loss: torch.Tensor | None = None,
+    ) -> dict[str, torch.Tensor]:
         """Compute the combined loss and its components.
 
         Args:
@@ -291,9 +286,9 @@ def train_step(
     optimizer: torch.optim.Optimizer,
     x: torch.Tensor,
     y: torch.Tensor,
-    physics_fn: Optional[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
+    physics_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None = None,
     num_mc_samples: int = 2,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """One optimisation step averaging the ELBO over MC weight samples.
 
     Args:
@@ -310,7 +305,7 @@ def train_step(
     """
     model.train()
     optimizer.zero_grad()
-    totals: Dict[str, torch.Tensor] = {}
+    totals: dict[str, torch.Tensor] = {}
     for _ in range(num_mc_samples):
         mean, log_var = model(x, sample=True)
         phys = physics_fn(mean, x) if physics_fn is not None else None

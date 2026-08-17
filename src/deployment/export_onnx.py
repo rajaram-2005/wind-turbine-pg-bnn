@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -34,7 +33,7 @@ class _DeterministicWrapper(nn.Module):
         super().__init__()
         self.model = model
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Deterministic forward returning (mean, variance)."""
         mean, log_var = self.model(x, sample=False)
         return mean, torch.exp(log_var)
@@ -94,7 +93,7 @@ def validate_onnx_export(
     num_test_batches: int = 3,
     batch_size: int = 8,
     atol: float = 1e-4,
-    seed: Optional[int] = 0,
+    seed: int | None = 0,
 ) -> bool:
     """Validate the exported ONNX model against the PyTorch mean-weight model.
 

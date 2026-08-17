@@ -11,8 +11,6 @@ All functions are ``torch``-native and differentiable.
 
 from __future__ import annotations
 
-from typing import Optional
-
 import torch
 
 DEFAULT_GEAR_RATIO: float = 97.0  # typical 1.5–3 MW turbine gearbox
@@ -121,8 +119,8 @@ def vibration_stress_energy(
 def drivetrain_physics_loss(
     predicted_hss_torque_nm: torch.Tensor,
     rotor_torque_nm: torch.Tensor,
-    predicted_wear_rate: Optional[torch.Tensor] = None,
-    vibration_rms_mms: Optional[torch.Tensor] = None,
+    predicted_wear_rate: torch.Tensor | None = None,
+    vibration_rms_mms: torch.Tensor | None = None,
     gear_ratio: float = DEFAULT_GEAR_RATIO,
     efficiency: float = DEFAULT_GEARBOX_EFFICIENCY,
     vibration_limit_mms: float = 4.5,

@@ -390,3 +390,6 @@ class HealthResponse(BaseModel):
     version: str = "1.0.0"
     website: str = "https://aerovigil.abacusai.app"
     serving_model_loaded: bool = False
+    is_lts: bool = True
+    lts_support_until: str = "2029-08-17"
+    next_major_update: str = "2029-08-17"

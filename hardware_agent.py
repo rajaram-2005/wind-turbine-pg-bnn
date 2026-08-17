@@ -120,8 +120,12 @@ class ProtocolConnector(abc.ABC):
             return True
         except Exception as exc:  # noqa: BLE001
             self._reconnect_delay = min(self._reconnect_delay * 2.0, 60.0)
-            logger.warning("[%s] reconnect failed (%s); retrying in %.0fs",
-                           self.name, exc, self._reconnect_delay)
+            logger.warning(
+                "[%s] reconnect failed (%s); retrying in %.0fs",
+                self.name,
+                exc,
+                self._reconnect_delay,
+            )
             return False
 
     # Cumulative operating hours for the simulated turbine; advances a little
@@ -138,10 +142,18 @@ class ProtocolConnector(abc.ABC):
         """
         cls._sim_operating_hours += 0.1  # ≈ one 6-minute SCADA cycle
         return [
-            {"signal": "generator_rpm", "value": round(random.uniform(900, 1800), 1), "unit": "rpm"},
+            {
+                "signal": "generator_rpm",
+                "value": round(random.uniform(900, 1800), 1),
+                "unit": "rpm",
+            },
             {"signal": "gearbox_temp", "value": round(random.uniform(45, 95), 2), "unit": "C"},
             {"signal": "generator_temp", "value": round(random.uniform(55, 110), 2), "unit": "C"},
-            {"signal": "vibration_rms", "value": round(random.uniform(0.5, 12.0), 3), "unit": "mm/s"},
+            {
+                "signal": "vibration_rms",
+                "value": round(random.uniform(0.5, 12.0), 3),
+                "unit": "mm/s",
+            },
             {"signal": "power_output", "value": round(random.uniform(0, 3200), 1), "unit": "kW"},
             {"signal": "wind_speed", "value": round(random.uniform(2, 22), 2), "unit": "m/s"},
             {"signal": "operating_hours", "value": round(cls._sim_operating_hours, 1), "unit": "h"},
@@ -378,9 +390,7 @@ class ModbusTCPConnector(ProtocolConnector):
             self._enter_simulated("no --host given for modbus")
             return
         port = int(self.options.get("port") or 502)
-        client = ModbusTcpClient(
-            host, port=port, timeout=float(self.options.get("timeout", 5.0))
-        )
+        client = ModbusTcpClient(host, port=port, timeout=float(self.options.get("timeout", 5.0)))
         try:
             ok = client.connect()
         except Exception as exc:  # noqa: BLE001
@@ -711,7 +721,10 @@ class HardwareAgent:
         await self.connector.connect()
         logger.info(
             "agent started: connector=%s server=%s interval=%.1fs buffered=%d",
-            self.connector.name, self.server, self.interval, self.buffer.count(),
+            self.connector.name,
+            self.server,
+            self.interval,
+            self.buffer.count(),
         )
         try:
             while True:
@@ -751,27 +764,33 @@ def _build_parser() -> argparse.ArgumentParser:
     mqtt.add_argument("--mqtt-port", type=int, default=1883)
     mqtt.add_argument("--mqtt-username", default=None)
     mqtt.add_argument("--mqtt-password", default=None)
-    mqtt.add_argument("--mqtt-topics", default=None,
-                      help="Comma-separated topics to subscribe to")
-    mqtt.add_argument("--mqtt-topic-map", default=None,
-                      help="Comma-separated topic=signal map entries")
+    mqtt.add_argument("--mqtt-topics", default=None, help="Comma-separated topics to subscribe to")
+    mqtt.add_argument(
+        "--mqtt-topic-map", default=None, help="Comma-separated topic=signal map entries"
+    )
     mqtt.add_argument("--mqtt-tls", action="store_true")
     mqtt.add_argument("--mqtt-ca-cert", default=None)
 
     modbus = p.add_argument_group("Modbus/TCP")
     modbus.add_argument("--modbus-port", type=int, default=502)
     modbus.add_argument("--modbus-unit", type=int, default=1, help="Slave/unit id")
-    modbus.add_argument("--modbus-register-map", default=None,
-                        help="Compact map: name@addr[:count][:scale][:unit],... "
-                             "(or a JSON array of objects)")
+    modbus.add_argument(
+        "--modbus-register-map",
+        default=None,
+        help="Compact map: name@addr[:count][:scale][:unit],... (or a JSON array of objects)",
+    )
 
     opcua = p.add_argument_group("OPC-UA")
     opcua.add_argument("--opcua-user", default=None)
     opcua.add_argument("--opcua-password", default=None)
-    opcua.add_argument("--opcua-security", default=None,
-                       help="Security string, e.g. Basic256Sha256,SignAndEncrypt,cert.der,key.pem")
-    opcua.add_argument("--opcua-nodes", default=None,
-                       help="Comma-separated name=nodeid map entries")
+    opcua.add_argument(
+        "--opcua-security",
+        default=None,
+        help="Security string, e.g. Basic256Sha256,SignAndEncrypt,cert.der,key.pem",
+    )
+    opcua.add_argument(
+        "--opcua-nodes", default=None, help="Comma-separated name=nodeid map entries"
+    )
     return p
 
 
@@ -784,8 +803,7 @@ def _build_connector(args: argparse.Namespace) -> ProtocolConnector:
             port=args.mqtt_port,
             username=args.mqtt_username,
             password=args.mqtt_password,
-            topics=[t.strip() for t in (args.mqtt_topics or "").split(",") if t.strip()]
-            or None,
+            topics=[t.strip() for t in (args.mqtt_topics or "").split(",") if t.strip()] or None,
             topic_map=_split_kv(args.mqtt_topic_map) or None,
             tls=args.mqtt_tls,
             ca_cert=args.mqtt_ca_cert,

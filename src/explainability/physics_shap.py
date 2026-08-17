@@ -17,7 +17,7 @@ Anomaly-cause taxonomy:
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Sequence
+from collections.abc import Sequence
 
 import torch
 import torch.nn as nn
@@ -25,7 +25,7 @@ import torch.nn as nn
 logger = logging.getLogger(__name__)
 
 #: Default mapping of SCADA feature names → physics category.
-DEFAULT_FEATURE_PHYSICS_MAP: Dict[str, str] = {
+DEFAULT_FEATURE_PHYSICS_MAP: dict[str, str] = {
     "wind_speed": "aerodynamic_anomaly",
     "rotor_speed": "aerodynamic_anomaly",
     "pitch_angle": "aerodynamic_anomaly",
@@ -44,7 +44,7 @@ DEFAULT_FEATURE_PHYSICS_MAP: Dict[str, str] = {
 }
 
 #: Physics-loss module associated with each category (for residual reporting).
-CATEGORY_RESIDUALS: Dict[str, str] = {
+CATEGORY_RESIDUALS: dict[str, str] = {
     "aerodynamic_anomaly": "src.physics.aerodynamics.aerodynamic_physics_loss",
     "mechanical_wear": "src.physics.drivetrain.drivetrain_physics_loss",
     "thermal_overheating": "src.physics.thermal.thermal_physics_loss",
@@ -79,7 +79,7 @@ class PhysicsSHAP:
         model: nn.Module,
         feature_names: Sequence[str],
         background: torch.Tensor,
-        feature_physics_map: Optional[Dict[str, str]] = None,
+        feature_physics_map: dict[str, str] | None = None,
     ) -> None:
         self.model = _MeanForward(model).eval()
         self.feature_names = list(feature_names)
@@ -125,7 +125,7 @@ class PhysicsSHAP:
         (grad,) = torch.autograd.grad(out, x_req)
         return grad * (x - baseline)
 
-    def categorize(self, attributions: torch.Tensor) -> Dict[str, float]:
+    def categorize(self, attributions: torch.Tensor) -> dict[str, float]:
         """Aggregate |attribution| mass per physics category.
 
         Also raises a ``sensor_drift`` score when one single feature carries
@@ -143,7 +143,7 @@ class PhysicsSHAP:
             attr = attr.mean(dim=0)
         total = float(attr.sum()) or 1.0
 
-        scores: Dict[str, float] = {
+        scores: dict[str, float] = {
             "mechanical_wear": 0.0,
             "thermal_overheating": 0.0,
             "aerodynamic_anomaly": 0.0,
@@ -158,7 +158,7 @@ class PhysicsSHAP:
             scores["sensor_drift"] = top_share
         return scores
 
-    def explain(self, x: torch.Tensor) -> Dict:
+    def explain(self, x: torch.Tensor) -> dict:
         """Full explainability report for a batch of samples.
 
         Args:
