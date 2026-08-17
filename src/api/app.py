@@ -68,8 +68,18 @@ from src.faults.limits import OVERRIDE_KEYS as OVERRIDE_KEYS_IMPORT
 from src.models.predictor import run_advisory
 from src.utils.safety import enforce_safety_contract
 from src.utils.schema import TurbinePayload
-from src.version import APP_VERSION as VERSION
-from src.version import PRODUCT, SAFETY_BANNER, WEBSITE
+from src.version import (
+    APP_VERSION as VERSION,
+)
+from src.version import (
+    IS_LTS,
+    LTS_CYCLE_YEARS,
+    LTS_END_DATE,
+    NEXT_MAJOR_UPDATE,
+    PRODUCT,
+    SAFETY_BANNER,
+    WEBSITE,
+)
 
 ENV_MODEL_PATH = "AV_MODEL_PATH"
 # Memory bound for the in-memory twin registry (LRU-evicted). Overridable per
@@ -309,6 +319,12 @@ def create_app() -> FastAPI:
             "website": WEBSITE,
             "advisory_only": True,
             "serving_model_loaded": app.state.serving is not None,
+            "lts": {
+                "is_lts": IS_LTS,
+                "support_until": LTS_END_DATE,
+                "cycle_years": LTS_CYCLE_YEARS,
+                "next_major_update": NEXT_MAJOR_UPDATE,
+            },
             "agent_team": {
                 "team_id": "CYBER_PRIME_DUAL_AGENT",
                 "agents": ["MIKA", "KAI"],
@@ -354,6 +370,9 @@ def create_app() -> FastAPI:
             product=PRODUCT,
             website=WEBSITE,
             serving_model_loaded=app.state.serving is not None,
+            is_lts=IS_LTS,
+            lts_support_until=LTS_END_DATE,
+            next_major_update=NEXT_MAJOR_UPDATE,
         )
 
     @app.post("/advisory", response_model=AdvisoryResponse)

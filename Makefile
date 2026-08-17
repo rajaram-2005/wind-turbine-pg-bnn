@@ -7,7 +7,7 @@
 PYTHON ?= python
 PKG    := src/aerovigil_pg_bnn
 
-.PHONY: help dev install serve lint format format-check typecheck security test build docker-lint ci clean
+.PHONY: help dev install serve lint format format-check typecheck security test build apps release-apps docker-lint ci clean
 
 help: ## Show this help
 	@echo "Aerovigil PG-BNN — local CI targets (run 'make ci' for everything):"
@@ -20,6 +20,8 @@ help: ## Show this help
 	@echo "  make security     bandit scan"
 	@echo "  make test         pytest"
 	@echo "  make build        sdist + wheel (+ twine check)"
+	@echo "  make apps         package native multiplatform apps (dry-run)"
+	@echo "  make release-apps package native multiplatform apps (Windows, macOS, Linux, Android)"
 	@echo "  make docker-lint  hadolint on the Dockerfile (if installed)"
 	@echo "  make dev          install api + dev dependencies"
 	@echo "  make clean        remove build artifacts"
@@ -52,7 +54,13 @@ test: ## Run the test suite
 
 build: ## Build sdist + wheel and validate metadata
 	$(PYTHON) -m build
-	twine check dist/*
+	twine check dist/*.tar.gz dist/*.whl
+
+apps: ## Package native multiplatform apps (dry-run mode)
+	$(PYTHON) scripts/build_apps.py --dry-run
+
+release-apps: ## Build and package native apps across all platforms
+	$(PYTHON) scripts/build_apps.py --platform all
 
 docker-lint: ## Lint the Dockerfile with hadolint (if installed)
 	@command -v hadolint >/dev/null 2>&1 && hadolint -c .hadolint.yaml Dockerfile \

@@ -52,7 +52,7 @@ class JobBroker:
             logger.warning("Redis publish failed (%s); job stays durable in SQLite", exc)
             return False
 
-    async def consume(self, timeout: float = 0.5) -> (str | None):
+    async def consume(self, timeout: float = 0.5) -> str | None:
         if self._client is None:
             return None
         try:

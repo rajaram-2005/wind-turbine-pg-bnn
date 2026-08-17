@@ -16,8 +16,6 @@ evaluated on another, because the learned kernels live in Fourier space.
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -137,7 +135,7 @@ class FourierNeuralOperator(nn.Module):
         )
 
     @staticmethod
-    def _grid(shape: Tuple[int, int, int, int], device: torch.device) -> torch.Tensor:
+    def _grid(shape: tuple[int, int, int, int], device: torch.device) -> torch.Tensor:
         """Normalised (x, y) coordinate grid, shape (B, 2, H, W)."""
         b, _, h, w = shape
         gx = torch.linspace(0.0, 1.0, h, device=device).view(1, 1, h, 1).expand(b, 1, h, w)
@@ -179,9 +177,9 @@ class PINO(nn.Module):
 
     def __init__(
         self,
-        operator: Optional[FourierNeuralOperator] = None,
+        operator: FourierNeuralOperator | None = None,
         viscosity: float = 1.5e-2,
-        domain_size: Tuple[float, float] = (1000.0, 500.0),
+        domain_size: tuple[float, float] = (1000.0, 500.0),
     ) -> None:
         super().__init__()
         self.operator = operator or FourierNeuralOperator()
@@ -227,7 +225,7 @@ class PINO(nn.Module):
         x: torch.Tensor,
         y_true: torch.Tensor,
         lambda_pde: float = 0.1,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Combined data + PDE-residual loss.
 
         Args:

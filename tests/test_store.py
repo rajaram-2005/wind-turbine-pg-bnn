@@ -1,6 +1,5 @@
 """Tests for the durable SQLite operational store (src.data.store)."""
 
-
 from src.data.store import Store
 
 
@@ -8,10 +7,22 @@ def test_telemetry_roundtrip(tmp_path):
     store = Store(tmp_path / "store.sqlite3")
     n = store.record_telemetry(
         [
-            {"gateway_id": "gw-1", "turbine_id": "WTG-1", "signal": "rpm", "value": 1500.0,
-             "unit": "rpm", "timestamp": "2026-08-08T10:00:00Z"},
-            {"gateway_id": "gw-1", "turbine_id": "WTG-1", "signal": "temp", "value": 68.0,
-             "unit": "C", "timestamp": "2026-08-08T10:00:00Z"},
+            {
+                "gateway_id": "gw-1",
+                "turbine_id": "WTG-1",
+                "signal": "rpm",
+                "value": 1500.0,
+                "unit": "rpm",
+                "timestamp": "2026-08-08T10:00:00Z",
+            },
+            {
+                "gateway_id": "gw-1",
+                "turbine_id": "WTG-1",
+                "signal": "temp",
+                "value": 68.0,
+                "unit": "C",
+                "timestamp": "2026-08-08T10:00:00Z",
+            },
         ]
     )
     assert n == 2
@@ -25,12 +36,20 @@ def test_telemetry_roundtrip(tmp_path):
 
 def test_assets_upsert_and_summary(tmp_path):
     store = Store(tmp_path / "store.sqlite3")
-    store.upsert_asset({"turbine_id": "WTG-1", "status": "Healthy", "health_score": 90.0,
-                        "predicted_rul_days": 250.0})
-    store.upsert_asset({"turbine_id": "WTG-1", "status": "Watch", "health_score": 70.0,
-                        "predicted_rul_days": 60.0})
-    store.upsert_asset({"turbine_id": "WTG-2", "status": "Alert", "health_score": 30.0,
-                        "predicted_rul_days": 20.0})
+    store.upsert_asset(
+        {
+            "turbine_id": "WTG-1",
+            "status": "Healthy",
+            "health_score": 90.0,
+            "predicted_rul_days": 250.0,
+        }
+    )
+    store.upsert_asset(
+        {"turbine_id": "WTG-1", "status": "Watch", "health_score": 70.0, "predicted_rul_days": 60.0}
+    )
+    store.upsert_asset(
+        {"turbine_id": "WTG-2", "status": "Alert", "health_score": 30.0, "predicted_rul_days": 20.0}
+    )
     summary = store.summarize_fleet()
     assert summary["n_assets"] == 2
     assert summary["at_risk_count"] == 2  # both RUL < 104d

@@ -33,7 +33,6 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, Tuple
 
 import torch
 import yaml
@@ -83,7 +82,7 @@ def build_model(cfg: dict) -> PhysicsGuidedBNN:
 
 def make_synthetic_scada(
     n: int, in_features: int, seed: int = 0
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Generate a physically-plausible synthetic SCADA dataset.
 
     Features: wind_speed, rotor_speed, generator_temp, vibration_rms,
@@ -308,7 +307,9 @@ def cmd_faults(args: argparse.Namespace) -> int:
     # ({"asset_id": ..., "model_key": ..., "telemetry": {...}}).
     telemetry = snapshot.get("telemetry", snapshot)
     if not isinstance(telemetry, dict):
-        print("--snapshot must be a JSON object (telemetry dict or wrapped payload)", file=sys.stderr)
+        print(
+            "--snapshot must be a JSON object (telemetry dict or wrapped payload)", file=sys.stderr
+        )
         return 2
     report = FaultDetector(spec).detect(
         telemetry,
@@ -342,7 +343,8 @@ def cmd_notify(args: argparse.Namespace) -> int:
     status = notifier.status()
     logger.info(
         "notifier mode=%s host=%s alert_recipients=%s report_recipients=%s",
-        status["mode"], status["smtp_host"] or "-",
+        status["mode"],
+        status["smtp_host"] or "-",
         ",".join(status["alert_recipients"]) or "-",
         ",".join(status["report_recipients"]) or "-",
     )
@@ -362,9 +364,7 @@ def cmd_notify(args: argparse.Namespace) -> int:
                 "predicted_rul_days": float(row.get("predicted_rul_days", 365.0)),
             }
             reports.append(
-                FaultDetector(spec).detect(
-                    telemetry, asset_id=str(row["asset_id"]), timestamp=""
-                )
+                FaultDetector(spec).detect(telemetry, asset_id=str(row["asset_id"]), timestamp="")
             )
     else:
         if not args.snapshot:
@@ -376,9 +376,7 @@ def cmd_notify(args: argparse.Namespace) -> int:
         snapshot = json.loads(Path(args.snapshot).read_text(encoding="utf-8"))
         telemetry = snapshot.get("telemetry", snapshot)
         reports.append(
-            FaultDetector(spec).detect(
-                telemetry, asset_id=str(args.asset), timestamp=""
-            )
+            FaultDetector(spec).detect(telemetry, asset_id=str(args.asset), timestamp="")
         )
 
     if args.report or len(reports) > 1:
@@ -479,7 +477,7 @@ def cmd_federated(args: argparse.Namespace) -> int:
         # Weighted FedAvg aggregation.
         total = float(sum(weights))
         agg = {}
-        for key in global_model.state_dict().keys():
+        for key in global_model.state_dict():
             acc = None
             for w, state in zip(weights, local_states):
                 term = state[key].float() * (w / total)
@@ -495,6 +493,15 @@ def cmd_federated(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_info(args: argparse.Namespace) -> int:
+    """Print application version and 3-Year Enterprise LTS support metadata."""
+    from src.version import get_lts_info
+
+    info = get_lts_info()
+    print(json.dumps(info, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Assemble the argparse CLI with all subcommands."""
     parser = argparse.ArgumentParser(
@@ -503,6 +510,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="debug logging")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p_info = sub.add_parser("info", help="print release version and 3-Year LTS support info")
+    p_info.set_defaults(func=cmd_info)
 
     def common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--config", default="configs/default.yaml", help="YAML config path")
@@ -581,7 +591,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[list] = None) -> int:
+def main(argv: list | None = None) -> int:
     """CLI entry point."""
     args = build_parser().parse_args(argv)
     setup_logging(args.verbose)

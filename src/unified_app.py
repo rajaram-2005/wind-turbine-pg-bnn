@@ -55,8 +55,16 @@ from fastapi.staticfiles import StaticFiles
 from src.aerovigil_pg_bnn.api import app as _model_app  # lifespan loads the model
 from src.api.app import create_app as create_operations_api
 from src.api.gateway_routes import router as gateway_router
-from src.version import APP_VERSION as VERSION
-from src.version import PRODUCT
+from src.version import (
+    APP_VERSION as VERSION,
+)
+from src.version import (
+    IS_LTS,
+    LTS_CYCLE_YEARS,
+    LTS_END_DATE,
+    NEXT_MAJOR_UPDATE,
+    PRODUCT,
+)
 
 # Location of the compiled browser-console assets served at ``/``.
 _CONSOLE_DIR = Path(__file__).resolve().parents[1] / "web_console" / "dist"
@@ -241,6 +249,12 @@ def create_app(*, include_dashboard: bool = True) -> FastAPI:
                 "agents": ["MIKA", "KAI"],
                 "status": "connected",
                 "evidence_path": ["SCADA", "PG-BNN", "ISO 281", "TWIN", "FLEET", "HUMAN"],
+            },
+            "lts": {
+                "is_lts": IS_LTS,
+                "support_until": LTS_END_DATE,
+                "cycle_years": LTS_CYCLE_YEARS,
+                "next_major_update": NEXT_MAJOR_UPDATE,
             },
         }
 

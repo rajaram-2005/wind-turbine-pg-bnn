@@ -11,8 +11,6 @@ All functions are ``torch``-native and differentiable.
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
-
 import torch
 
 DEFAULT_WINDING_RESISTANCE_OHM: float = 0.02  # per-phase stator resistance

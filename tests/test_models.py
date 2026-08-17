@@ -89,9 +89,7 @@ class TestONNXExport:
             validate = False
 
         model = PhysicsGuidedBNN(in_features=6, hidden_dims=[16], out_features=1)
-        out = export_bnn_to_onnx(
-            model, str(tmp_path / "bnn.onnx"), validate=validate
-        )
+        out = export_bnn_to_onnx(model, str(tmp_path / "bnn.onnx"), validate=validate)
         assert out.exists() and out.stat().st_size > 0
 
         import onnx

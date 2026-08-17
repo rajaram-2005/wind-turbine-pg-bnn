@@ -1,7 +1,6 @@
 """End-to-end tests for hardware-stream processing: durable persistence, twin
 updates, advisories, fleet reports, and signed-cloud imports."""
 
-
 import pytest
 
 pytest.importorskip("fastapi")
@@ -14,16 +13,46 @@ from src.unified_app import create_app  # noqa: E402
 _STREAM_BATCH = {
     "gateway_id": "gw-nacelle-01",
     "readings": [
-        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S1", "signal": "generator_rpm",
-         "value": 1500.0, "unit": "rpm", "timestamp": "2026-08-08T10:00:00Z"},
-        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S1", "signal": "gearbox_temp",
-         "value": 68.0, "unit": "C", "timestamp": "2026-08-08T10:00:00Z"},
-        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S1", "signal": "vibration_rms",
-         "value": 2.5, "unit": "mm/s", "timestamp": "2026-08-08T10:00:00Z"},
-        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S1", "signal": "wind_speed",
-         "value": 11.0, "unit": "m/s", "timestamp": "2026-08-08T10:00:00Z"},
-        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S1", "signal": "power_output",
-         "value": 1850.0, "unit": "kW", "timestamp": "2026-08-08T10:00:00Z"},
+        {
+            "gateway_id": "gw-nacelle-01",
+            "turbine_id": "WTG-S1",
+            "signal": "generator_rpm",
+            "value": 1500.0,
+            "unit": "rpm",
+            "timestamp": "2026-08-08T10:00:00Z",
+        },
+        {
+            "gateway_id": "gw-nacelle-01",
+            "turbine_id": "WTG-S1",
+            "signal": "gearbox_temp",
+            "value": 68.0,
+            "unit": "C",
+            "timestamp": "2026-08-08T10:00:00Z",
+        },
+        {
+            "gateway_id": "gw-nacelle-01",
+            "turbine_id": "WTG-S1",
+            "signal": "vibration_rms",
+            "value": 2.5,
+            "unit": "mm/s",
+            "timestamp": "2026-08-08T10:00:00Z",
+        },
+        {
+            "gateway_id": "gw-nacelle-01",
+            "turbine_id": "WTG-S1",
+            "signal": "wind_speed",
+            "value": 11.0,
+            "unit": "m/s",
+            "timestamp": "2026-08-08T10:00:00Z",
+        },
+        {
+            "gateway_id": "gw-nacelle-01",
+            "turbine_id": "WTG-S1",
+            "signal": "power_output",
+            "value": 1850.0,
+            "unit": "kW",
+            "timestamp": "2026-08-08T10:00:00Z",
+        },
     ],
 }
 
@@ -87,20 +116,62 @@ def test_hardware_stream_persists_and_updates_twins(client):
 _STREAM_BATCH_SIX_SIGNAL = {
     "gateway_id": "gw-nacelle-01",
     "readings": [
-        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S2", "signal": "generator_rpm",
-         "value": 1500.0, "unit": "rpm", "timestamp": "2026-08-08T11:00:00Z"},
-        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S2", "signal": "gearbox_temp",
-         "value": 62.0, "unit": "C", "timestamp": "2026-08-08T11:00:00Z"},
-        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S2", "signal": "generator_temp",
-         "value": 74.0, "unit": "C", "timestamp": "2026-08-08T11:00:00Z"},
-        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S2", "signal": "vibration_rms",
-         "value": 2.5, "unit": "mm/s", "timestamp": "2026-08-08T11:00:00Z"},
-        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S2", "signal": "wind_speed",
-         "value": 10.0, "unit": "m/s", "timestamp": "2026-08-08T11:00:00Z"},
-        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S2", "signal": "power_output",
-         "value": 1500.0, "unit": "kW", "timestamp": "2026-08-08T11:00:00Z"},
-        {"gateway_id": "gw-nacelle-01", "turbine_id": "WTG-S2", "signal": "operating_hours",
-         "value": 22000.0, "unit": "h", "timestamp": "2026-08-08T11:00:00Z"},
+        {
+            "gateway_id": "gw-nacelle-01",
+            "turbine_id": "WTG-S2",
+            "signal": "generator_rpm",
+            "value": 1500.0,
+            "unit": "rpm",
+            "timestamp": "2026-08-08T11:00:00Z",
+        },
+        {
+            "gateway_id": "gw-nacelle-01",
+            "turbine_id": "WTG-S2",
+            "signal": "gearbox_temp",
+            "value": 62.0,
+            "unit": "C",
+            "timestamp": "2026-08-08T11:00:00Z",
+        },
+        {
+            "gateway_id": "gw-nacelle-01",
+            "turbine_id": "WTG-S2",
+            "signal": "generator_temp",
+            "value": 74.0,
+            "unit": "C",
+            "timestamp": "2026-08-08T11:00:00Z",
+        },
+        {
+            "gateway_id": "gw-nacelle-01",
+            "turbine_id": "WTG-S2",
+            "signal": "vibration_rms",
+            "value": 2.5,
+            "unit": "mm/s",
+            "timestamp": "2026-08-08T11:00:00Z",
+        },
+        {
+            "gateway_id": "gw-nacelle-01",
+            "turbine_id": "WTG-S2",
+            "signal": "wind_speed",
+            "value": 10.0,
+            "unit": "m/s",
+            "timestamp": "2026-08-08T11:00:00Z",
+        },
+        {
+            "gateway_id": "gw-nacelle-01",
+            "turbine_id": "WTG-S2",
+            "signal": "power_output",
+            "value": 1500.0,
+            "unit": "kW",
+            "timestamp": "2026-08-08T11:00:00Z",
+        },
+        {
+            "gateway_id": "gw-nacelle-01",
+            "turbine_id": "WTG-S2",
+            "signal": "operating_hours",
+            "value": 22000.0,
+            "unit": "h",
+            "timestamp": "2026-08-08T11:00:00Z",
+        },
     ],
 }
 

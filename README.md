@@ -24,6 +24,8 @@ honest estimate of how certain it is.
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch 2.0+](https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c.svg)](https://pytorch.org/)
+[![LTS: 2026-2029](https://img.shields.io/badge/LTS-2026--2029%20(3%20Years)-success.svg)](docs/LTS_POLICY.md)
+[![Release: v1.0.0 LTS](https://img.shields.io/badge/Release-v1.0.0%20LTS-blue.svg)](https://github.com/rajaram-2005/wind-turbine-pg-bnn/releases/tag/v1.0.0)
 [![Live Demo](https://img.shields.io/badge/demo-live-22c55e.svg)](https://aerovigil.abacusai.app)
 
 > ### 📊 AeroVigil in numbers
@@ -1416,15 +1418,30 @@ multi-component RUL, and federated fleet learning.
 Star the repo, open issues, submit PRs. Check the [`CONTRIBUTING.md`](CONTRIBUTING.md)
 guide and the [development](#development) section above.
 
+## 🛡️ Enterprise Long-Term Support (LTS) — 3-Year Lifecycle (2026–2029)
+
+AeroVigil v1.0.0 is an official **3-Year Enterprise Long-Term Support (LTS)** release:
+
+- **Active Support Window**: **August 17, 2026 – August 17, 2029** (3 full years).
+- **Stability Guarantee**: Zero breaking changes to REST APIs (`/api`, `/advisory`, `/twin`, `/faults`), telemetry schemas, edge microcontroller protocols (ESP32/STM32), or ONNX model signatures.
+- **Maintenance Cadence**: Seamless, drop-in patch updates (`v1.0.x`) for security vulnerabilities, bug fixes, and non-breaking OEM sensor profile additions.
+- **Predictable Upgrade Cadence**: Next major platform upgrade (**v2.0.0 LTS**) scheduled for **August 2029** with a 12-month advance preview and migration sandbox.
+
+For complete policy details, compatibility matrices, and upgrade roadmaps, see:
+- 📖 [`docs/LTS_POLICY.md`](docs/LTS_POLICY.md) — 3-Year Enterprise Support Commitment & Architecture Guarantees
+- 🚀 [`docs/RELEASES.md`](docs/RELEASES.md) — Complete Release History & Milestone Roadmap
+
 ## 🗺️ Roadmap
 
-| Timeframe | Focus |
-|-----------|-------|
-| **Now** | Open-source release, community building, demo polish |
-| **0–3 months** | Secure first pilot fleet, validate on real site data |
-| **3–6 months** | Fleet-level reporting, CMMS integration, role-based dashboards |
-| **6–12 months** | Multi-component coverage, cross-site benchmarking, OEM partnerships |
-| **12+ months** | Federated learning across fleets, offshore-specific models, API marketplace |
+| Timeframe | Release / Milestone | Focus |
+|-----------|--------------------|-------|
+| **August 2026** | **v1.0.0 LTS (Active)** | Foundational 3-year LTS release: 12-subsystem fault diagnostics, Flutter apps, edge IoT |
+| **0–3 months** | Pilot Fleet Validation | Secure first pilot wind farm partnership, validate on operational SCADA streams |
+| **3–6 months** | Site Calibration | Farm-specific calibration tools, CMMS work-order integration, role-based dashboards |
+| **6–12 months** | Multi-Farm Benchmarking | Cross-site fleet analytics, extended OEM turbine library (15+ models), ISO 55000 compliance |
+| **12–24 months** | Advanced Federated Mesh | Multi-farm federated learning, offshore-specific aero-wake modeling, edge gateway hardening |
+| **August 2028** | v2.0.0 Preview RFC | 12-month advance notice, architecture blueprints, and migration guidelines for next LTS |
+| **August 2029** | **v2.0.0 LTS (Next)** | Next scheduled 3-year major platform release cycle (2029–2032) |
 
 ## 👤 About the Founder
 
@@ -1488,6 +1505,8 @@ dashboards, digital twins, and a 28,400-sample EPIC model trained across
 
 | Document | What it covers |
 |----------|----------------|
+| [`docs/LTS_POLICY.md`](docs/LTS_POLICY.md) | 🛡️ 3-Year Enterprise LTS Policy & Compatibility Guarantees (2026–2029) |
+| [`docs/RELEASES.md`](docs/RELEASES.md) | 🚀 Complete Release History & 3-Year Milestone Roadmap |
 | [`docs/STORY.md`](docs/STORY.md) | 🎬 The origin story — from idea to product |
 | [`docs/LINKEDIN_PROFILE.md`](docs/LINKEDIN_PROFILE.md) | 👤 Founder profile, project entries, and professional skills |
 | [`docs/EXPLAINER.md`](docs/EXPLAINER.md) | The idea with zero jargon |

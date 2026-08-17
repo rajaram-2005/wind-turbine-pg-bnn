@@ -19,6 +19,7 @@ Design goals
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -29,7 +30,7 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_DB = _REPO_ROOT / "artifacts" / "jobs.sqlite3"
@@ -73,7 +74,7 @@ class JobRecord:
     updated_at: float
     args: list[str] = field(default_factory=list)
     logs: list[str] = field(default_factory=list)
-    result: Optional[dict[str, Any]] = None
+    result: dict[str, Any] | None = None
 
     def to_public(self, *, max_logs: int = 100) -> dict[str, Any]:
         """Return a JSON-friendly dict with the most recent ``max_logs`` lines."""
@@ -86,7 +87,7 @@ class JobRecord:
 class JobManager:
     """Schedule and track framework jobs on the running event loop."""
 
-    def __init__(self, db_path: Optional[Path | str] = None) -> None:
+    def __init__(self, db_path: Path | str | None = None) -> None:
         if db_path is None:
             override = os.environ.get("AV_JOB_DB")
             db_path = Path(override) if override else _DEFAULT_DB
@@ -152,7 +153,7 @@ class JobManager:
                 ),
             )
 
-    def _load(self, job_id: str) -> Optional[JobRecord]:
+    def _load(self, job_id: str) -> JobRecord | None:
         with self._connect() as conn:
             row = conn.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
         if row is None:
@@ -179,7 +180,7 @@ class JobManager:
         enqueues them for a standalone worker (``AV_JOB_MODE=worker``)."""
         return os.environ.get("AV_JOB_MODE", "inline") != "worker"
 
-    async def queue(self, job_type: str, extra_args: Optional[Sequence[str]] = None) -> str:
+    async def queue(self, job_type: str, extra_args: Sequence[str] | None = None) -> str:
         """Queue a job and return its unique ``job_id``.
 
         The Pending row is persisted *before* anything runs, so the queue is
@@ -228,7 +229,7 @@ class JobManager:
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning("broker publish failed for %s: %s", job_id, exc)
 
-    def get(self, job_id: str) -> Optional[JobRecord]:
+    def get(self, job_id: str) -> JobRecord | None:
         """Return the current record for ``job_id`` (memory first, then SQLite)."""
         return self._jobs.get(job_id) or self._load(job_id)
 
@@ -276,7 +277,7 @@ class JobManager:
         return records
 
     # -------------------------------------------------------------- worker
-    def _touch(self, rec: JobRecord, status: Optional[JobStatus] = None) -> None:
+    def _touch(self, rec: JobRecord, status: JobStatus | None = None) -> None:
         if status is not None:
             rec.status = status
         rec.updated_at = time.time()
@@ -299,13 +300,11 @@ class JobManager:
         """Append a log line, persisting periodically for live status polls."""
         rec.logs.append(line)
         if len(rec.logs) % 5 == 0:
-            try:
+            with contextlib.suppress(Exception):
                 self._touch(rec)
-            except Exception:  # pragma: no cover - defensive
-                pass
 
 
-_SINGLETON: Optional[JobManager] = None
+_SINGLETON: JobManager | None = None
 
 
 def get_job_manager() -> JobManager:

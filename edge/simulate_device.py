@@ -46,9 +46,7 @@ class SimulatedTurbine:
         clamp = lambda v, lo, hi: max(lo, min(hi, v))  # noqa: E731
         self.vib = clamp(self.vib + self._rng.uniform(-0.3, 0.3), 0.5, 12.0)
         self.gearbox_temp = clamp(self.gearbox_temp + self._rng.uniform(-2, 2), 45.0, 95.0)
-        self.generator_temp = clamp(
-            self.generator_temp + self._rng.uniform(-2, 2), 55.0, 110.0
-        )
+        self.generator_temp = clamp(self.generator_temp + self._rng.uniform(-2, 2), 55.0, 110.0)
         self.wind = clamp(self.wind + self._rng.uniform(-0.8, 0.8), 2.0, 22.0)
         rpm = 900.0 + max(0.0, min(900.0, self.wind * 100.0 - 200.0)) / 900.0 * 900.0
         if self.wind < 3.0:
@@ -79,8 +77,9 @@ UNITS = {
 }
 
 
-def build_batch(gateway_id: str, turbine_id: str, device: SimulatedTurbine,
-                hours_per_sample: float) -> dict:
+def build_batch(
+    gateway_id: str, turbine_id: str, device: SimulatedTurbine, hours_per_sample: float
+) -> dict:
     readings = []
     values = device.sweep()
     device.operating_hours += hours_per_sample
@@ -112,25 +111,31 @@ def post_batch(server: str, batch: dict, timeout: float = 10.0) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--server", default="http://localhost:8080",
-                        help="AeroVigil unified app origin (default %(default)s)")
+    parser.add_argument(
+        "--server",
+        default="http://localhost:8080",
+        help="AeroVigil unified app origin (default %(default)s)",
+    )
     parser.add_argument("--gateway-id", default="esp32-gw-01")
     parser.add_argument("--turbine-id", default="WTG-ESP-01")
-    parser.add_argument("--interval", type=float, default=10.0,
-                        help="seconds between batches (default %(default)s)")
-    parser.add_argument("--count", type=int, default=0,
-                        help="stop after N batches (0 = run forever)")
+    parser.add_argument(
+        "--interval", type=float, default=10.0, help="seconds between batches (default %(default)s)"
+    )
+    parser.add_argument(
+        "--count", type=int, default=0, help="stop after N batches (0 = run forever)"
+    )
     parser.add_argument("--seed", type=int, default=None)
     args = parser.parse_args()
 
     device = SimulatedTurbine(args.seed)
-    print(f"[sim] {args.gateway_id} -> {args.server}/api/hardware/stream "
-          f"(turbine {args.turbine_id}, every {args.interval:g}s)")
+    print(
+        f"[sim] {args.gateway_id} -> {args.server}/api/hardware/stream "
+        f"(turbine {args.turbine_id}, every {args.interval:g}s)"
+    )
 
     sent = 0
     while args.count == 0 or sent < args.count:
-        batch = build_batch(args.gateway_id, args.turbine_id, device,
-                            args.interval / 3600.0)
+        batch = build_batch(args.gateway_id, args.turbine_id, device, args.interval / 3600.0)
         try:
             ack = post_batch(args.server, batch)
             assets = ack.get("assets") or []

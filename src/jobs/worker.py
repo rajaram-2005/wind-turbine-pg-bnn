@@ -97,7 +97,10 @@ async def run_worker(
 
     logger.info(
         "job worker started: workers=%d db=%s poll=%.1fs broker=%s",
-        workers, mgr._db_path, poll_interval, broker_url or "polling",
+        workers,
+        mgr._db_path,
+        poll_interval,
+        broker_url or "polling",
     )
     while True:
         job_ids = await _drain_once(mgr, broker, workers)

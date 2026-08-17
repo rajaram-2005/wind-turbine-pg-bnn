@@ -24,108 +24,94 @@ on:
 permissions:
   contents: write
 jobs:
-  prepare:
-    name: Resolve build matrix
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.setmatrix.outputs.matrix }}
-      publish_tag: ${{ steps.setmatrix.outputs.publish_tag }}
+  build-windows:
+    if: github.event_name == 'push' || github.event.inputs.platform == 'all' || github.event.inputs.platform == 'windows'
+    runs-on: windows-latest
     steps:
-      - id: setmatrix
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - working-directory: apps/aerovigilai_flutter
         run: |
-          ALL='[
-            {"os":"windows-latest","target":"windows","platforms":"windows","artifact":"aerovigil-windows-x64.zip"},
-            {"os":"macos-latest","target":"macos","platforms":"macos","artifact":"aerovigil-macos-universal.zip"},
-            {"os":"ubuntu-latest","target":"linux","platforms":"linux","artifact":"aerovigil-linux-x64.tar.gz"},
-            {"os":"ubuntu-latest","target":"android","platforms":"android","artifact":"aerovigil-android.apk"}
-          ]'
-          SEL="${{ github.event.inputs.platform }}"
-          if [ -z "$SEL" ] || [ "$SEL" = "all" ]; then
-            echo "matrix=$ALL" >> "$GITHUB_OUTPUT"
-          else
-            echo "matrix=$(echo "$ALL" | jq -c --arg t "$SEL" '[.[] | select(.target == $t)]')" >> "$GITHUB_OUTPUT"
-          fi
-          TAG="${{ github.event.inputs.tag }}"
-          if [ "${{ github.event_name }}" = "push" ]; then TAG="${{ github.ref_name }}"; fi
-          echo "publish_tag=$TAG" >> "$GITHUB_OUTPUT"
-  build:
-    name: Build (${{ matrix.target }})
-    needs: prepare
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.prepare.outputs.matrix) }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - name: Set up Java (Android)
-        if: matrix.target == 'android'
-        uses: actions/setup-java@v4
-        with:
-          distribution: zulu
-          java-version: "17"
-      - name: Install Linux desktop toolchain
-        if: matrix.target == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
-      - name: Generate platform runners
-        working-directory: apps/aerovigilai_flutter
-        run: |
-          flutter create --platforms=${{ matrix.platforms }} --org ai.aerovigil --project-name aerovigilai_flutter .
+          flutter create --platforms=windows --org ai.aerovigil --project-name aerovigilai_flutter .
           flutter pub get
-      - name: Build (Windows)
-        if: matrix.target == 'windows'
-        working-directory: apps/aerovigilai_flutter
-        run: flutter build windows --release
-      - name: Build (macOS)
-        if: matrix.target == 'macos'
-        working-directory: apps/aerovigilai_flutter
-        run: flutter build macos --release
-      - name: Build (Linux)
-        if: matrix.target == 'linux'
-        working-directory: apps/aerovigilai_flutter
-        run: flutter build linux --release
-      - name: Build (Android)
-        if: matrix.target == 'android'
-        working-directory: apps/aerovigilai_flutter
-        run: flutter build apk --release
-      - name: Package (Windows)
-        if: matrix.target == 'windows'
-        shell: pwsh
-        run: |
-          Compress-Archive -Path apps/aerovigilai_flutter/build/windows/x64/runner/Release/* `
-            -DestinationPath (Join-Path $env:GITHUB_WORKSPACE "${{ matrix.artifact }}")
-      - name: Package (macOS)
-        if: matrix.target == 'macos'
-        working-directory: apps/aerovigilai_flutter/build/macos/Build/Products/Release
-        run: |
-          ditto -c -k --sequesterRsrc --keepParent aerovigilai_flutter.app "$GITHUB_WORKSPACE/${{ matrix.artifact }}"
-      - name: Package (Linux)
-        if: matrix.target == 'linux'
-        working-directory: apps/aerovigilai_flutter/build/linux/x64/release
-        run: tar -czf "$GITHUB_WORKSPACE/${{ matrix.artifact }}" bundle
-      - name: Package (Android)
-        if: matrix.target == 'android'
-        working-directory: apps/aerovigilai_flutter/build/app/outputs/flutter-apk
-        run: cp app-release.apk "$GITHUB_WORKSPACE/${{ matrix.artifact }}"
-      - name: Upload artifact (always available)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
-          if-no-files-found: error
-      - name: Publish to GitHub Release
-        if: needs.prepare.outputs.publish_tag != ''
+          flutter build windows --release
+      - shell: pwsh
+        run: Compress-Archive -Path apps/aerovigilai_flutter/build/windows/x64/runner/Release/* -DestinationPath aerovigil-windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with: { name: aerovigil-windows-x64.zip, path: aerovigil-windows-x64.zip, if-no-files-found: error }
+      - if: github.event_name == 'push' || github.event.inputs.tag != ''
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.prepare.outputs.publish_tag }}
-          files: ${{ matrix.artifact }}
+          tag_name: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || github.ref_name }}
+          files: aerovigil-windows-x64.zip
           generate_release_notes: true
-          draft: false
-          prerelease: false
+  build-macos:
+    if: github.event_name == 'push' || github.event.inputs.platform == 'all' || github.event.inputs.platform == 'macos'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - working-directory: apps/aerovigilai_flutter
+        run: |
+          flutter create --platforms=macos --org ai.aerovigil --project-name aerovigilai_flutter .
+          flutter pub get
+          flutter build macos --release
+      - working-directory: apps/aerovigilai_flutter/build/macos/Build/Products/Release
+        run: ditto -c -k --sequesterRsrc --keepParent aerovigilai_flutter.app $GITHUB_WORKSPACE/aerovigil-macos-universal.zip
+      - uses: actions/upload-artifact@v4
+        with: { name: aerovigil-macos-universal.zip, path: aerovigil-macos-universal.zip, if-no-files-found: error }
+      - if: github.event_name == 'push' || github.event.inputs.tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || github.ref_name }}
+          files: aerovigil-macos-universal.zip
+          generate_release_notes: true
+  build-linux:
+    if: github.event_name == 'push' || github.event.inputs.platform == 'all' || github.event.inputs.platform == 'linux'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+      - working-directory: apps/aerovigilai_flutter
+        run: |
+          flutter create --platforms=linux --org ai.aerovigil --project-name aerovigilai_flutter .
+          flutter pub get
+          flutter build linux --release
+      - working-directory: apps/aerovigilai_flutter/build/linux/x64/release
+        run: tar -czf $GITHUB_WORKSPACE/aerovigil-linux-x64.tar.gz bundle
+      - uses: actions/upload-artifact@v4
+        with: { name: aerovigil-linux-x64.tar.gz, path: aerovigil-linux-x64.tar.gz, if-no-files-found: error }
+      - if: github.event_name == 'push' || github.event.inputs.tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || github.ref_name }}
+          files: aerovigil-linux-x64.tar.gz
+          generate_release_notes: true
+  build-android:
+    if: github.event_name == 'push' || github.event.inputs.platform == 'all' || github.event.inputs.platform == 'android'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - uses: actions/setup-java@v4
+        with: { distribution: zulu, java-version: "17" }
+      - working-directory: apps/aerovigilai_flutter
+        run: |
+          flutter create --platforms=android --org ai.aerovigil --project-name aerovigilai_flutter .
+          flutter pub get
+          flutter build apk --release
+      - working-directory: apps/aerovigilai_flutter/build/app/outputs/flutter-apk
+        run: cp app-release.apk $GITHUB_WORKSPACE/aerovigil-android.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: aerovigil-android.apk, path: aerovigil-android.apk, if-no-files-found: error }
+      - if: github.event_name == 'push' || github.event.inputs.tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || github.ref_name }}
+          files: aerovigil-android.apk
+          generate_release_notes: true

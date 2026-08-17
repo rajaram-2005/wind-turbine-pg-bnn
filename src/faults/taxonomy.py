@@ -1092,8 +1092,7 @@ FAULT_CATALOG: list[FaultDefinition] = [
         subsystem="generator",
         subsystem_label="Generator",
         severity="MEDIUM",
-        description="DE/NDE generator bearing wear detected by vibration spectra and "
-        "temperature.",
+        description="DE/NDE generator bearing wear detected by vibration spectra and temperature.",
         root_causes=["Fatigue", "Grease starvation", "Electrical pitting (EDM currents)"],
         symptoms=[
             "Bearing defect frequencies",
@@ -1148,7 +1147,7 @@ FAULT_CATALOG: list[FaultDefinition] = [
         subsystem="generator",
         subsystem_label="Generator",
         severity="HIGH",
-        description="Air/water cooling circuit failure causes rapid winding " "temperature rise.",
+        description="Air/water cooling circuit failure causes rapid winding temperature rise.",
         root_causes=[
             "Cooling fan/pump fault",
             "Heat exchanger fouling",
@@ -1608,7 +1607,7 @@ FAULT_CATALOG: list[FaultDefinition] = [
         subsystem="cooling_hydraulics",
         subsystem_label="Cooling & Hydraulics",
         severity="MEDIUM",
-        description="Contaminated hydraulic fluid (particles/water) wears valves " "and actuators.",
+        description="Contaminated hydraulic fluid (particles/water) wears valves and actuators.",
         root_causes=["Filter clogging", "Breather failure", "Water ingress", "Wear debris"],
         symptoms=["Particle counts high", "Valve sluggishness", "Fluid cloudy"],
         detection_signals=["hydraulic_oil_particles_iso4406", "hydraulic_oil_water_ppm"],

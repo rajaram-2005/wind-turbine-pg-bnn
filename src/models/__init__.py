@@ -8,9 +8,9 @@ Modules:
 
 from src.models.bayesian_nn import BayesianLinear, PGBNNLoss, PhysicsGuidedBNN, train_step
 from src.models.pino_operator import (
+    PINO,
     FNOBlock,
     FourierNeuralOperator,
-    PINO,
     SpectralConv2d,
 )
 

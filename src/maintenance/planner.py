@@ -151,6 +151,6 @@ def summarize_plan(plan: dict) -> str:
     ]
     for week in plan["calendar"]:
         lines.append(
-            f"  wk {week['week_start']}: {week['n_tasks']} task(s), " f"{week['total_hours']} h"
+            f"  wk {week['week_start']}: {week['n_tasks']} task(s), {week['total_hours']} h"
         )
     return "\n".join(lines)

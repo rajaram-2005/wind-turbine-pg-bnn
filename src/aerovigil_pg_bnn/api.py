@@ -344,6 +344,7 @@ async def model_docs() -> HTMLResponse:
     response.headers["Cache-Control"] = "no-store"
     return response
 
+
 # Middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(

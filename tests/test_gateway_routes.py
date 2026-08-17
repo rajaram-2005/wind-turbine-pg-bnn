@@ -46,9 +46,7 @@ def test_model_batch_is_served_on_the_single_api(client):
         "wind_speed": 11.0,
         "operating_hours": 21000.0,
     }
-    resp = client.post(
-        "/api/model/batch", json={"samples": [sample, sample], "n_mcmc_samples": 12}
-    )
+    resp = client.post("/api/model/batch", json={"samples": [sample, sample], "n_mcmc_samples": 12})
     assert resp.status_code == 200
     body = resp.json()
     assert len(body["predictions"]) == 2
@@ -83,9 +81,7 @@ def test_model_trend_is_served_on_the_single_api(client):
         "operating_hours": 21000.0,
     }
     worse = {**sample, "vibration_rms": 6.5, "bearing_temp": 88.0}
-    resp = client.post(
-        "/api/model/trend", json={"samples": [sample, worse], "n_mcmc_samples": 12}
-    )
+    resp = client.post("/api/model/trend", json={"samples": [sample, worse], "n_mcmc_samples": 12})
     assert resp.status_code == 200
     body = resp.json()
     assert body["degradation_trend"] in ("DEGRADING", "IMPROVING", "STABLE")
