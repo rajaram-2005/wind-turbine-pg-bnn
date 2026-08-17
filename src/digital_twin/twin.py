@@ -33,6 +33,7 @@ import pandas as pd
 from src.agents.cyber_team import build_cyber_team_brief
 from src.data.ingest import CHANNELS
 from src.digital_twin.specs import TurbineSpec
+from src.faults.detector import FaultDetector, FaultReport
 from src.physics.constraints import (
     GearboxPhysicsConstraints,
     check_violations,
@@ -78,6 +79,9 @@ class WindTurbineDigitalTwin:
         # Raw snapshot buffer feeding the advisory feature pipeline.
         self._telemetry_buffer: deque[dict[str, float]] = deque(maxlen=_ADVISORY_BUFFER_MAX)
         self.serving_model = None
+        # Whole-turbine fault detection (taxonomy + oil analysis + rules).
+        self.fault_detector = FaultDetector(spec)
+        self.last_fault_report: FaultReport | None = None
         if serving_model is not None:
             self.attach_serving_model(serving_model)
 
@@ -213,6 +217,16 @@ class WindTurbineDigitalTwin:
         self.last_updated = timestamp
         self._telemetry_buffer.append(telemetry_dict)
 
+        # Whole-turbine fault detection: every part, every fault type. The
+        # confirmation pass uses the previous buffered windows so persistent
+        # faults gain confidence and first sightings are flagged as new.
+        self.last_fault_report = self.fault_detector.detect(
+            telemetry_dict,
+            history=list(self._telemetry_buffer)[:-1],
+            asset_id=self.asset_id,
+            timestamp=timestamp.isoformat(),
+        )
+
         # Bridge to the advisory engine: model path when a serving model is
         # attached, else the incoming bnn_state block (previous behavior).
         advisory, advisory_source, advisory_error = self._compute_advisory(telemetry, bnn_state)
@@ -242,6 +256,7 @@ class WindTurbineDigitalTwin:
             "advisory_source": advisory_source,
             "advisory_error": advisory_error,
             "agent_team": agent_team,
+            "fault_report": self.last_fault_report.to_dict(),
         }
         self.state_history.append(state_record)
         if len(self.state_history) > self.max_history:

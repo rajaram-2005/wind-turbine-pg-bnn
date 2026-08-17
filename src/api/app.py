@@ -41,6 +41,8 @@ from src.api.schemas import (
     AdvisoryResponse,
     AgentAskRequest,
     AgentReviewRequest,
+    FaultDetectRequest,
+    FaultDetectResponse,
     FleetRequest,
     FleetResponse,
     FleetSummary,
@@ -432,6 +434,53 @@ def create_app() -> FastAPI:
             "last_state": last,
             "advisory_only": True,
         }
+        enforce_safety_contract(body)
+        return body
+
+    # ------------------------------------------------------------------ #
+    # Whole-turbine fault detection                                      #
+    # ------------------------------------------------------------------ #
+    @app.post("/faults/detect", response_model=FaultDetectResponse)
+    def faults_detect(req: FaultDetectRequest) -> FaultDetectResponse:
+        """Detect faults across every turbine subsystem from one snapshot.
+
+        The five canonical SCADA channels are always evaluated; any optional
+        condition-monitoring channels present in ``telemetry`` (oil water,
+        ISO 4406 particles, TAN, filter ΔP, yaw error, brake wear, converter
+        temperature, inspection flags ...) enable the corresponding rules of
+        the fault catalog (``src/faults``).
+        """
+        from datetime import datetime, timezone
+
+        from src.digital_twin.specs import get_spec
+        from src.faults.detector import FaultDetector
+
+        try:
+            spec = get_spec(req.model_key)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        report = FaultDetector(spec).detect(
+            dict(req.telemetry),
+            asset_id=req.asset_id,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+        body = report.to_dict()
+        enforce_safety_contract(body)
+        return FaultDetectResponse(**body)
+
+    @app.get("/faults/catalog")
+    def faults_catalog(subsystem: str | None = None) -> dict:
+        """The complete fault catalog — every subsystem, every fault type.
+
+        ``?subsystem=gearbox`` filters to one subsystem's fault types.
+        """
+        from src.faults.taxonomy import catalog_summary, list_faults
+
+        try:
+            faults = list_faults(subsystem)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        body = {"summary": catalog_summary(), "faults": faults}
         enforce_safety_contract(body)
         return body
 

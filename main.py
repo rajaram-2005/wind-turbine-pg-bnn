@@ -7,6 +7,7 @@ Subcommands:
     export         Export the trained BNN to ONNX (mean + variance heads).
     active-sample  Run uncertainty sampling on a SCADA batch, emit alerts.
     explain        Generate a physics-grounded SHAP explainability report.
+    faults         Whole-turbine fault detection: every part, every fault type.
     federated      Fleet-wide federated-averaging simulation across farms.
 
 Examples:
@@ -15,6 +16,9 @@ Examples:
     python main.py export --checkpoint artifacts/pg_bnn.pt --out artifacts/pg_bnn.onnx
     python main.py active-sample --checkpoint artifacts/pg_bnn.pt
     python main.py explain --checkpoint artifacts/pg_bnn.pt
+    python main.py faults --list
+    python main.py faults --subsystem gearbox
+    python main.py faults --snapshot examples/fault_payload.json --model NREL-5MW
     python main.py federated --rounds 3 --clients 2
 """
 
@@ -261,6 +265,53 @@ def cmd_explain(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_faults(args: argparse.Namespace) -> int:
+    """Find faults across every turbine subsystem (the whole-turbine check)."""
+    from src.faults.detector import FaultDetector
+    from src.faults.taxonomy import catalog_summary, list_faults
+
+    if args.list or args.subsystem:
+        subsystem = args.subsystem
+        body = {
+            "summary": catalog_summary(),
+            "faults": list_faults(subsystem),
+            "filtered_subsystem": subsystem,
+        }
+        print(json.dumps(body, indent=2))
+        return 0
+
+    if not args.snapshot:
+        print("provide --snapshot <telemetry.json> (or --list / --subsystem)", file=sys.stderr)
+        return 2
+
+    spec = None
+    if args.model:
+        from src.digital_twin.specs import get_spec
+
+        try:
+            spec = get_spec(args.model)
+        except KeyError as exc:
+            logger.error("%s", exc)
+            return 2
+    snapshot = json.loads(Path(args.snapshot).read_text(encoding="utf-8"))
+    # Accept both a bare telemetry dict and a wrapped payload
+    # ({"asset_id": ..., "model_key": ..., "telemetry": {...}}).
+    telemetry = snapshot.get("telemetry", snapshot)
+    if not isinstance(telemetry, dict):
+        print("--snapshot must be a JSON object (telemetry dict or wrapped payload)", file=sys.stderr)
+        return 2
+    report = FaultDetector(spec).detect(
+        telemetry,
+        asset_id=str(args.asset),
+        timestamp=args.timestamp,
+    )
+    print(json.dumps(report.to_dict(), indent=2))
+    if args.out:
+        Path(args.out).write_text(json.dumps(report.to_dict(), indent=2))
+        logger.info("fault report written to %s", args.out)
+    return 0
+
+
 def cmd_federated(args: argparse.Namespace) -> int:
     """Run a local fleet-wide federated-averaging simulation.
 
@@ -395,6 +446,21 @@ def build_parser() -> argparse.ArgumentParser:
     common(p_explain)
     p_explain.add_argument("--out", default=None, help="report output path")
     p_explain.set_defaults(func=cmd_explain)
+
+    p_faults = sub.add_parser(
+        "faults",
+        help="whole-turbine fault detection (every part, oil included)",
+    )
+    p_faults.add_argument("--list", action="store_true", help="print the full fault catalog")
+    p_faults.add_argument("--subsystem", default=None, help="catalog filter, e.g. gearbox")
+    p_faults.add_argument(
+        "--snapshot", default=None, help="JSON telemetry snapshot to check for faults"
+    )
+    p_faults.add_argument("--model", default=None, help="TurbineSpec key, e.g. NREL-5MW")
+    p_faults.add_argument("--asset", default="WTG-000", help="asset id for the report")
+    p_faults.add_argument("--timestamp", default="", help="report timestamp (ISO 8601)")
+    p_faults.add_argument("--out", default=None, help="write the report JSON to this path")
+    p_faults.set_defaults(func=cmd_faults)
 
     p_fed = sub.add_parser("federated", help="fleet-wide federated FedAvg simulation")
     common(p_fed)

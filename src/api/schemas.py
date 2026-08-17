@@ -27,6 +27,8 @@ __all__ = [
     "AgentAskRequest",
     "AgentReviewRequest",
     "BNNState",
+    "FaultDetectRequest",
+    "FaultDetectResponse",
     "FleetRequest",
     "FleetResponse",
     "FleetSummary",
@@ -73,6 +75,33 @@ class TelemetryWindow(BaseModel):
         if len(lengths) != 1:
             raise ValueError("all telemetry_window channels must have equal sample counts")
         return self
+
+
+class FaultDetectRequest(BaseModel):
+    """Request body for POST /faults/detect.
+
+    ``telemetry`` carries the canonical five SCADA channels plus any optional
+    condition-monitoring channels the fault rules understand (oil water/ppm,
+    ISO 4406 particle codes, yaw error, brake wear, converter temperature,
+    inspection flags, ...). Extra channels are allowed on purpose: more
+    channels simply enable more of the fault catalog.
+    """
+
+    asset_id: str = Field("WTG-000", min_length=1)
+    model_key: str = Field("GE-1.5", min_length=1)
+    telemetry: dict[str, Any] = Field(..., description="Telemetry snapshot dict")
+
+
+class FaultDetectResponse(BaseModel):
+    """Result of whole-turbine fault detection (see ``src.faults``)."""
+
+    asset_id: str
+    timestamp: str
+    health_score: float = Field(..., ge=0.0, le=100.0)
+    overall_status: str
+    summary: dict[str, Any]
+    oil: dict[str, Any]
+    faults: list[dict[str, Any]]
 
 
 class TelemetryCompressRequest(BaseModel):

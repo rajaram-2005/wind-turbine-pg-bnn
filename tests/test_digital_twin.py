@@ -95,6 +95,11 @@ def test_simulation_is_deterministic():
             rec.pop("timestamp", None)  # wall-clock at twin construction
             if rec.get("advisory"):
                 rec["advisory"] = {k: v for k, v in rec["advisory"].items() if k != "generated_at"}
+            if rec.get("fault_report"):
+                # The embedded fault report carries the same wall-clock stamp.
+                rec["fault_report"] = {
+                    k: v for k, v in rec["fault_report"].items() if k != "timestamp"
+                }
             out.append(rec)
         return out
 

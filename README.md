@@ -196,6 +196,36 @@ python main.py active-sample --checkpoint artifacts/pg_bnn.pt --out artifacts/ma
 python main.py explain --checkpoint artifacts/pg_bnn.pt --out artifacts/explain_report.json
 ```
 
+## 🔍 Whole-turbine fault detection — every part, every fault type
+
+Beyond the main-bearing RUL forecast, AeroVigil ships a complete fault
+detection system covering **all 12 wind-turbine subsystems** — rotor &
+blades, pitch, hub & main shaft, gearbox, high-speed shaft & brake,
+generator, yaw, tower & foundation, nacelle & sensors, cooling & hydraulics,
+electrical & power, and SCADA & communication — with **71 fault types**,
+including the full gearbox **oil-condition** set (viscosity, water, ISO 4406
+particles, TAN, filter ΔP, level, aeration, supply pressure, wear metals).
+
+Each detection run returns a ranked report: fault id, subsystem, severity
+(LOW → CRITICAL), confidence, evidence, first-sighting/confirmation status,
+and recommended maintenance actions. See [`docs/FAULTS.md`](docs/FAULTS.md)
+for the complete catalog and thresholds.
+
+```bash
+# Print the full fault catalog
+python main.py faults --list
+
+# Just the gearbox (oil faults included)
+python main.py faults --subsystem gearbox
+
+# Find faults in a telemetry snapshot (oil, vibration, temperature, ...)
+python main.py faults --snapshot examples/fault_payload.json --model NREL-5MW
+```
+
+The same engine runs inside the digital twin on every state update
+(`state_record["fault_report"]`), and is exposed as
+`POST /api/faults/detect` and `GET /api/faults/catalog`.
+
 ## Configuration guide
 
 All knobs live in `configs/default.yaml` (validated by

@@ -1,5 +1,7 @@
 """Tests for the FastAPI advisory service (`src.api`)."""
 
+import json
+
 import pytest
 
 # These tests need the optional `api` extras. Skip gracefully if absent.
@@ -151,3 +153,103 @@ def test_fleet_endpoint_returns_summary_and_assets(client: TestClient):
 def test_fleet_rejects_empty(client: TestClient):
     resp = client.post("/advisory/fleet", json={"assets": []})
     assert resp.status_code == 422  # min_length=1
+
+
+# --------------------------------------------------------------------------- #
+# Whole-turbine fault detection routes                                         #
+# --------------------------------------------------------------------------- #
+def test_faults_catalog_lists_all_subsystems(client):
+    resp = client.get("/faults/catalog")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["summary"]["n_subsystems"] == 12
+    assert body["summary"]["total_fault_types"] >= 60
+    subsystems = {f["subsystem"] for f in body["faults"]}
+    assert subsystems == {
+        "rotor_blades",
+        "pitch",
+        "hub_mainshaft",
+        "gearbox",
+        "hss_brake",
+        "generator",
+        "yaw",
+        "tower_foundation",
+        "nacelle_sensors",
+        "cooling_hydraulics",
+        "electrical",
+        "scada",
+    }
+
+
+def test_faults_catalog_filtered_by_subsystem(client):
+    resp = client.get("/faults/catalog?subsystem=gearbox")
+    assert resp.status_code == 200
+    faults = resp.json()["faults"]
+    assert len(faults) >= 10
+    assert all(f["subsystem"] == "gearbox" for f in faults)
+    names = " ".join(f["name"] for f in faults).lower()
+    assert "viscosity" in names and "water" in names and "filter" in names
+
+    bad = client.get("/faults/catalog?subsystem=not-real")
+    assert bad.status_code == 404
+
+
+def test_faults_detect_healthy_and_faulty(client):
+    healthy = {
+        "asset_id": "WTG-API",
+        "model_key": "NREL-5MW",
+        "telemetry": {
+            "vibration_mms": 2.0,
+            "temperature_c": 55.0,
+            "rpm": 950.0,
+            "oil_viscosity_cst": 32.0,
+            "load_pct": 70.0,
+        },
+    }
+    resp = client.post("/faults/detect", json=healthy)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["asset_id"] == "WTG-API"
+    assert body["overall_status"] == "OK"
+    assert body["summary"]["n_faults"] == 0
+
+    faulty = {
+        "asset_id": "WTG-API",
+        "model_key": "NREL-5MW",
+        "telemetry": {
+            "vibration_mms": 8.5,
+            "temperature_c": 88.0,
+            "oil_temp_c": 88.0,
+            "rpm": 1100.0,
+            "oil_viscosity_cst": 5.0,
+            "load_pct": 100.0,
+            "oil_water_ppm": 1500.0,
+            "oil_particles_iso4406": "20/18/16",
+            "oil_tan_mgkoh_g": 2.5,
+            "oil_filter_dp_bar": 2.9,
+            "oil_level_pct": 5.0,
+            "oil_pressure_bar": 0.6,
+            "generator_temp_c": 122.0,
+            "yaw_error_deg": 25.0,
+        },
+    }
+    resp = client.post("/faults/detect", json=faulty)
+    assert resp.status_code == 200
+    body = resp.json()
+    ids = {f["fault_id"] for f in body["faults"]}
+    assert {"GB-02", "GB-04", "GB-05", "GB-06", "GB-07", "GB-08", "GB-12"} <= ids
+    assert "GN-01" in ids and "YW-03" in ids and "HS-01" in ids
+    assert body["oil"]["overall_status"] == "ALARM"
+    assert body["overall_status"] in ("HIGH", "CRITICAL")
+    # Advisory-only contract: no actuation fields leak into fault payloads.
+    for f in body["faults"]:
+        for key in BLOCKED_KEYS:
+            assert key not in json.dumps(f)
+
+
+def test_faults_detect_unknown_model(client):
+    resp = client.post(
+        "/faults/detect",
+        json={"asset_id": "WTG-X", "model_key": "No-Such-Model", "telemetry": {}},
+    )
+    assert resp.status_code == 404
