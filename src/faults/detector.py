@@ -1196,6 +1196,180 @@ def _rule_sc04(t: dict, lim: _Limits) -> tuple[Severity, float, dict] | None:
     return None
 
 
+def _rule_rb07(t: dict, lim: _Limits) -> tuple[Severity, float, dict] | None:
+    """Blade fire / lightning fire (CRITICAL)."""
+    if _flag(t, "blade_fire_alarm"):
+        return "CRITICAL", 0.95, {"blade_fire_alarm": t.get("blade_fire_alarm")}
+    blade_temp = _num(t, "blade_temp_c")
+    strikes = _num(t, "lightning_events_24h")
+    if blade_temp is not None and blade_temp >= 90.0:
+        evidence: dict = {"blade_temp_c": blade_temp}
+        if strikes is not None and strikes >= 1.0:
+            evidence["lightning_events_24h"] = strikes
+            evidence["hint"] = "hot blade after lightning activity"
+        return "CRITICAL", 0.85, evidence
+    return None
+
+
+def _rule_rb08(t: dict, lim: _Limits) -> tuple[Severity, float, dict] | None:
+    """Blade tip deflection / excessive flex (MEDIUM)."""
+    deflection = _num(t, "blade_tip_deflection_pct")
+    if deflection is None:
+        return None
+    res = _above(deflection, 8.0, 15.0, _ABOVE_MAP)
+    if res is None:
+        return None
+    sev, conf = res
+    return sev, conf, {"blade_tip_deflection_pct": deflection, "limit": "warn 8 % / alarm 15 %"}
+
+
+def _rule_rb09(t: dict, lim: _Limits) -> tuple[Severity, float, dict] | None:
+    """Trailing-edge split / delamination (HIGH)."""
+    if _flag(t, "inspection_blade_delamination"):
+        return "HIGH", 0.9, {"inspection_blade_delamination": True}
+    if _flag(t, "blade_acoustic_anomaly"):
+        dev = _num(t, "aep_deviation_pct")
+        if dev is not None and dev > 5.0:
+            return (
+                "HIGH",
+                0.75,
+                {
+                    "blade_acoustic_anomaly": True,
+                    "aep_deviation_pct": dev,
+                    "hint": "acoustic anomaly with energy loss",
+                },
+            )
+    return None
+
+
+def _rule_rb10(t: dict, lim: _Limits) -> tuple[Severity, float, dict] | None:
+    """Blade root bolt tension loss (HIGH)."""
+    dev = _num(t, "blade_bolt_tension_deviation_pct")
+    if dev is not None:
+        res = _above(dev, 10.0, 20.0, _ABOVE_MAP)
+        if res is not None:
+            sev, conf = res
+            return (
+                sev,
+                conf,
+                {
+                    "blade_bolt_tension_deviation_pct": dev,
+                    "limit": "warn 10 % / alarm 20 %",
+                },
+            )
+    if _flag(t, "inspection_bolt_loose"):
+        detail = str(t.get("inspection_bolt_loose")).lower()
+        if "blade" in detail or "root" in detail:
+            return "HIGH", 0.9, {"inspection_bolt_loose": t.get("inspection_bolt_loose")}
+    return None
+
+
+def _rule_br05(t: dict, lim: _Limits) -> tuple[Severity, float, dict] | None:
+    """Brake fire (CRITICAL)."""
+    if _flag(t, "brake_fire_alarm"):
+        return "CRITICAL", 0.95, {"brake_fire_alarm": True}
+    temp = _num(t, "brake_temp_c")
+    if temp is not None and temp >= 120.0:
+        return "CRITICAL", 0.9, {"brake_temp_c": temp, "hint": "brake thermal runaway"}
+    if _flag(t, "smoke_detector_on"):
+        temp = _num(t, "brake_temp_c")
+        if temp is not None and temp >= 80.0:
+            return "CRITICAL", 0.8, {"smoke_detector_on": True, "brake_temp_c": temp}
+    return None
+
+
+def _rule_gb15(t: dict, lim: _Limits) -> tuple[Severity, float, dict] | None:
+    """Gearbox oil fire (CRITICAL)."""
+    oil_temp = _num(t, "oil_temp_c") or _num(t, "temperature_c")
+    if oil_temp is not None and oil_temp >= 120.0:
+        return (
+            "CRITICAL",
+            0.9,
+            {"oil_temp_c": oil_temp, "hint": "oil temperature at ignition range"},
+        )
+    if (_flag(t, "oil_smoke_detector_on") or _flag(t, "smoke_detector_on")) and (
+        oil_temp is not None and oil_temp >= 95.0
+    ):
+        return (
+            "CRITICAL",
+            0.85,
+            {
+                "smoke_detector_on": True,
+                "oil_temp_c": oil_temp,
+                "hint": "smoke with very hot gearbox oil",
+            },
+        )
+    if _flag(t, "fire_suppression_released"):
+        oil_temp = _num(t, "oil_temp_c") or _num(t, "temperature_c")
+        if oil_temp is not None and oil_temp >= 95.0:
+            return (
+                "CRITICAL",
+                0.85,
+                {
+                    "fire_suppression_released": True,
+                    "oil_temp_c": oil_temp,
+                },
+            )
+    return None
+
+
+def _rule_el06(t: dict, lim: _Limits) -> tuple[Severity, float, dict] | None:
+    """Electrical cabinet / transformer fire (CRITICAL)."""
+    if _flag(t, "cabinet_fire_alarm"):
+        return "CRITICAL", 0.95, {"cabinet_fire_alarm": True}
+    temp = _num(t, "transformer_temp_c")
+    if _flag(t, "smoke_detector_on") and temp is not None and temp >= 110.0:
+        return "CRITICAL", 0.85, {"smoke_detector_on": True, "transformer_temp_c": temp}
+    if temp is not None and temp >= 130.0:
+        return "CRITICAL", 0.9, {"transformer_temp_c": temp, "hint": "transformer thermal runaway"}
+    if _flag(t, "fire_suppression_released") and temp is not None and temp >= 95.0:
+        return "CRITICAL", 0.8, {"fire_suppression_released": True, "transformer_temp_c": temp}
+    return None
+
+
+def _rule_tf05(t: dict, lim: _Limits) -> tuple[Severity, float, dict] | None:
+    """Tower base fire (CRITICAL)."""
+    if _flag(t, "tower_fire_alarm") or _flag(t, "tower_smoke_detector_on"):
+        return (
+            "CRITICAL",
+            0.95,
+            {
+                "tower_fire_alarm": _flag(t, "tower_fire_alarm"),
+                "tower_smoke_detector_on": _flag(t, "tower_smoke_detector_on"),
+            },
+        )
+    return None
+
+
+def _rule_ns07(t: dict, lim: _Limits) -> tuple[Severity, float, dict] | None:
+    """Fire suppression system fault (HIGH)."""
+    status = t.get("fire_suppression_status")
+    if isinstance(status, str):
+        lowered = status.strip().lower()
+        if lowered in ("fault", "unavailable", "discharged", "expired", "maintenance"):
+            return "HIGH", 0.9, {"fire_suppression_status": status}
+    if _flag(t, "fire_suppression_fault"):
+        return "HIGH", 0.85, {"fire_suppression_fault": True}
+    if _flag(t, "fire_suppression_released") and not (
+        _flag(t, "smoke_detector_on")
+        or _flag(t, "blade_fire_alarm")
+        or _flag(t, "cabinet_fire_alarm")
+        or _flag(t, "tower_fire_alarm")
+        or _flag(t, "brake_fire_alarm")
+        or _flag(t, "oil_smoke_detector_on")
+    ):
+        # Suppression released without any fire evidence = system fault.
+        return (
+            "HIGH",
+            0.7,
+            {
+                "fire_suppression_released": True,
+                "hint": "suppression released without fire evidence",
+            },
+        )
+    return None
+
+
 # --------------------------------------------------------------------------- #
 # Rule registry: every auto-detectable fault id -> evaluator                    #
 # --------------------------------------------------------------------------- #
@@ -1206,6 +1380,10 @@ _RULES: dict[str, Callable[[dict, _Limits], tuple[Severity, float, dict] | None]
     "RB-04": _rule_rb04,
     "RB-05": _rule_rb05,
     "RB-06": _rule_rb06,
+    "RB-07": _rule_rb07,
+    "RB-08": _rule_rb08,
+    "RB-09": _rule_rb09,
+    "RB-10": _rule_rb10,
     "PT-01": _rule_pt01,
     "PT-02": _rule_pt02,
     "PT-03": _rule_pt03,
@@ -1230,10 +1408,12 @@ _RULES: dict[str, Callable[[dict, _Limits], tuple[Severity, float, dict] | None]
     "GB-12": _rule_gb12,
     "GB-13": _rule_gb13,
     "GB-14": _rule_gb14,
+    "GB-15": _rule_gb15,
     "BR-01": _rule_br01,
     "BR-02": _rule_br02,
     "BR-03": _rule_br03,
     "BR-04": _rule_br04,
+    "BR-05": _rule_br05,
     "GN-01": _rule_gn01,
     "GN-02": _rule_gn02,
     "GN-03": _rule_gn03,
@@ -1250,12 +1430,14 @@ _RULES: dict[str, Callable[[dict, _Limits], tuple[Severity, float, dict] | None]
     "TF-02": _rule_tf02,
     "TF-03": _rule_tf03,
     "TF-04": _rule_tf04,
+    "TF-05": _rule_tf05,
     "NS-01": _rule_ns01,
     "NS-02": _rule_ns02,
     "NS-03": _rule_ns03,
     "NS-04": _rule_ns04,
     "NS-05": _rule_ns05,
     "NS-06": _rule_ns06,
+    "NS-07": _rule_ns07,
     "CH-01": _rule_ch01,
     "CH-02": _rule_ch02,
     "CH-03": _rule_ch03,
@@ -1267,6 +1449,7 @@ _RULES: dict[str, Callable[[dict, _Limits], tuple[Severity, float, dict] | None]
     "EL-03": _rule_el03,
     "EL-04": _rule_el04,
     "EL-05": _rule_el05,
+    "EL-06": _rule_el06,
     "SC-01": _rule_sc01,
     "SC-02": _rule_sc02,
     "SC-03": _rule_sc03,

@@ -5,8 +5,10 @@ hub & main shaft, gearbox (including oil-condition faults), high-speed shaft
 & brake, generator, yaw, tower & foundation, nacelle & sensors, cooling &
 hydraulics, electrical & power conversion, and SCADA & communication.
 
-The fault catalog (`src/faults/taxonomy.py`) defines **71 fault types across
-12 subsystems**. For every fault it records the symptoms, root causes, the
+The fault catalog (`src/faults/taxonomy.py`) defines **80 fault types across
+12 subsystems** — including **7 fire fault types** (blade, brake, gearbox-oil,
+electrical-cabinet, tower-base and nacelle fires plus fire-suppression system
+faults) and **10 blade fault types**. For every fault it records the symptoms, root causes, the
 signals it is detected from, severity, and recommended maintenance actions.
 
 ## How it finds faults
@@ -31,6 +33,10 @@ signals it is detected from, severity, and recommended maintenance actions.
 | RB-04 | Lightning strike damage | HIGH | `lightning_events_24h` ≥ 3 / 10, `inspection_lightning_damage` |
 | RB-05 | Blade crack / structural damage | CRITICAL | `inspection_crack`, `blade_acoustic_anomaly` |
 | RB-06 | Pitch-angle asymmetry | MEDIUM | `blade_pitch_deviation_deg` > 0.5° / 1.5° |
+| RB-07 | **Blade fire / lightning fire** | CRITICAL | `blade_fire_alarm`, `blade_temp_c` ≥ 90 °C + lightning |
+| RB-08 | Blade tip deflection / excessive flex | MEDIUM | `blade_tip_deflection_pct` > 8 / 15 |
+| RB-09 | Trailing-edge split / delamination | HIGH | `inspection_blade_delamination`, acoustic + AEP loss |
+| RB-10 | Blade root bolt tension loss | HIGH | `blade_bolt_tension_deviation_pct` > 10 / 20 |
 
 ### 2 · Pitch System (`PT`)
 | ID | Fault type | Severity | Detected from |
@@ -67,6 +73,7 @@ signals it is detected from, severity, and recommended maintenance actions.
 | GB-12 | Lubrication starvation | HIGH | `oil_pressure_bar` < 1.5 / 1.0 |
 | GB-13 | Oil aeration / foaming | MEDIUM | `oil_aeration_pct` ≥ 6 / 15, `oil_foam_pct` ≥ 25 |
 | GB-14 | Gear backlash increase / rattle | LOW | `backlash_mm` > 0.3 / 0.6 |
+| GB-15 | **Gearbox oil fire** | CRITICAL | `oil_temp_c` ≥ 120 °C, oil smoke, suppression released |
 
 ### 5 · High-Speed Shaft & Brake (`BR`)
 | ID | Fault type | Severity | Detected from |
@@ -75,6 +82,7 @@ signals it is detected from, severity, and recommended maintenance actions.
 | BR-02 | HSS over-speed | CRITICAL | `rpm` > spec limit, `overspeed_trips_24h` ≥ 1 / 3 |
 | BR-03 | HSS vibration / coupling fault | MEDIUM | `hss_vibration_mms` > 4.5 / 7.1 |
 | BR-04 | Brake dragging / not releasing | MEDIUM | `brake_temp_c` > 60/80, `brake_drag_current_pct` > 10 |
+| BR-05 | **Brake fire** | CRITICAL | `brake_temp_c` ≥ 120 °C, `brake_fire_alarm`, smoke + hot brake |
 
 ### 6 · Generator (`GN`)
 | ID | Fault type | Severity | Detected from |
@@ -103,6 +111,7 @@ signals it is detected from, severity, and recommended maintenance actions.
 | TF-02 | Foundation bolt loosening | HIGH | `bolt_tension_deviation_pct` > 10 / 20, `inspection_bolt_loose` |
 | TF-03 | Tower tilt / settlement | MEDIUM | `tower_tilt_deg` > 0.2° / 0.5° |
 | TF-04 | Tower / foundation corrosion | LOW | `inspection_corrosion`, `tower_humidity_pct` ≥ 80 |
+| TF-05 | **Tower base fire** | CRITICAL | `tower_smoke_detector_on`, `tower_fire_alarm` |
 
 ### 9 · Nacelle & Sensors (`NS`)
 | ID | Fault type | Severity | Detected from |
@@ -113,6 +122,7 @@ signals it is detected from, severity, and recommended maintenance actions.
 | NS-04 | Lightning protection failure | LOW | `lightning_events_24h` ≥ 3, `inspection_lightning_damage` |
 | NS-05 | Nacelle HVAC failure | LOW | `nacelle_temp_c` > 40/50, humidity ≥ 80 % |
 | NS-06 | Nacelle fire / smoke detection | CRITICAL | `smoke_detector_on`, `nacelle_temp_c` ≥ 60 |
+| NS-07 | Fire suppression system fault | HIGH | `fire_suppression_status`, release without fire evidence |
 
 ### 10 · Cooling & Hydraulics (`CH`)
 | ID | Fault type | Severity | Detected from |
@@ -132,6 +142,7 @@ signals it is detected from, severity, and recommended maintenance actions.
 | EL-03 | Grid harmonics / power quality | LOW | `thd_pct` > 5/8, `voltage_unbalance_pct` > 2/4 |
 | EL-04 | Cable / insulation fault | HIGH | `partial_discharge_pc` > 500/2000, IR < 100 MΩ |
 | EL-05 | DC-link / rectifier fault | HIGH | `dc_link_ripple_pct` > 5 / 10 |
+| EL-06 | **Electrical cabinet / transformer fire** | CRITICAL | `cabinet_fire_alarm`, smoke + transformer ≥ 110 °C |
 
 ### 12 · SCADA & Communication (`SC`)
 | ID | Fault type | Severity | Detected from |
@@ -203,6 +214,28 @@ print(report.to_dict())
 Digital twin: every `update_state` call runs detection automatically and
 embeds `fault_report` in the returned state record; `twin.last_fault_report`
 holds the latest report.
+
+## The sensor catalog — what hardware sees what
+
+`src/faults/sensors.py` maps every sensor to the channels it measures and the
+fault types it reveals (63 sensors, 9 categories). Query it with
+`python main.py faults --sensors [--subsystem gearbox]` or
+`GET /api/faults/sensors`. Key sensors per measurement family:
+
+| Family | Sensors | Faults they reveal |
+| --- | --- | --- |
+| Wind | Cup/ultrasonic anemometer, wind vane, ice detector | NS-01, NS-02, YW-03, RB-03 |
+| Temperature | Bearing/generator/oil/transformer/converter/brake RTDs, IR camera | HS-01, GB-01, GB-15, GN-01, EL-01, EL-02, EL-06, BR-04, BR-05 |
+| Vibration / CMS | Drive-train accelerometer, gearbox HF sensor, bearing envelope, tower accelerometer, blade strain, acoustic emission | HS-01, GB-09, GB-10, GB-11, BR-03, GN-07, TF-01, RB-05, RB-08, RB-09 |
+| Oil condition | Viscometer, water-in-oil, particle counter, level, filter ΔP, pressure, aeration, ferrous debris, lab TAN | GB-02…GB-13, HS-01 |
+| Fire & safety | Smoke, heat, IR/UV flame, CO/CO₂ gas, suppression status, lightning counter | RB-04, RB-07, BR-05, GB-15, EL-06, TF-05, NS-06, NS-07 |
+| Position & actuation | Pitch encoder, pitch current, yaw encoder, yaw current, brake wear, hydraulic pressure | RB-06, PT-01…PT-06, YW-01…YW-05, BR-01, CH-04, CH-05 |
+| Mechanical | HSS/rotor speed, axial displacement, torque | BR-02, RB-08, HS-02, HS-04, GB-10 |
+| Electrical | Power meter, THD analyzer, partial discharge, DC-link, IR monitor, MCSA | EL-03, EL-04, EL-05, GN-03, GN-04, GN-06 |
+| Data & comms | PLC, RTU/gateway, edge node, drone inspection, NTP | SC-01…SC-04, RB-04, RB-05, RB-09, RB-10, TF-02, TF-04, NS-04 |
+
+The hardware installation guide (sensor BOM, placements, wiring, edge
+firmware) is in [`docs/USER_GUIDE.md`](USER_GUIDE.md).
 
 ## Notes
 

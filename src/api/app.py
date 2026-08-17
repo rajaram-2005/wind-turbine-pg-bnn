@@ -47,6 +47,9 @@ from src.api.schemas import (
     FleetResponse,
     FleetSummary,
     HealthResponse,
+    NotificationSendRequest,
+    NotificationSendResponse,
+    NotificationStatusResponse,
     TelemetryCompressRequest,
     TelemetryCompressResponse,
     TelemetryRestoreRequest,
@@ -483,6 +486,76 @@ def create_app() -> FastAPI:
         body = {"summary": catalog_summary(), "faults": faults}
         enforce_safety_contract(body)
         return body
+
+    @app.get("/faults/sensors")
+    def faults_sensors(subsystem: str | None = None) -> dict:
+        """The sensor catalog — every sensor, its placement, technology and the
+        fault types its readings feed. ``?subsystem=gearbox`` filters."""
+        from src.faults.sensors import sensor_catalog_dict
+
+        try:
+            body = sensor_catalog_dict(subsystem)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        enforce_safety_contract(body)
+        return body
+
+    # ------------------------------------------------------------------ #
+    # Email notifications: alerts + health reports                       #
+    # ------------------------------------------------------------------ #
+    @app.post("/notifications/send", response_model=NotificationSendResponse)
+    def notifications_send(req: NotificationSendRequest) -> NotificationSendResponse:
+        """Detect faults in the snapshot and email the result.
+
+        CRITICAL/HIGH findings page the recipient immediately (subject to the
+        per-fault cooldown/escalation tracker); otherwise a health-report
+        digest is sent. Without SMTP configured the message is written as an
+        ``.eml`` file under the artifact directory so delivery can be
+        previewed and tested offline.
+        """
+        from datetime import datetime, timezone
+
+        from src.digital_twin.specs import get_spec
+        from src.faults.detector import FaultDetector
+        from src.notifications import EmailNotifier
+
+        try:
+            spec = get_spec(req.model_key)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        report = FaultDetector(spec).detect(
+            dict(req.telemetry),
+            asset_id=req.asset_id,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+        notifier = EmailNotifier()
+        recipients = (req.recipient,) if req.recipient else None
+        if req.force_report or not report.faults:
+            result = notifier.send_health_report(
+                [report], title=req.subject or f"Health report — {req.asset_id}",
+                recipients=recipients,
+            )
+            notifications = [result.to_dict()] if result else []
+        else:
+            notifications = [n.to_dict() for n in notifier.process_report(report)]
+        delivered = bool(notifications) and all(n["delivered"] for n in notifications)
+        body = {
+            "asset_id": req.asset_id,
+            "report": report.to_dict(),
+            "notifications": notifications,
+            "delivered": delivered,
+        }
+        enforce_safety_contract(body)
+        return NotificationSendResponse(**body)
+
+    @app.get("/notifications/status", response_model=NotificationStatusResponse)
+    def notifications_status() -> NotificationStatusResponse:
+        """Notifier configuration summary (recipients, mode, cooldowns)."""
+        from src.notifications import EmailNotifier
+
+        status = EmailNotifier().status()
+        enforce_safety_contract(status)
+        return NotificationStatusResponse(**status)
 
     @app.get("/twin/status")
     def twin_status(asset_id: str = "WTG-001", model: str = "GE-1.5") -> dict:

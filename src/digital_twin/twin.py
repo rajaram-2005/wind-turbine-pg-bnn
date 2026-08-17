@@ -67,6 +67,7 @@ class WindTurbineDigitalTwin:
         serving_model=None,
         *,
         max_history: int = DEFAULT_MAX_HISTORY,
+        notifier=None,
     ):
         if max_history < 1:
             raise ValueError(f"max_history must be >= 1, got {max_history}")
@@ -82,6 +83,9 @@ class WindTurbineDigitalTwin:
         # Whole-turbine fault detection (taxonomy + oil analysis + rules).
         self.fault_detector = FaultDetector(spec)
         self.last_fault_report: FaultReport | None = None
+        # Optional email notifier: raises CRITICAL/HIGH alerts on new findings.
+        self.notifier = notifier
+        self.last_notifications: list[dict] = []
         if serving_model is not None:
             self.attach_serving_model(serving_model)
 
@@ -226,6 +230,14 @@ class WindTurbineDigitalTwin:
             asset_id=self.asset_id,
             timestamp=timestamp.isoformat(),
         )
+        if self.notifier is not None:
+            # Severe (CRITICAL/HIGH) findings page the recipient by email;
+            # dedupe/cooldown is handled inside the notifier.
+            self.last_notifications = [
+                n.to_dict() for n in self.notifier.process_report(self.last_fault_report)
+            ]
+        else:
+            self.last_notifications = []
 
         # Bridge to the advisory engine: model path when a serving model is
         # attached, else the incoming bnn_state block (previous behavior).
@@ -257,6 +269,7 @@ class WindTurbineDigitalTwin:
             "advisory_error": advisory_error,
             "agent_team": agent_team,
             "fault_report": self.last_fault_report.to_dict(),
+            "notifications": self.last_notifications,
         }
         self.state_history.append(state_record)
         if len(self.state_history) > self.max_history:

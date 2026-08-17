@@ -89,7 +89,7 @@ def test_catalog_helpers():
     summary = catalog_summary()
     assert summary["total_fault_types"] == len(FAULT_CATALOG)
     assert summary["n_subsystems"] == 12
-    assert len(list_faults("gearbox")) == 14
+    assert len(list_faults("gearbox")) == 15
     assert len(list_faults()) == len(FAULT_CATALOG)
 
 
@@ -361,3 +361,112 @@ def test_example_fault_payload_detects_faults():
     assert {"GB-02", "GB-04", "GB-05", "GB-08", "GB-09", "GB-11"} <= ids
     assert report.oil.overall_status == "ALARM"
     assert report.overall_status in ("HIGH", "CRITICAL")
+
+
+# --------------------------------------------------------------------------- #
+# Fire & blade fault types (added in the second wave)                          #
+# --------------------------------------------------------------------------- #
+def test_catalog_has_fire_faults_in_every_risk_area():
+    ids = {f.fault_id: f for f in FAULT_CATALOG}
+    for fault_id in ("RB-07", "BR-05", "GB-15", "EL-06", "TF-05", "NS-06", "NS-07"):
+        assert fault_id in ids, fault_id
+        assert ids[fault_id].severity in ("HIGH", "CRITICAL")
+    assert ids["RB-07"].name == "Blade fire / lightning fire"
+    assert ids["NS-06"].name == "Nacelle fire / smoke detection"
+    assert "smoke" in " ".join(ids["RB-07"].detection_signals + ids["NS-06"].detection_signals)
+
+
+def test_new_blade_faults_trigger():
+    detector = FaultDetector()
+    scenarios = [
+        ("RB-07", {"blade_fire_alarm": True}),
+        ("RB-08", {"blade_tip_deflection_pct": 16.0}),
+        ("RB-09", {"inspection_blade_delamination": True}),
+        ("RB-10", {"blade_bolt_tension_deviation_pct": 22.0}),
+        ("BR-05", {"brake_temp_c": 130.0}),
+        ("GB-15", {"oil_temp_c": 125.0, "smoke_detector_on": True}),
+        ("EL-06", {"cabinet_fire_alarm": True}),
+        ("TF-05", {"tower_smoke_detector_on": True}),
+        ("NS-07", {"fire_suppression_status": "fault"}),
+    ]
+    for fault_id, patch in scenarios:
+        telemetry = dict(HEALTHY)
+        telemetry.update(patch)
+        report = detector.detect(telemetry, asset_id="WTG-T")
+        ids = {f.fault_id for f in report.faults}
+        assert fault_id in ids, f"{fault_id} not detected with {patch} (got {sorted(ids)})"
+        severity = next(f.severity for f in report.faults if f.fault_id == fault_id)
+        if fault_id not in ("RB-08",):
+            assert severity in ("HIGH", "CRITICAL"), fault_id
+
+
+def test_fire_suppression_released_without_fire_is_a_fault():
+    report = FaultDetector().detect(
+        {**HEALTHY, "fire_suppression_released": True}, asset_id="WTG-T"
+    )
+    ids = {f.fault_id for f in report.faults}
+    assert "NS-07" in ids  # suppression system fault
+
+
+# --------------------------------------------------------------------------- #
+# Sensor catalog                                                               #
+# --------------------------------------------------------------------------- #
+def test_sensor_catalog_has_40_plus_sensors_and_covers_all_subsystems():
+    from src.faults.sensors import SENSOR_CATALOG, sensors_for_subsystem
+
+    assert len(SENSOR_CATALOG) >= 40
+    sensor_ids = {s.sensor_id for s in SENSOR_CATALOG}
+    assert len(sensor_ids) == len(SENSOR_CATALOG)  # unique ids
+    for subsystem in SUBSYSTEMS:
+        assert sensors_for_subsystem(subsystem), subsystem
+
+
+def test_sensor_catalog_fire_category():
+    from src.faults.sensors import sensors_by_category
+
+    fire = sensors_by_category("FS")
+    assert len(fire) >= 5
+    assert {"smoke_detector_on", "fire_suppression_status", "fire_suppression_released"} <= {
+        ch for s in fire for ch in s.channels
+    }
+    assert {"RB-07", "BR-05", "GB-15", "EL-06", "TF-05", "NS-06", "NS-07"} <= {
+        fid for s in fire for fid in s.feeds_fault_ids
+    }
+
+
+def test_every_fault_has_at_least_one_sensor():
+    from src.faults.sensors import sensors_for_fault
+
+    covered = set()
+    for fault in FAULT_CATALOG:
+        found = sensors_for_fault(fault.fault_id)
+        assert found, f"{fault.fault_id} has no sensor mapping"
+        covered.add(fault.fault_id)
+    # Every catalog fault (including all fire/blade types) is instrumented.
+    assert covered == {f.fault_id for f in FAULT_CATALOG}
+
+
+def test_sensor_channels_match_detector_signals():
+    from src.faults.sensors import get_sensor
+
+    viscometer = get_sensor("OC-01")
+    assert "oil_viscosity_cst" in viscometer.channels
+    flame = get_sensor("FS-03")
+    assert "blade_fire_alarm" in flame.channels
+    assert "GB-02" in viscometer.feeds_fault_ids  # viscosity -> low-viscosity fault
+
+
+def test_sensor_catalog_serialization_and_filter():
+    from src.faults.sensors import sensor_catalog_dict, sensors_for_subsystem
+
+    full = sensor_catalog_dict()
+    assert full["summary"]["n_sensors"] >= 40
+    assert full["summary"]["n_fault_types_covered"] == len(FAULT_CATALOG)
+    gearbox = sensor_catalog_dict("gearbox")
+    assert gearbox["summary"]["filtered_subsystem"] == "gearbox"
+    assert all(
+        s["sensor_id"] in {x.sensor_id for x in sensors_for_subsystem("gearbox")}
+        for s in gearbox["sensors"]
+    )
+    with pytest.raises(KeyError):
+        sensor_catalog_dict("not-real")

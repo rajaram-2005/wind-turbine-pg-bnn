@@ -251,6 +251,117 @@ FAULT_CATALOG: list[FaultDefinition] = [
             "Verify pitch control gains",
         ],
     ),
+    FaultDefinition(
+        fault_id="RB-07",
+        name="Blade fire / lightning fire",
+        subsystem="rotor_blades",
+        subsystem_label="Rotor & Blades",
+        severity="CRITICAL",
+        description="Fire on or inside a blade — typically lightning-initiated or "
+        "from hot pitch-system electronics; requires immediate shutdown and "
+        "fire response.",
+        root_causes=[
+            "Lightning strike",
+            "Electrical fault in pitch/hub electronics",
+            "Leading-edge tape burning from friction",
+            "Arcing in blade heater",
+        ],
+        symptoms=[
+            "Blade fire alarm",
+            "Smoke near rotor",
+            "Lightning event followed by smoke",
+            "Infrared camera hotspot on blade",
+        ],
+        detection_signals=[
+            "blade_fire_alarm",
+            "blade_temp_c",
+            "smoke_detector_on",
+            "lightning_events_24h",
+        ],
+        recommended_actions=[
+            "Shut down and yaw to safe position",
+            "Trigger fire suppression",
+            "Evacuate tower base, call emergency services",
+        ],
+    ),
+    FaultDefinition(
+        fault_id="RB-08",
+        name="Blade tip deflection / excessive flex",
+        subsystem="rotor_blades",
+        subsystem_label="Rotor & Blades",
+        severity="MEDIUM",
+        description="Blade tip deflection exceeds the design envelope, risking "
+        "tower strike in extreme cases; indicates stiffness loss or overload.",
+        root_causes=[
+            "Structural stiffness loss",
+            "Over-speed operation",
+            "Extreme gusts",
+            "Damaged spar cap",
+        ],
+        symptoms=[
+            "Tip deflection sensor/strain above limit",
+            "Tower proximity alarms",
+            "AEP loss at high wind",
+        ],
+        detection_signals=["blade_tip_deflection_pct", "blade_strain_ue", "rotor_speed_rpm"],
+        recommended_actions=[
+            "Reduce load setpoints",
+            "Strain/inspection review",
+            "Check for spar damage",
+        ],
+    ),
+    FaultDefinition(
+        fault_id="RB-09",
+        name="Trailing-edge split / delamination",
+        subsystem="rotor_blades",
+        subsystem_label="Rotor & Blades",
+        severity="HIGH",
+        description="Trailing-edge opening or laminate delamination grows with "
+        "cycling and can shed material; detected acoustically or by inspection.",
+        root_causes=[
+            "Fatigue of trailing-edge bond",
+            "Manufacturing void",
+            "Impact damage",
+            "Water ingress freezing",
+        ],
+        symptoms=["Blade acoustic anomaly", "AEP deviation", "Found on drone inspection"],
+        detection_signals=[
+            "blade_acoustic_anomaly",
+            "aep_deviation_pct",
+            "inspection_blade_delamination",
+        ],
+        recommended_actions=[
+            "Inspect with drone/rope access",
+            "Repair trailing-edge bond",
+            "Monitor growth rate",
+        ],
+    ),
+    FaultDefinition(
+        fault_id="RB-10",
+        name="Blade root bolt tension loss",
+        subsystem="rotor_blades",
+        subsystem_label="Rotor & Blades",
+        severity="HIGH",
+        description="Tension loss of blade root studs/bolts — a classic finding of "
+        "bolt audits; if undetected it can progress to bolt failure.",
+        root_causes=[
+            "Pre-load relaxation",
+            "Oversized holes / bedding wear",
+            "Corrosion",
+            "Overload cycles",
+        ],
+        symptoms=[
+            "Bolt tension audit deviation",
+            "Hub-side stud corrosion",
+            "Micro-movement at root flange",
+        ],
+        detection_signals=["blade_bolt_tension_deviation_pct", "inspection_bolt_loose"],
+        recommended_actions=[
+            "Bolt tension audit",
+            "Re-torque per OEM procedure",
+            "Replace degraded studs",
+        ],
+    ),
     # ── 2. Pitch System ────────────────────────────────────────────────────
     FaultDefinition(
         fault_id="PT-01",
@@ -820,6 +931,32 @@ FAULT_CATALOG: list[FaultDefinition] = [
         detection_signals=["vibration_mms", "backlash_mm"],
         recommended_actions=["Monitor trend", "Inspect at next service", "Adjust if possible"],
     ),
+    FaultDefinition(
+        fault_id="GB-15",
+        name="Gearbox oil fire",
+        subsystem="gearbox",
+        subsystem_label="Gearbox",
+        severity="CRITICAL",
+        description="Gearbox oil ignites (hot oil spray on a hot surface) — smoke "
+        "detectors and extreme oil temperature mark the event.",
+        root_causes=[
+            "Oil leak onto hot gearbox surface",
+            "Oil mist ignition",
+            "Extreme overheating",
+            "Electrical spark near oil mist",
+        ],
+        symptoms=[
+            "Oil temperature extreme (> 120 °C)",
+            "Smoke detector near gearbox",
+            "Fire suppression released",
+        ],
+        detection_signals=["oil_temp_c", "smoke_detector_on", "fire_suppression_released"],
+        recommended_actions=[
+            "Shut down and disconnect from grid",
+            "Trigger fire suppression",
+            "Evacuate tower base, call emergency services",
+        ],
+    ),
     # ── 5. High-Speed Shaft & Brake ────────────────────────────────────────
     FaultDefinition(
         fault_id="BR-01",
@@ -902,6 +1039,32 @@ FAULT_CATALOG: list[FaultDefinition] = [
             "Inspect caliper and actuator",
             "Verify release pressure",
             "Clean and re-grease sliding surfaces",
+        ],
+    ),
+    FaultDefinition(
+        fault_id="BR-05",
+        name="Brake fire",
+        subsystem="hss_brake",
+        subsystem_label="High-Speed Shaft & Brake",
+        severity="CRITICAL",
+        description="Brake disc/pad overheat ignites — from prolonged dragging or a "
+        "failed emergency brake; smoke and heat detectors fire.",
+        root_causes=[
+            "Prolonged brake dragging",
+            "Failed release",
+            "Disc overheating",
+            "Combustible contamination on disc",
+        ],
+        symptoms=[
+            "Brake temperature extreme",
+            "Smoke detector in nacelle/drive train",
+            "Burning smell, brake dust ignition",
+        ],
+        detection_signals=["brake_temp_c", "smoke_detector_on", "brake_fire_alarm"],
+        recommended_actions=[
+            "Shut down and disconnect from grid",
+            "Trigger fire suppression",
+            "Evacuate tower base, call emergency services",
         ],
     ),
     # ── 6. Generator ───────────────────────────────────────────────────────
@@ -1206,6 +1369,36 @@ FAULT_CATALOG: list[FaultDefinition] = [
             "Corrosion monitoring program",
         ],
     ),
+    FaultDefinition(
+        fault_id="TF-05",
+        name="Tower base fire",
+        subsystem="tower_foundation",
+        subsystem_label="Tower & Foundation",
+        severity="CRITICAL",
+        description="Fire at the tower base — transformer, switchgear or cable "
+        "compartment; tower-base smoke/heat detectors fire.",
+        root_causes=[
+            "Transformer fault at tower base",
+            "Cable fault in tower",
+            "Switchgear arcing",
+            "External fire spreading",
+        ],
+        symptoms=[
+            "Tower-base smoke alarm",
+            "Tower-base heat detector",
+            "Fire suppression released",
+        ],
+        detection_signals=[
+            "tower_smoke_detector_on",
+            "tower_fire_alarm",
+            "fire_suppression_released",
+        ],
+        recommended_actions=[
+            "Shut down and disconnect from grid",
+            "Trigger fire suppression",
+            "Evacuate tower base, call emergency services",
+        ],
+    ),
     # ── 9. Nacelle & Sensors ───────────────────────────────────────────────
     FaultDefinition(
         fault_id="NS-01",
@@ -1313,6 +1506,27 @@ FAULT_CATALOG: list[FaultDefinition] = [
             "Shut down and disconnect from grid",
             "Trigger fire suppression",
             "Evacuate tower base, call emergency services",
+        ],
+    ),
+    FaultDefinition(
+        fault_id="NS-07",
+        name="Fire suppression system fault",
+        subsystem="nacelle_sensors",
+        subsystem_label="Nacelle & Sensors",
+        severity="HIGH",
+        description="The fire suppression system is unavailable, faulted, or "
+        "discharged — the turbine loses its first line of fire defense.",
+        root_causes=[
+            "Suppression bottle discharged/expired",
+            "Detector fault",
+            "Actuation circuit fault",
+        ],
+        symptoms=["Suppression status alarm", "System test failed", "Pressure low in bottle"],
+        detection_signals=["fire_suppression_status", "fire_suppression_released"],
+        recommended_actions=[
+            "Recharge/replace suppression bottle",
+            "Test detectors",
+            "Repair actuation circuit",
         ],
     ),
     # ── 10. Cooling & Hydraulics ───────────────────────────────────────────
@@ -1483,6 +1697,37 @@ FAULT_CATALOG: list[FaultDefinition] = [
             "Check DC-link capacitors",
             "Analyze converter events",
             "Replace capacitors",
+        ],
+    ),
+    FaultDefinition(
+        fault_id="EL-06",
+        name="Electrical cabinet / transformer fire",
+        subsystem="electrical",
+        subsystem_label="Electrical & Power",
+        severity="CRITICAL",
+        description="Fire in a converter cabinet, transformer or cable compartment "
+        "— the most common electrical fire source in wind turbines.",
+        root_causes=[
+            "Converter/IGBT thermal runaway",
+            "Transformer fault",
+            "Cable insulation failure",
+            "Loose connection arcing",
+        ],
+        symptoms=[
+            "Cabinet smoke alarm",
+            "Transformer temperature extreme",
+            "Fire suppression released",
+        ],
+        detection_signals=[
+            "smoke_detector_on",
+            "cabinet_fire_alarm",
+            "transformer_temp_c",
+            "fire_suppression_released",
+        ],
+        recommended_actions=[
+            "Shut down and disconnect from grid",
+            "Trigger fire suppression",
+            "Evacuate tower base, call emergency services",
         ],
     ),
     # ── 12. SCADA & Communication ──────────────────────────────────────────

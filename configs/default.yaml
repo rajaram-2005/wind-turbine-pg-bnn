@@ -143,3 +143,18 @@ deployment:
   validate_export: true
   edge:
     num_threads: 1          # ONNX Runtime intra-op threads on edge devices
+
+notifications:
+  mode: auto                # auto | smtp | eml | off
+  smtp_host: ""             # set AV_SMTP_HOST to enable SMTP delivery
+  smtp_port: 587
+  smtp_from: aerovigil@localhost
+  smtp_tls: true
+  alert_recipients: []      # or AV_ALERT_RECIPIENTS="ops@example.com"
+  report_recipients: []     # or AV_REPORT_RECIPIENTS="maintenance@example.com"
+  artifact_dir: artifacts/notifications   # .eml fallback / alert state
+  cooldown_hours:
+    CRITICAL: 6.0           # re-alert cooldown per (asset, fault)
+    HIGH: 24.0
+    MEDIUM: 168.0
+  alert_severities: [CRITICAL, HIGH]  # severities that page immediately

@@ -314,6 +314,30 @@ class DeploymentConfig(BaseModel):
     edge: EdgeDeploymentConfig = Field(default_factory=EdgeDeploymentConfig)
 
 
+class NotificationsConfig(BaseModel):
+    """Email alert/report defaults (secrets stay in ``AV_*`` env vars).
+
+    See ``src/notifications/emailer.py`` — mode ``auto`` uses SMTP when
+    ``AV_SMTP_HOST`` is set, otherwise writes ``.eml`` files under
+    ``artifact_dir`` so the pipeline works offline.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: str = "auto"  # auto | smtp | eml | off
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_from: str = "aerovigil@localhost"
+    smtp_tls: bool = True
+    alert_recipients: list[str] = Field(default_factory=list)
+    report_recipients: list[str] = Field(default_factory=list)
+    artifact_dir: str = "artifacts/notifications"
+    cooldown_hours: dict[str, float] = Field(
+        default_factory=lambda: {"CRITICAL": 6.0, "HIGH": 24.0, "MEDIUM": 168.0}
+    )
+    alert_severities: list[str] = Field(default_factory=lambda: ["CRITICAL", "HIGH"])
+
+
 class AppConfig(BaseModel):
     """Typed mirror of ``configs/default.yaml`` (plus eval/ui conveniences)."""
 
@@ -334,6 +358,7 @@ class AppConfig(BaseModel):
     ui: UiConfig = Field(default_factory=UiConfig)
     serving: ServingConfig = Field(default_factory=ServingConfig)
     safety: SafetyConfig = Field(default_factory=SafetyConfig)
+    notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
 
     @model_validator(mode="after")
     def _enforce_advisory_only(self) -> AppConfig:

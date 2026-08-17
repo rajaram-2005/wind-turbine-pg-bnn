@@ -253,3 +253,82 @@ def test_faults_detect_unknown_model(client):
         json={"asset_id": "WTG-X", "model_key": "No-Such-Model", "telemetry": {}},
     )
     assert resp.status_code == 404
+
+
+# --------------------------------------------------------------------------- #
+# Email notifications + sensor catalog routes                                  #
+# --------------------------------------------------------------------------- #
+def test_notifications_status_reports_configuration(client):
+    resp = client.get("/notifications/status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["mode"] in ("smtp", "eml")
+    assert body["advisory_only"] is True
+    assert "alert_recipients" in body and "cooldown_hours" in body
+
+
+def test_notifications_send_faulty_snapshot_pages_alert(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("AV_NOTIFY_DIR", str(tmp_path / "notes"))
+    monkeypatch.delenv("AV_SMTP_HOST", raising=False)
+    monkeypatch.setenv("AV_ALERT_RECIPIENTS", "ops@example.com")
+    payload = {
+        "asset_id": "WTG-NOTIF",
+        "model_key": "NREL-5MW",
+        "telemetry": {
+            "vibration_mms": 9.0,
+            "temperature_c": 60.0,
+            "rpm": 1000.0,
+            "oil_viscosity_cst": 5.0,
+            "load_pct": 90.0,
+            "oil_temp_c": 125.0,
+            "smoke_detector_on": True,
+        },
+    }
+    resp = client.post("/notifications/send", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["delivered"] is True
+    assert body["notifications"], "expected an alert email"
+    subjects = " ".join(n["subject"] for n in body["notifications"])
+    assert "CRITICAL" in subjects
+    eml_files = list((tmp_path / "notes").glob("*.eml"))
+    assert len(eml_files) >= 1
+    assert "WTG-NOTIF" in eml_files[0].read_text(encoding="utf-8")
+
+
+def test_notifications_send_healthy_snapshot_force_reports(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("AV_NOTIFY_DIR", str(tmp_path / "notes2"))
+    monkeypatch.delenv("AV_SMTP_HOST", raising=False)
+    monkeypatch.setenv("AV_REPORT_RECIPIENTS", "maint@example.com")
+    payload = {
+        "asset_id": "WTG-FINE",
+        "model_key": "NREL-5MW",
+        "telemetry": {
+            "vibration_mms": 2.0,
+            "temperature_c": 55.0,
+            "rpm": 950.0,
+            "oil_viscosity_cst": 32.0,
+            "load_pct": 70.0,
+        },
+        "force_report": True,
+        "subject": "Overnight check",
+    }
+    resp = client.post("/notifications/send", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["delivered"] is True
+    assert len(body["notifications"]) == 1
+    assert "Overnight check" in body["notifications"][0]["subject"]
+
+
+def test_faults_sensors_route(client):
+    resp = client.get("/faults/sensors")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["summary"]["n_sensors"] >= 40
+    assert body["summary"]["n_fault_types_covered"] >= 75
+    fire = client.get("/faults/sensors?subsystem=gearbox")
+    assert fire.status_code == 200
+    assert all(s["category"] for s in fire.json()["sensors"])
+    bad = client.get("/faults/sensors?subsystem=nope")
+    assert bad.status_code == 404

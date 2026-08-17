@@ -33,6 +33,9 @@ __all__ = [
     "FleetResponse",
     "FleetSummary",
     "HealthResponse",
+    "NotificationSendRequest",
+    "NotificationSendResponse",
+    "NotificationStatusResponse",
     "REVIEW_DECISIONS",
     "Telemetry",
     "TelemetryCompressRequest",
@@ -102,6 +105,53 @@ class FaultDetectResponse(BaseModel):
     summary: dict[str, Any]
     oil: dict[str, Any]
     faults: list[dict[str, Any]]
+
+
+class NotificationSendRequest(BaseModel):
+    """Request body for POST /notifications/send.
+
+    Detects faults from the snapshot and emails an alert (CRITICAL/HIGH
+    findings) or a health report (anything else) to ``recipient`` (falls back
+    to the configured alert/report recipients).
+    """
+
+    asset_id: str = Field("WTG-000", min_length=1)
+    model_key: str = Field("GE-1.5", min_length=1)
+    telemetry: dict[str, Any] = Field(..., description="Telemetry snapshot dict")
+    recipient: str | None = Field(None, description="Explicit recipient email")
+    subject: str | None = Field(None, description="Optional report subject/title")
+    force_report: bool = Field(
+        False, description="Send the digest-style health report instead of an alert"
+    )
+
+
+class NotificationSendResponse(BaseModel):
+    """Result of one notification send."""
+
+    asset_id: str
+    report: dict[str, Any]
+    notifications: list[dict[str, Any]]
+    delivered: bool
+
+
+class NotificationStatusResponse(BaseModel):
+    """Configuration summary of the email notifier (no secrets)."""
+
+    mode: str
+    configured_mode: str
+    smtp_host: str
+    smtp_port: int
+    smtp_tls: bool
+    from_: str = Field(..., alias="from")
+    alert_recipients: list[str]
+    report_recipients: list[str]
+    artifact_dir: str
+    alert_severities: list[str]
+    cooldown_hours: dict[str, float]
+    tracked_alerts: int
+    advisory_only: bool
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class TelemetryCompressRequest(BaseModel):
