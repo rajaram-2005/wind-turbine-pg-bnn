@@ -155,7 +155,7 @@ docker compose up --build        # unified app + optional Redis broker
 
 ```bash
 # simulate a turbine sending live readings every 10 s:
-python edge/simulate_device.py --url http://<server>:8080 --turbine WTG-001
+python edge/simulate_device.py --server http://<server>:8080 --turbine-id WTG-001
 ```
 
 Real nodes POST the same wire format (see `edge/README.md`):
@@ -249,7 +249,7 @@ AV_ALERT_RECIPIENTS=ops@example.com python main.py notify \
 ls artifacts/notifications/*.eml        # or check the recipient's inbox
 
 # 4. Live stream into the twin (fires detection + alerts automatically)
-python edge/simulate_device.py --url http://localhost:8080 --turbine WTG-001
+python edge/simulate_device.py --server http://localhost:8080 --turbine-id WTG-001
 curl "http://localhost:8080/api/twin/status?asset_id=WTG-001&model=NREL-5MW" | \
   python -c "import json,sys; print(json.load(sys.stdin)['last_state']['fault_report']['overall_status'])"
 ```
