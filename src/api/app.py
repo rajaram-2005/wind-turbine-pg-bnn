@@ -26,6 +26,7 @@ without a trained feature-extraction pipeline).
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 from collections import OrderedDict
 from pathlib import Path
@@ -41,18 +42,29 @@ from src.api.schemas import (
     AdvisoryResponse,
     AgentAskRequest,
     AgentReviewRequest,
+    AlertAckRequest,
+    DigestRequest,
+    FaultDetectRequest,
+    FaultDetectResponse,
     FleetRequest,
     FleetResponse,
     FleetSummary,
     HealthResponse,
+    LimitsRequest,
+    NotificationSendRequest,
+    NotificationSendResponse,
+    NotificationStatusResponse,
+    SimulateRequest,
     TelemetryCompressRequest,
     TelemetryCompressResponse,
     TelemetryRestoreRequest,
     TelemetryRestoreResponse,
     TwinScenariosRequest,
     TwinSimulateRequest,
+    WorkOrderRequest,
 )
 from src.eval.calibration import expected_asset_utilization
+from src.faults.limits import OVERRIDE_KEYS as OVERRIDE_KEYS_IMPORT
 from src.models.predictor import run_advisory
 from src.utils.safety import enforce_safety_contract
 from src.utils.schema import TurbinePayload
@@ -131,7 +143,17 @@ def _connect_agent_team(payload: TurbinePayload, recommendation: dict) -> dict:
     return enforce_safety_contract(enriched)
 
 
-def get_or_create_twin(state, asset_id: str, model_key: str = "GE-1.5"):
+def _fault_name(fault_id: str) -> str:
+    """Human name for a fault id (best-effort)."""
+    try:
+        from src.faults.taxonomy import get_fault
+
+        return get_fault(fault_id).name
+    except KeyError:
+        return fault_id
+
+
+def get_or_create_twin(state, asset_id: str, model_key: str = "GE-1.5", farm: str = ""):
     """Shared, LRU-bounded digital-twin registry accessor with durable hydration.
 
     Used both by the advisory API routes and by the gateway router
@@ -141,6 +163,9 @@ def get_or_create_twin(state, asset_id: str, model_key: str = "GE-1.5"):
     If the twin is not in memory but has prior snapshots in the durable SQLite
     store, its state_history is hydrated from the latest persisted record so
     fleet dashboards can resume after a restart.
+
+    Per-asset detection-limit overrides (``src.faults.limits``) persisted via
+    ``PUT /api/faults/limits`` are applied to the twin's fault detector.
     """
     from src.digital_twin.specs import get_spec
     from src.digital_twin.twin import WindTurbineDigitalTwin
@@ -155,7 +180,22 @@ def get_or_create_twin(state, asset_id: str, model_key: str = "GE-1.5"):
             spec = get_spec(model_key)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        twin = WindTurbineDigitalTwin(asset_id, spec, serving_model=state.serving)
+        overrides = None
+        try:
+            from src.data.store import get_store
+
+            row = get_store().get_limits_override(asset_id)
+            if row:
+                overrides = row.get("overrides")
+        except Exception:  # noqa: BLE001 - overrides are an optimization
+            overrides = None
+        twin = WindTurbineDigitalTwin(
+            asset_id,
+            spec,
+            serving_model=state.serving,
+            fault_detector_overrides=overrides,
+        )
+        twin.farm = farm or ""
         # Hydrate from durable store first; if nothing persisted, seed with
         # the spec's nominal operating point so status/prompt are meaningful.
         hydrated = False
@@ -403,7 +443,7 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------ #
     # Digital twin ↔ advisory bridge                                      #
     # ------------------------------------------------------------------ #
-    def _get_twin(asset_id: str, model_key: str):
+    def _get_twin(asset_id: str, model_key: str, farm: str = ""):
         """Fetch (or lazily create) the in-memory twin for an asset.
 
         When the service has a serving model loaded it is attached so every
@@ -413,7 +453,7 @@ def create_app() -> FastAPI:
         The registry is LRU-bounded: when the cap is reached the least
         recently used twin is evicted before a new asset is admitted.
         """
-        return get_or_create_twin(app.state, asset_id, model_key)
+        return get_or_create_twin(app.state, asset_id, model_key, farm=farm)
 
     def _twin_status_payload(twin) -> dict:
         last = twin.state_history[-1] if twin.state_history else None
@@ -435,16 +475,744 @@ def create_app() -> FastAPI:
         enforce_safety_contract(body)
         return body
 
+    # ------------------------------------------------------------------ #
+    # Whole-turbine fault detection                                      #
+    # ------------------------------------------------------------------ #
+    @app.post("/faults/detect", response_model=FaultDetectResponse)
+    def faults_detect(req: FaultDetectRequest) -> FaultDetectResponse:
+        """Detect faults across every turbine subsystem from one snapshot.
+
+        The five canonical SCADA channels are always evaluated; any optional
+        condition-monitoring channels present in ``telemetry`` (oil water,
+        ISO 4406 particles, TAN, filter ΔP, yaw error, brake wear, converter
+        temperature, inspection flags ...) enable the corresponding rules of
+        the fault catalog (``src/faults``).
+        """
+        from datetime import datetime, timezone
+
+        from src.digital_twin.specs import get_spec
+        from src.faults.detector import FaultDetector
+
+        try:
+            spec = get_spec(req.model_key)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        overrides = None
+        try:
+            from src.data.store import get_store
+
+            stored = get_store().get_limits_override(req.asset_id)
+            if stored:
+                overrides = stored.get("overrides")
+        except Exception:  # noqa: BLE001 - overrides are an optimization
+            overrides = None
+        report = FaultDetector(spec, overrides=overrides).detect(
+            dict(req.telemetry),
+            asset_id=req.asset_id,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+        body = report.to_dict()
+        enforce_safety_contract(body)
+        return FaultDetectResponse(**body)
+
+    @app.get("/faults/catalog")
+    def faults_catalog(subsystem: str | None = None) -> dict:
+        """The complete fault catalog — every subsystem, every fault type.
+
+        ``?subsystem=gearbox`` filters to one subsystem's fault types.
+        """
+        from src.faults.taxonomy import catalog_summary, list_faults
+
+        try:
+            faults = list_faults(subsystem)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        body = {"summary": catalog_summary(), "faults": faults}
+        enforce_safety_contract(body)
+        return body
+
+    @app.get("/faults/sensors")
+    def faults_sensors(subsystem: str | None = None) -> dict:
+        """The sensor catalog — every sensor, its placement, technology and the
+        fault types its readings feed. ``?subsystem=gearbox`` filters."""
+        from src.faults.sensors import sensor_catalog_dict
+
+        try:
+            body = sensor_catalog_dict(subsystem)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        enforce_safety_contract(body)
+        return body
+
+    # ------------------------------------------------------------------ #
+    # Email notifications: alerts + health reports                       #
+    # ------------------------------------------------------------------ #
+    @app.post("/notifications/send", response_model=NotificationSendResponse)
+    def notifications_send(req: NotificationSendRequest) -> NotificationSendResponse:
+        """Detect faults in the snapshot and email the result.
+
+        CRITICAL/HIGH findings page the recipient immediately (subject to the
+        per-fault cooldown/escalation tracker); otherwise a health-report
+        digest is sent. Without SMTP configured the message is written as an
+        ``.eml`` file under the artifact directory so delivery can be
+        previewed and tested offline.
+        """
+        from datetime import datetime, timezone
+
+        from src.digital_twin.specs import get_spec
+        from src.faults.detector import FaultDetector
+        from src.notifications import EmailNotifier
+
+        try:
+            spec = get_spec(req.model_key)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        report = FaultDetector(spec).detect(
+            dict(req.telemetry),
+            asset_id=req.asset_id,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+        notifier = EmailNotifier()
+        recipients = (req.recipient,) if req.recipient else None
+        if req.force_report or not report.faults:
+            result = notifier.send_health_report(
+                [report],
+                title=req.subject or f"Health report — {req.asset_id}",
+                recipients=recipients,
+            )
+            notifications = [result.to_dict()] if result else []
+        else:
+            notifications = [n.to_dict() for n in notifier.process_report(report)]
+            # Also page webhooks (Slack/Teams/generic) for the same report.
+            from src.notifications.webhooks import WebhookNotifier
+
+            webhook_results = WebhookNotifier.from_env().process_report(report)
+            notifications.extend(
+                {"channel": "webhook", "delivered": r.delivered, **r.to_dict()}
+                for r in webhook_results
+            )
+        delivered = bool(notifications) and all(n["delivered"] for n in notifications)
+        # Audit trail: persist every notification attempt.
+        try:
+            from src.data.store import get_store
+
+            for item in notifications:
+                get_store().record_notification(
+                    channel=item.get("channel", item.get("format", "email")),
+                    subject=item.get("subject", ""),
+                    asset_id=req.asset_id,
+                    severity=report.overall_status,
+                    delivered=bool(item.get("delivered")),
+                    detail=item.get("detail", ""),
+                )
+        except Exception:  # noqa: BLE001 - history must never break the response
+            pass
+        body = {
+            "asset_id": req.asset_id,
+            "report": report.to_dict(),
+            "notifications": notifications,
+            "delivered": delivered,
+        }
+        enforce_safety_contract(body)
+        return NotificationSendResponse(**body)
+
+    @app.get("/notifications/status", response_model=NotificationStatusResponse)
+    def notifications_status() -> NotificationStatusResponse:
+        """Notifier configuration summary (recipients, mode, cooldowns)."""
+        from src.notifications import EmailNotifier
+        from src.notifications.digest import DigestConfig
+        from src.notifications.webhooks import WebhookNotifier
+
+        status = EmailNotifier().status()
+        status["webhooks"] = WebhookNotifier.from_env().status()
+        status["digest"] = DigestConfig().to_dict()
+        enforce_safety_contract(status)
+        return NotificationStatusResponse(**status)
+
+    # ------------------------------------------------------------------ #
+    # Alert workflow: open alerts, acknowledge, resolve                   #
+    # ------------------------------------------------------------------ #
+    @app.get("/notifications/alerts")
+    def notifications_alerts() -> dict:
+        """Every tracked, unresolved alert (with ack state)."""
+        from src.notifications import EmailNotifier
+
+        alerts = EmailNotifier().tracker.open_alerts()
+        body = {"n_open": len(alerts), "alerts": alerts}
+        enforce_safety_contract(body)
+        return body
+
+    @app.post("/notifications/alerts/ack")
+    def notifications_alerts_ack(req: AlertAckRequest) -> dict:
+        """Acknowledge an alert: it stops re-alerting until escalation/resolution."""
+        from src.notifications import EmailNotifier
+
+        tracker = EmailNotifier().tracker
+        acknowledged = tracker.acknowledge(req.asset_id, req.fault_id, operator=req.operator)
+        body = {
+            "acknowledged": acknowledged,
+            "message": (
+                f"alert {req.asset_id}:{req.fault_id} acknowledged"
+                if acknowledged
+                else "no tracked alert for this asset/fault"
+            ),
+            "open_alerts": tracker.open_alerts(),
+        }
+        enforce_safety_contract(body)
+        return body
+
+    @app.post("/notifications/alerts/resolve")
+    def notifications_alerts_resolve(req: AlertAckRequest) -> dict:
+        """Resolve an alert (fault fixed): a future re-detection re-alerts."""
+        from src.notifications import EmailNotifier
+
+        tracker = EmailNotifier().tracker
+        resolved = tracker.resolve(req.asset_id, req.fault_id, operator=req.operator)
+        body = {
+            "resolved": resolved,
+            "message": (
+                f"alert {req.asset_id}:{req.fault_id} resolved"
+                if resolved
+                else "no tracked alert for this asset/fault"
+            ),
+            "open_alerts": tracker.open_alerts(),
+        }
+        enforce_safety_contract(body)
+        return body
+
+    # ------------------------------------------------------------------ #
+    # Maintenance mode / suppression + notification history                #
+    # ------------------------------------------------------------------ #
+    @app.get("/notifications/suppressions")
+    def notifications_suppressions() -> dict:
+        """Assets currently in maintenance mode (alerts suppressed)."""
+        from src.notifications import EmailNotifier
+
+        suppressed = EmailNotifier().tracker.suppressed_assets()
+        body = {"n_suppressed": len(suppressed), "assets": suppressed}
+        enforce_safety_contract(body)
+        return body
+
+    @app.post("/notifications/suppress")
+    def notifications_suppress(asset_id: str, reason: str = "", operator: str = "") -> dict:
+        """Put an asset into maintenance mode: all its alerts are silenced.
+
+        Detection keeps running and the suppression is visible in the alert
+        list; remove it with POST /notifications/unsuppress when the crew
+        finishes.
+        """
+        from src.notifications import EmailNotifier
+
+        tracker = EmailNotifier().tracker
+        tracker.suppress_asset(asset_id, reason=reason, operator=operator)
+        body = {
+            "suppressed": True,
+            "asset_id": asset_id,
+            "reason": reason,
+            "operator": operator,
+            "message": f"{asset_id} in maintenance mode — alerts suppressed",
+        }
+        enforce_safety_contract(body)
+        return body
+
+    @app.post("/notifications/unsuppress")
+    def notifications_unsuppress(asset_id: str) -> dict:
+        """Take an asset out of maintenance mode (alerts resume)."""
+        from src.notifications import EmailNotifier
+
+        removed = EmailNotifier().tracker.unsuppress_asset(asset_id)
+        body = {
+            "suppressed": not removed,
+            "asset_id": asset_id,
+            "message": f"{asset_id} alerts resumed"
+            if removed
+            else f"{asset_id} was not suppressed",
+        }
+        enforce_safety_contract(body)
+        return body
+
+    @app.get("/notifications/history")
+    def notifications_history(
+        asset_id: str | None = None, channel: str | None = None, limit: int = 100
+    ) -> dict:
+        """Audit trail of every notification attempt (email/webhook)."""
+        from src.data.store import get_store
+
+        records = get_store().list_notifications(asset_id=asset_id, channel=channel, limit=limit)
+        body = {"n_records": len(records), "notifications": records}
+        enforce_safety_contract(body)
+        return body
+
+    # ------------------------------------------------------------------ #
+    # Webhook alerts (Slack / Teams / generic)                            #
+    # ------------------------------------------------------------------ #
+    @app.get("/notifications/webhooks/status")
+    def notifications_webhooks_status() -> dict:
+        """Webhook alert configuration summary."""
+        from src.notifications.webhooks import WebhookNotifier
+
+        body = WebhookNotifier.from_env().status()
+        enforce_safety_contract(body)
+        return body
+
+    @app.post("/notifications/email/test")
+    def notifications_email_test() -> dict:
+        """Send a connectivity-test email to the alert recipients."""
+        from src.notifications import EmailNotifier
+
+        result = EmailNotifier().deliver_test()
+        body = {"result": result.to_dict()}
+        enforce_safety_contract(body)
+        return body
+
+    @app.post("/notifications/webhooks/test")
+    def notifications_webhooks_test() -> dict:
+        """Send a test message to every configured webhook."""
+        from src.faults.detector import FaultDetector
+        from src.notifications.webhooks import WebhookNotifier
+
+        notifier = WebhookNotifier.from_env()
+        if not notifier.urls:
+            raise HTTPException(
+                status_code=422, detail="no webhook URLs configured (AV_WEBHOOK_URLS)"
+            )
+        sample = FaultDetector().detect(
+            {
+                "vibration_mms": 9.0,
+                "temperature_c": 60.0,
+                "rpm": 1000.0,
+                "oil_viscosity_cst": 5.0,
+                "load_pct": 90.0,
+            },
+            asset_id="WTG-WEBHOOK-TEST",
+            timestamp="test",
+        )
+        results = notifier.send_message(sample, "[AeroVigil TEST] webhook connectivity check")
+        body = {"results": [r.to_dict() for r in results]}
+        enforce_safety_contract(body)
+        return body
+
+    # ------------------------------------------------------------------ #
+    # Fleet digest (manual trigger; the app schedules it daily)           #
+    # ------------------------------------------------------------------ #
+    @app.post("/notifications/digest")
+    def notifications_digest(req: DigestRequest | None = None) -> dict:
+        """Email the fleet health digest now (all tracked twins)."""
+        from src.notifications import EmailNotifier
+        from src.notifications.digest import run_digest
+
+        notifier = EmailNotifier()
+        recipients = tuple(req.recipients) if req and req.recipients else None
+        result = run_digest(
+            app.state.twins,
+            notifier,
+            title=(req.title if req else None) or None,
+            recipients=recipients,
+        )
+        if result is None:
+            raise HTTPException(
+                status_code=422,
+                detail="no twins with fault reports to digest (ingest telemetry first)",
+            )
+        try:
+            from datetime import datetime, timezone
+
+            from src.data.store import get_store
+
+            get_store().record_notification(
+                channel=result.channel,
+                subject=result.subject,
+                delivered=result.delivered,
+                detail=result.detail,
+                ts_iso=datetime.now(timezone.utc).isoformat(),
+            )
+        except Exception:  # noqa: BLE001 - history must never break the response
+            pass
+        body = {"result": result.to_dict(), "n_assets": len(app.state.twins)}
+        enforce_safety_contract(body)
+        return body
+
+    # ------------------------------------------------------------------ #
+    # Fault history & fleet trends                                        #
+    # ------------------------------------------------------------------ #
+    @app.get("/faults/history")
+    def faults_history(asset_id: str = "WTG-001", limit: int = 50) -> dict:
+        """Fault timeline for one asset (from the twin registry + durable store)."""
+        from src.data.store import get_store
+
+        timeline: list[dict] = []
+        twin = app.state.twins.get(asset_id)
+        if twin is not None:
+            for rec in twin.state_history[-limit:]:
+                fault_report = rec.get("fault_report") or {}
+                timeline.append(
+                    {
+                        "timestamp": rec.get("timestamp"),
+                        "health_score": fault_report.get("health_score"),
+                        "overall_status": fault_report.get("overall_status"),
+                        "n_faults": (fault_report.get("summary") or {}).get("n_faults", 0),
+                        "fault_ids": [f["fault_id"] for f in fault_report.get("faults", [])],
+                    }
+                )
+        if not timeline:
+            try:
+                for rec in get_store().twin_history(asset_id, limit=limit):
+                    fault_report = (rec.get("payload") or {}).get("fault_report") or {}
+                    timeline.append(
+                        {
+                            "timestamp": rec.get("ts"),
+                            "health_score": fault_report.get("health_score"),
+                            "overall_status": fault_report.get("overall_status"),
+                            "n_faults": (fault_report.get("summary") or {}).get("n_faults", 0),
+                            "fault_ids": [f["fault_id"] for f in fault_report.get("faults", [])],
+                        }
+                    )
+            except Exception:  # noqa: BLE001 - history is best-effort
+                pass
+        body = {"asset_id": asset_id, "n_records": len(timeline), "timeline": timeline}
+        enforce_safety_contract(body)
+        return body
+
+    @app.get("/faults/trends")
+    def faults_trends() -> dict:
+        """Fleet-wide fault roll-up across every tracked twin."""
+        from collections import Counter
+
+        fault_counts: Counter = Counter()
+        subsystem_counts: Counter = Counter()
+        severity_counts: Counter = Counter()
+        health_scores: list[float] = []
+        assets: list[dict] = []
+        for twin in app.state.twins.values():
+            report = twin.last_fault_report
+            if report is None:
+                continue
+            health_scores.append(report.health_score)
+            assets.append(
+                {
+                    "asset_id": twin.asset_id,
+                    "status": report.overall_status,
+                    "health_score": round(report.health_score, 1),
+                    "n_faults": report.n_faults,
+                }
+            )
+            for fault in report.faults:
+                fault_counts[fault.fault_id] += 1
+                subsystem_counts[fault.subsystem_label] += 1
+                severity_counts[fault.severity] += 1
+        body = {
+            "n_assets": len(assets),
+            "fleet_avg_health": round(sum(health_scores) / len(health_scores), 1)
+            if health_scores
+            else None,
+            "severity_rollup": dict(severity_counts),
+            "top_faults": [
+                {"fault_id": fid, "count": count, "name": _fault_name(fid)}
+                for fid, count in fault_counts.most_common(10)
+            ],
+            "subsystem_rollup": dict(sorted(subsystem_counts.items(), key=lambda kv: -kv[1])),
+            "assets": assets,
+        }
+        enforce_safety_contract(body)
+        return body
+
+    # ------------------------------------------------------------------ #
+    # Maintenance work orders                                             #
+    # ------------------------------------------------------------------ #
+    @app.post("/maintenance/workorder")
+    def maintenance_workorder(req: WorkOrderRequest) -> dict:
+        """Generate (and persist) a maintenance work order from a snapshot."""
+        from datetime import datetime, timezone
+
+        from src.digital_twin.specs import get_spec
+        from src.faults.detector import FaultDetector
+        from src.maintenance import WorkOrderGenerator
+
+        try:
+            spec = get_spec(req.model_key)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        report = FaultDetector(spec).detect(
+            dict(req.telemetry),
+            asset_id=req.asset_id,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+        work_order = WorkOrderGenerator().generate(report)
+        body = work_order.to_dict()
+        try:
+            from src.data.store import get_store
+
+            get_store().record_report(
+                kind="workorder",
+                title=work_order.wo_id,
+                body=json.dumps(body, indent=2),
+                meta={"asset_id": req.asset_id, "priority": work_order.priority},
+            )
+        except Exception:  # noqa: BLE001 - persistence must never break the request
+            pass
+        enforce_safety_contract(body)
+        return body
+
+    @app.get("/maintenance/workorders")
+    def maintenance_workorders(limit: int = 20) -> dict:
+        """Work orders generated by this app (newest first)."""
+        from src.data.store import get_store
+
+        records = get_store().list_reports(kind="workorder", limit=limit)
+        orders = []
+        for record in records:
+            try:
+                orders.append(json.loads(record["body"]))
+            except (ValueError, TypeError):
+                continue
+        body = {"n_workorders": len(orders), "workorders": orders}
+        enforce_safety_contract(body)
+        return body
+
+    # ------------------------------------------------------------------ #
+    # Maintenance plan: 30-day weekly calendar for the fleet              #
+    # ------------------------------------------------------------------ #
+    @app.get("/maintenance/plan")
+    def maintenance_plan(days: int = 30, farm: str | None = None) -> dict:
+        """Weekly maintenance calendar built from work orders + RUL forecasts."""
+        from src.maintenance import build_plan, summarize_plan
+
+        twins = {
+            asset_id: twin
+            for asset_id, twin in app.state.twins.items()
+            if farm is None or twin.farm == farm
+        }
+        plan = build_plan(twins, days=days)
+        plan["summary"] = summarize_plan(plan)
+        enforce_safety_contract(plan)
+        return plan
+
+    # ------------------------------------------------------------------ #
+    # Per-asset detection limit tuning                                    #
+    # ------------------------------------------------------------------ #
+    @app.get("/faults/limits")
+    def faults_limits(asset_id: str | None = None, model: str = "GE-1.5") -> dict:
+        """Effective detection limits (spec + per-asset overrides)."""
+        from src.digital_twin.specs import get_spec
+        from src.faults.detector import FaultDetector
+
+        try:
+            spec = get_spec(model)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        overrides = None
+        stored = None
+        if asset_id:
+            try:
+                from src.data.store import get_store
+
+                stored = get_store().get_limits_override(asset_id)
+                if stored:
+                    overrides = stored.get("overrides")
+            except Exception:  # noqa: BLE001 - limits are best-effort
+                overrides = None
+        detector = FaultDetector(spec, overrides=overrides)
+        body = {
+            "asset_id": asset_id,
+            "model": model,
+            "limits": detector.effective_limits,
+            "overrides_applied": overrides or {},
+            "stored": stored,
+            "supported_keys": list(OVERRIDE_KEYS_IMPORT),
+        }
+        enforce_safety_contract(body)
+        return body
+
+    @app.put("/faults/limits")
+    def faults_limits_put(req: LimitsRequest) -> dict:
+        """Persist per-asset detection-limit overrides."""
+        from src.faults.limits import validate_overrides
+
+        try:
+            cleaned = validate_overrides(req.overrides)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        try:
+            from src.data.store import get_store
+
+            get_store().set_limits_override(req.asset_id, cleaned, operator=req.operator)
+        except Exception as exc:  # noqa: BLE001 - persistence failure is visible
+            raise HTTPException(
+                status_code=500, detail=f"failed to persist overrides: {exc}"
+            ) from exc
+        body = {
+            "asset_id": req.asset_id,
+            "overrides": cleaned,
+            "message": "overrides saved — applied to new twins and detect calls",
+        }
+        enforce_safety_contract(body)
+        return body
+
+    @app.delete("/faults/limits")
+    def faults_limits_delete(asset_id: str) -> dict:
+        """Remove per-asset detection-limit overrides (back to spec defaults)."""
+        try:
+            from src.data.store import get_store
+
+            removed = get_store().clear_limits_override(asset_id)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        body = {"asset_id": asset_id, "removed": removed}
+        enforce_safety_contract(body)
+        return body
+
+    # ------------------------------------------------------------------ #
+    # Fleet export + HTML report downloads                                #
+    # ------------------------------------------------------------------ #
+    @app.get("/fleet/export")
+    def fleet_export(format: str = "csv", farm: str | None = None):
+        """Export the current fleet health snapshot (CSV or JSON)."""
+        import csv as _csv
+        import io
+
+        rows = []
+        for asset_id, twin in app.state.twins.items():
+            if farm is not None and twin.farm != farm:
+                continue
+            report = twin.last_fault_report
+            advisory = None
+            if twin.state_history:
+                advisory = twin.state_history[-1].get("advisory") or {}
+            rul = None
+            if advisory:
+                rul = advisory.get("predicted_rul_days")
+            rows.append(
+                {
+                    "asset_id": asset_id,
+                    "farm": twin.farm,
+                    "model": twin.spec.model_name,
+                    "status": report.overall_status if report else "NO_DATA",
+                    "health_score": round(report.health_score, 1) if report else None,
+                    "oil_health": round(report.oil.health_score, 1) if report else None,
+                    "n_faults": report.n_faults if report else 0,
+                    "predicted_rul_days": round(rul, 1) if rul is not None else None,
+                    "last_updated": twin.last_updated.isoformat(),
+                }
+            )
+        if format == "json":
+            body = {"n_assets": len(rows), "assets": rows}
+            enforce_safety_contract(body)
+            return body
+        if format != "csv":
+            raise HTTPException(status_code=422, detail="format must be 'csv' or 'json'")
+        stream = io.StringIO()
+        fieldnames = [
+            "asset_id",
+            "farm",
+            "model",
+            "status",
+            "health_score",
+            "oil_health",
+            "n_faults",
+            "predicted_rul_days",
+            "last_updated",
+        ]
+        writer = _csv.DictWriter(stream, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+        from fastapi.responses import Response
+
+        return Response(
+            content=stream.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=aerovigil-fleet.csv"},
+        )
+
+    @app.get("/reports/fleet.html")
+    def reports_fleet_html() -> Any:
+        """Downloadable HTML health report for the whole fleet."""
+        from fastapi.responses import HTMLResponse
+
+        from src.notifications import render_health_report_html
+
+        reports = [t.last_fault_report for t in app.state.twins.values() if t.last_fault_report]
+        if not reports:
+            raise HTTPException(status_code=404, detail="no twin fault reports to render")
+        html = render_health_report_html(reports, "Fleet health snapshot")
+        return HTMLResponse(
+            content=html,
+            headers={"Content-Disposition": "attachment; filename=aerovigil-fleet-report.html"},
+        )
+
+    @app.get("/reports/asset/{asset_id}.html")
+    def reports_asset_html(asset_id: str) -> Any:
+        """Downloadable HTML report for one asset."""
+        from fastapi.responses import HTMLResponse
+
+        from src.notifications import render_alert_html
+
+        twin = app.state.twins.get(asset_id)
+        if twin is None or twin.last_fault_report is None:
+            raise HTTPException(status_code=404, detail=f"no fault report for {asset_id}")
+        html = render_alert_html(twin.last_fault_report)
+        return HTMLResponse(
+            content=html,
+            headers={"Content-Disposition": f"attachment; filename={asset_id}-report.html"},
+        )
+
+    # ------------------------------------------------------------------ #
+    # Scenario simulator                                                  #
+    # ------------------------------------------------------------------ #
+    @app.post("/simulate/snapshot")
+    def simulate_snapshot(req: SimulateRequest) -> dict:
+        """Generate a deterministic demo snapshot and run fault detection on it.
+
+        ``scenario`` ∈ healthy | faulty | critical | random. When ``notify`` is
+        set, CRITICAL/HIGH findings are emailed/webhooked like live alerts.
+        """
+        from datetime import datetime, timezone
+
+        from src.digital_twin.specs import get_spec
+        from src.faults.detector import FaultDetector
+        from src.faults.simulate import simulate_telemetry
+
+        try:
+            spec = get_spec(req.model_key)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        telemetry = simulate_telemetry(req.scenario, seed=req.seed)
+        report = FaultDetector(spec).detect(
+            telemetry,
+            asset_id=req.asset_id,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+        notifications: list[dict] = []
+        if req.notify:
+            from src.notifications import EmailNotifier
+            from src.notifications.webhooks import WebhookNotifier
+
+            notifications = [n.to_dict() for n in EmailNotifier().process_report(report)]
+            notifications.extend(
+                {"channel": "webhook", "delivered": r.delivered, **r.to_dict()}
+                for r in WebhookNotifier.from_env().process_report(report)
+            )
+        body = {
+            "asset_id": req.asset_id,
+            "scenario": req.scenario,
+            "seed": req.seed,
+            "telemetry": telemetry,
+            "report": report.to_dict(),
+            "notifications": notifications,
+        }
+        enforce_safety_contract(body)
+        return body
+
     @app.get("/twin/status")
-    def twin_status(asset_id: str = "WTG-001", model: str = "GE-1.5") -> dict:
+    def twin_status(asset_id: str = "WTG-001", model: str = "GE-1.5", farm: str = "") -> dict:
         """Current digital-twin state, including the advisory engine output."""
-        twin = _get_twin(asset_id, model)
+        twin = _get_twin(asset_id, model, farm=farm)
         return _twin_status_payload(twin)
 
     @app.post("/twin/simulate")
     def twin_simulate(req: TwinSimulateRequest) -> dict:
         """Replay an operating profile on the asset's digital twin (advisory only)."""
-        twin = _get_twin(req.asset_id, req.model)
+        twin = _get_twin(req.asset_id, req.model, farm=req.farm)
         try:
             records = twin.simulate_scenario(profile=req.profile, hours=req.hours)
         except ValueError as exc:

@@ -7,6 +7,8 @@ Subcommands:
     export         Export the trained BNN to ONNX (mean + variance heads).
     active-sample  Run uncertainty sampling on a SCADA batch, emit alerts.
     explain        Generate a physics-grounded SHAP explainability report.
+    faults         Whole-turbine fault detection: every part, every fault type.
+    notify         Email a fault alert / health report (CRITICAL/HIGH pages now).
     federated      Fleet-wide federated-averaging simulation across farms.
 
 Examples:
@@ -15,6 +17,12 @@ Examples:
     python main.py export --checkpoint artifacts/pg_bnn.pt --out artifacts/pg_bnn.onnx
     python main.py active-sample --checkpoint artifacts/pg_bnn.pt
     python main.py explain --checkpoint artifacts/pg_bnn.pt
+    python main.py faults --list
+    python main.py faults --subsystem gearbox
+    python main.py faults --sensors --subsystem gearbox
+    python main.py faults --snapshot examples/fault_payload.json --model NREL-5MW
+    python main.py notify --snapshot examples/fault_payload.json --recipient ops@example.com
+    python main.py notify --fleet examples/fleet.csv --recipient maintenance@example.com --report
     python main.py federated --rounds 3 --clients 2
 """
 
@@ -261,6 +269,134 @@ def cmd_explain(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_faults(args: argparse.Namespace) -> int:
+    """Find faults across every turbine subsystem (the whole-turbine check)."""
+    from src.faults.detector import FaultDetector
+    from src.faults.taxonomy import catalog_summary, list_faults
+
+    if args.sensors:
+        from src.faults.sensors import sensor_catalog_dict
+
+        print(json.dumps(sensor_catalog_dict(args.subsystem), indent=2))
+        return 0
+
+    if args.list or args.subsystem:
+        subsystem = args.subsystem
+        body = {
+            "summary": catalog_summary(),
+            "faults": list_faults(subsystem),
+            "filtered_subsystem": subsystem,
+        }
+        print(json.dumps(body, indent=2))
+        return 0
+
+    if not args.snapshot:
+        print("provide --snapshot <telemetry.json> (or --list / --subsystem)", file=sys.stderr)
+        return 2
+
+    spec = None
+    if args.model:
+        from src.digital_twin.specs import get_spec
+
+        try:
+            spec = get_spec(args.model)
+        except KeyError as exc:
+            logger.error("%s", exc)
+            return 2
+    snapshot = json.loads(Path(args.snapshot).read_text(encoding="utf-8"))
+    # Accept both a bare telemetry dict and a wrapped payload
+    # ({"asset_id": ..., "model_key": ..., "telemetry": {...}}).
+    telemetry = snapshot.get("telemetry", snapshot)
+    if not isinstance(telemetry, dict):
+        print("--snapshot must be a JSON object (telemetry dict or wrapped payload)", file=sys.stderr)
+        return 2
+    report = FaultDetector(spec).detect(
+        telemetry,
+        asset_id=str(args.asset),
+        timestamp=args.timestamp,
+    )
+    print(json.dumps(report.to_dict(), indent=2))
+    if args.out:
+        Path(args.out).write_text(json.dumps(report.to_dict(), indent=2))
+        logger.info("fault report written to %s", args.out)
+    return 0
+
+
+def cmd_notify(args: argparse.Namespace) -> int:
+    """Email a fault alert or a health report for one snapshot / the fleet."""
+    from src.faults.detector import FaultDetector
+    from src.notifications import EmailNotifier
+
+    spec = None
+    if args.model:
+        from src.digital_twin.specs import get_spec
+
+        try:
+            spec = get_spec(args.model)
+        except KeyError as exc:
+            logger.error("%s", exc)
+            return 2
+
+    recipients = (args.recipient,) if args.recipient else None
+    notifier = EmailNotifier()
+    status = notifier.status()
+    logger.info(
+        "notifier mode=%s host=%s alert_recipients=%s report_recipients=%s",
+        status["mode"], status["smtp_host"] or "-",
+        ",".join(status["alert_recipients"]) or "-",
+        ",".join(status["report_recipients"]) or "-",
+    )
+
+    reports = []
+    if args.fleet:
+        import pandas as pd
+
+        df = pd.read_csv(args.fleet)
+        for _, row in df.iterrows():
+            telemetry = {
+                "vibration_mms": float(row["vibration_mms"]),
+                "temperature_c": float(row["temperature_c"]),
+                "rpm": float(row["rpm"]),
+                "oil_viscosity_cst": float(row["oil_viscosity_cst"]),
+                "load_pct": float(row["load_pct"]),
+                "predicted_rul_days": float(row.get("predicted_rul_days", 365.0)),
+            }
+            reports.append(
+                FaultDetector(spec).detect(
+                    telemetry, asset_id=str(row["asset_id"]), timestamp=""
+                )
+            )
+    else:
+        if not args.snapshot:
+            print(
+                "provide --snapshot <telemetry.json> or --fleet <fleet.csv>",
+                file=sys.stderr,
+            )
+            return 2
+        snapshot = json.loads(Path(args.snapshot).read_text(encoding="utf-8"))
+        telemetry = snapshot.get("telemetry", snapshot)
+        reports.append(
+            FaultDetector(spec).detect(
+                telemetry, asset_id=str(args.asset), timestamp=""
+            )
+        )
+
+    if args.report or len(reports) > 1:
+        sent = notifier.send_health_report(
+            reports,
+            title=args.subject or f"Fleet health — {len(reports)} asset(s)",
+            recipients=recipients,
+        )
+        results = [sent.to_dict()] if sent else []
+    else:
+        results = [n.to_dict() for n in notifier.process_report(reports[0])]
+        if not results and not args.force:
+            logger.info("no CRITICAL/HIGH faults to alert; use --report for a digest")
+    for result in results:
+        print(json.dumps(result, indent=2))
+    return 0
+
+
 def cmd_federated(args: argparse.Namespace) -> int:
     """Run a local fleet-wide federated-averaging simulation.
 
@@ -395,6 +531,40 @@ def build_parser() -> argparse.ArgumentParser:
     common(p_explain)
     p_explain.add_argument("--out", default=None, help="report output path")
     p_explain.set_defaults(func=cmd_explain)
+
+    p_faults = sub.add_parser(
+        "faults",
+        help="whole-turbine fault detection (every part, oil included)",
+    )
+    p_faults.add_argument("--list", action="store_true", help="print the full fault catalog")
+    p_faults.add_argument(
+        "--sensors", action="store_true", help="print the sensor catalog (hardware guide)"
+    )
+    p_faults.add_argument("--subsystem", default=None, help="catalog filter, e.g. gearbox")
+    p_faults.add_argument(
+        "--snapshot", default=None, help="JSON telemetry snapshot to check for faults"
+    )
+    p_faults.add_argument("--model", default=None, help="TurbineSpec key, e.g. NREL-5MW")
+    p_faults.add_argument("--asset", default="WTG-000", help="asset id for the report")
+    p_faults.add_argument("--timestamp", default="", help="report timestamp (ISO 8601)")
+    p_faults.add_argument("--out", default=None, help="write the report JSON to this path")
+    p_faults.set_defaults(func=cmd_faults)
+
+    p_notify = sub.add_parser(
+        "notify",
+        help="email a fault alert or health report (CRITICAL/HIGH pages immediately)",
+    )
+    p_notify.add_argument("--snapshot", default=None, help="JSON telemetry snapshot")
+    p_notify.add_argument("--fleet", default=None, help="fleet CSV (digest report)")
+    p_notify.add_argument("--model", default=None, help="TurbineSpec key, e.g. NREL-5MW")
+    p_notify.add_argument("--asset", default="WTG-000", help="asset id (single snapshot)")
+    p_notify.add_argument("--recipient", default=None, help="explicit recipient email")
+    p_notify.add_argument("--subject", default=None, help="report subject/title")
+    p_notify.add_argument("--report", action="store_true", help="send the digest report")
+    p_notify.add_argument(
+        "--force", action="store_true", help="send even with no CRITICAL/HIGH fault"
+    )
+    p_notify.set_defaults(func=cmd_notify)
 
     p_fed = sub.add_parser("federated", help="fleet-wide federated FedAvg simulation")
     common(p_fed)

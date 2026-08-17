@@ -196,6 +196,109 @@ python main.py active-sample --checkpoint artifacts/pg_bnn.pt --out artifacts/ma
 python main.py explain --checkpoint artifacts/pg_bnn.pt --out artifacts/explain_report.json
 ```
 
+## 🔍 Whole-turbine fault detection — every part, every fault type
+
+Beyond the main-bearing RUL forecast, AeroVigil ships a complete fault
+detection system covering **all 12 wind-turbine subsystems** — rotor &
+blades, pitch, hub & main shaft, gearbox, high-speed shaft & brake,
+generator, yaw, tower & foundation, nacelle & sensors, cooling & hydraulics,
+electrical & power, and SCADA & communication — with **80 fault types**,
+including the full gearbox **oil-condition** set (viscosity, water, ISO 4406
+particles, TAN, filter ΔP, level, aeration, supply pressure, wear metals),
+**10 blade fault types** and **7 fire fault types** (blade, brake,
+gearbox-oil, electrical-cabinet, tower-base and nacelle fires, plus
+fire-suppression system faults).
+
+Each detection run returns a ranked report: fault id, subsystem, severity
+(LOW → CRITICAL), confidence, evidence, first-sighting/confirmation status,
+and recommended maintenance actions. See [`docs/FAULTS.md`](docs/FAULTS.md)
+for the complete catalog and thresholds, and
+[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) for the hardware setup (which
+sensors to install and where).
+
+```bash
+# Print the full fault catalog
+python main.py faults --list
+
+# Just the gearbox (oil faults included)
+python main.py faults --subsystem gearbox
+
+# Which sensors reveal a subsystem's faults (hardware guide)
+python main.py faults --sensors --subsystem gearbox
+
+# Find faults in a telemetry snapshot (oil, vibration, temperature, ...)
+python main.py faults --snapshot examples/fault_payload.json --model NREL-5MW
+```
+
+The same engine runs inside the digital twin on every state update
+(`state_record["fault_report"]`), and is exposed as
+`POST /api/faults/detect`, `GET /api/faults/catalog` and
+`GET /api/faults/sensors`.
+
+### 📧 Email health reports & alerts
+
+AeroVigil emails the **health report** on demand (fleet digest included) and
+**alerts the receiver immediately** when a fault is important:
+
+* **CRITICAL / HIGH** faults → instant email, per (asset, fault), with
+  dedupe cooldowns (6 h / 24 h) and instant re-alert on severity escalation.
+* **MEDIUM / LOW** faults → rolled into the periodic health report.
+* No SMTP server? Emails are written as standard `.eml` files under
+  `artifacts/notifications/` for offline preview and testing.
+
+```bash
+export AV_ALERT_RECIPIENTS='ops@yourfarm.com'       # who gets paged
+export AV_REPORT_RECIPIENTS='maintenance@yourfarm.com'
+export AV_SMTP_HOST=smtp.gmail.com                  # omit → .eml files
+
+python main.py notify --snapshot examples/fault_payload.json --model NREL-5MW
+python main.py notify --fleet examples/fleet.csv --report --subject "Daily health"
+```
+
+API: `POST /api/notifications/send`, `GET /api/notifications/status`.
+See [`docs/NOTIFICATIONS.md`](docs/NOTIFICATIONS.md) for the full policy.
+
+### ⚙️ More in the single app
+
+Everything below runs in the one unified deployment (`src/unified_app.py` →
+`/api`):
+
+* **Webhook alerts** — the same alerts are POSTed to Slack / Teams / generic
+  webhooks (`AV_WEBHOOK_URLS`).
+* **Alert workflow** — list, acknowledge and resolve open alerts
+  (`GET /api/notifications/alerts`, `POST .../ack`, `POST .../resolve`).
+* **Scheduled fleet digest** — the app emails the daily fleet health report
+  itself (`AV_DIGEST_ENABLED=1`, `AV_DIGEST_HOUR=6`); no external cron.
+* **Fault history & trends** — per-asset fault timeline
+  (`GET /api/faults/history`) and fleet roll-ups (`GET /api/faults/trends`).
+* **Maintenance work orders** — `POST /api/maintenance/workorder` turns any
+  snapshot into a prioritized work order (priority, target date, actions,
+  involved sensors, inspection checklist), persisted and listable via
+  `GET /api/maintenance/workorders`.
+* **Connectivity tests** — `POST /api/notifications/email/test` and
+  `POST /api/notifications/webhooks/test`.
+
+* **Maintenance mode** — put an asset into maintenance and all its alerts are
+  silenced (visible as suppressed) until the crew removes it:
+  `POST /api/notifications/suppress?asset_id=…&reason=…` (+ `/unsuppress`,
+  `GET /api/notifications/suppressions`).
+* **Notification history** — every email/webhook attempt is logged to the
+  durable store: `GET /api/notifications/history?asset_id=…`.
+* **Detection-limit tuning** — operators adjust per-asset thresholds at
+  runtime (`PUT /api/faults/limits`, `GET` / `DELETE` too); persisted and
+  applied to the digital twin and detect calls.
+* **Fleet export** — `GET /api/fleet/export?format=csv|json&farm=…` downloads
+  the fleet health snapshot; `GET /api/reports/fleet.html` and
+  `GET /api/reports/asset/{id}.html` download printable HTML reports.
+* **Maintenance plan** — `GET /api/maintenance/plan?days=30&farm=…` rolls
+  work orders + RUL forecasts onto a weekly calendar with hours and
+  energy-at-risk (MWh).
+* **Farm grouping** — assets register a farm (`farm` on twin simulate);
+  plan/trends/export filter by it.
+* **Scenario simulator** — `POST /api/simulate/snapshot` generates
+  deterministic healthy/faulty/critical/random snapshots, runs detection and
+  optionally pages alerts — perfect for demos and testing the pipeline.
+
 ## Configuration guide
 
 All knobs live in `configs/default.yaml` (validated by

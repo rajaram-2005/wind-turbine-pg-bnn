@@ -33,6 +33,7 @@ import pandas as pd
 from src.agents.cyber_team import build_cyber_team_brief
 from src.data.ingest import CHANNELS
 from src.digital_twin.specs import TurbineSpec
+from src.faults.detector import FaultDetector, FaultReport
 from src.physics.constraints import (
     GearboxPhysicsConstraints,
     check_violations,
@@ -66,11 +67,14 @@ class WindTurbineDigitalTwin:
         serving_model=None,
         *,
         max_history: int = DEFAULT_MAX_HISTORY,
+        notifier=None,
+        fault_detector_overrides: dict[str, float] | None = None,
     ):
         if max_history < 1:
             raise ValueError(f"max_history must be >= 1, got {max_history}")
         self.asset_id = asset_id
         self.spec = spec
+        self.farm: str = ""  # optional farm grouping (set by the API registry)
         self.state_history: list[dict[str, Any]] = []
         self.max_history: int = max_history
         self.cumulative_wear: float = 0.0  # Normalized wear index (0.0 = brand new, 1.0 = failure)
@@ -78,6 +82,12 @@ class WindTurbineDigitalTwin:
         # Raw snapshot buffer feeding the advisory feature pipeline.
         self._telemetry_buffer: deque[dict[str, float]] = deque(maxlen=_ADVISORY_BUFFER_MAX)
         self.serving_model = None
+        # Whole-turbine fault detection (taxonomy + oil analysis + rules).
+        self.fault_detector = FaultDetector(spec, overrides=fault_detector_overrides)
+        self.last_fault_report: FaultReport | None = None
+        # Optional email notifier: raises CRITICAL/HIGH alerts on new findings.
+        self.notifier = notifier
+        self.last_notifications: list[dict] = []
         if serving_model is not None:
             self.attach_serving_model(serving_model)
 
@@ -213,6 +223,24 @@ class WindTurbineDigitalTwin:
         self.last_updated = timestamp
         self._telemetry_buffer.append(telemetry_dict)
 
+        # Whole-turbine fault detection: every part, every fault type. The
+        # confirmation pass uses the previous buffered windows so persistent
+        # faults gain confidence and first sightings are flagged as new.
+        self.last_fault_report = self.fault_detector.detect(
+            telemetry_dict,
+            history=list(self._telemetry_buffer)[:-1],
+            asset_id=self.asset_id,
+            timestamp=timestamp.isoformat(),
+        )
+        if self.notifier is not None:
+            # Severe (CRITICAL/HIGH) findings page the recipient by email;
+            # dedupe/cooldown is handled inside the notifier.
+            self.last_notifications = [
+                n.to_dict() for n in self.notifier.process_report(self.last_fault_report)
+            ]
+        else:
+            self.last_notifications = []
+
         # Bridge to the advisory engine: model path when a serving model is
         # attached, else the incoming bnn_state block (previous behavior).
         advisory, advisory_source, advisory_error = self._compute_advisory(telemetry, bnn_state)
@@ -242,6 +270,8 @@ class WindTurbineDigitalTwin:
             "advisory_source": advisory_source,
             "advisory_error": advisory_error,
             "agent_team": agent_team,
+            "fault_report": self.last_fault_report.to_dict(),
+            "notifications": self.last_notifications,
         }
         self.state_history.append(state_record)
         if len(self.state_history) > self.max_history:

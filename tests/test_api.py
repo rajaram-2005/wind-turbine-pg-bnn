@@ -1,5 +1,7 @@
 """Tests for the FastAPI advisory service (`src.api`)."""
 
+import json
+
 import pytest
 
 # These tests need the optional `api` extras. Skip gracefully if absent.
@@ -151,3 +153,521 @@ def test_fleet_endpoint_returns_summary_and_assets(client: TestClient):
 def test_fleet_rejects_empty(client: TestClient):
     resp = client.post("/advisory/fleet", json={"assets": []})
     assert resp.status_code == 422  # min_length=1
+
+
+# --------------------------------------------------------------------------- #
+# Whole-turbine fault detection routes                                         #
+# --------------------------------------------------------------------------- #
+def test_faults_catalog_lists_all_subsystems(client):
+    resp = client.get("/faults/catalog")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["summary"]["n_subsystems"] == 12
+    assert body["summary"]["total_fault_types"] >= 60
+    subsystems = {f["subsystem"] for f in body["faults"]}
+    assert subsystems == {
+        "rotor_blades",
+        "pitch",
+        "hub_mainshaft",
+        "gearbox",
+        "hss_brake",
+        "generator",
+        "yaw",
+        "tower_foundation",
+        "nacelle_sensors",
+        "cooling_hydraulics",
+        "electrical",
+        "scada",
+    }
+
+
+def test_faults_catalog_filtered_by_subsystem(client):
+    resp = client.get("/faults/catalog?subsystem=gearbox")
+    assert resp.status_code == 200
+    faults = resp.json()["faults"]
+    assert len(faults) >= 10
+    assert all(f["subsystem"] == "gearbox" for f in faults)
+    names = " ".join(f["name"] for f in faults).lower()
+    assert "viscosity" in names and "water" in names and "filter" in names
+
+    bad = client.get("/faults/catalog?subsystem=not-real")
+    assert bad.status_code == 404
+
+
+def test_faults_detect_healthy_and_faulty(client):
+    healthy = {
+        "asset_id": "WTG-API",
+        "model_key": "NREL-5MW",
+        "telemetry": {
+            "vibration_mms": 2.0,
+            "temperature_c": 55.0,
+            "rpm": 950.0,
+            "oil_viscosity_cst": 32.0,
+            "load_pct": 70.0,
+        },
+    }
+    resp = client.post("/faults/detect", json=healthy)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["asset_id"] == "WTG-API"
+    assert body["overall_status"] == "OK"
+    assert body["summary"]["n_faults"] == 0
+
+    faulty = {
+        "asset_id": "WTG-API",
+        "model_key": "NREL-5MW",
+        "telemetry": {
+            "vibration_mms": 8.5,
+            "temperature_c": 88.0,
+            "oil_temp_c": 88.0,
+            "rpm": 1100.0,
+            "oil_viscosity_cst": 5.0,
+            "load_pct": 100.0,
+            "oil_water_ppm": 1500.0,
+            "oil_particles_iso4406": "20/18/16",
+            "oil_tan_mgkoh_g": 2.5,
+            "oil_filter_dp_bar": 2.9,
+            "oil_level_pct": 5.0,
+            "oil_pressure_bar": 0.6,
+            "generator_temp_c": 122.0,
+            "yaw_error_deg": 25.0,
+        },
+    }
+    resp = client.post("/faults/detect", json=faulty)
+    assert resp.status_code == 200
+    body = resp.json()
+    ids = {f["fault_id"] for f in body["faults"]}
+    assert {"GB-02", "GB-04", "GB-05", "GB-06", "GB-07", "GB-08", "GB-12"} <= ids
+    assert "GN-01" in ids and "YW-03" in ids and "HS-01" in ids
+    assert body["oil"]["overall_status"] == "ALARM"
+    assert body["overall_status"] in ("HIGH", "CRITICAL")
+    # Advisory-only contract: no actuation fields leak into fault payloads.
+    for f in body["faults"]:
+        for key in BLOCKED_KEYS:
+            assert key not in json.dumps(f)
+
+
+def test_faults_detect_unknown_model(client):
+    resp = client.post(
+        "/faults/detect",
+        json={"asset_id": "WTG-X", "model_key": "No-Such-Model", "telemetry": {}},
+    )
+    assert resp.status_code == 404
+
+
+# --------------------------------------------------------------------------- #
+# Email notifications + sensor catalog routes                                  #
+# --------------------------------------------------------------------------- #
+def test_notifications_status_reports_configuration(client):
+    resp = client.get("/notifications/status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["mode"] in ("smtp", "eml")
+    assert body["advisory_only"] is True
+    assert "alert_recipients" in body and "cooldown_hours" in body
+
+
+def test_notifications_send_faulty_snapshot_pages_alert(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("AV_NOTIFY_DIR", str(tmp_path / "notes"))
+    monkeypatch.delenv("AV_SMTP_HOST", raising=False)
+    monkeypatch.setenv("AV_ALERT_RECIPIENTS", "ops@example.com")
+    payload = {
+        "asset_id": "WTG-NOTIF",
+        "model_key": "NREL-5MW",
+        "telemetry": {
+            "vibration_mms": 9.0,
+            "temperature_c": 60.0,
+            "rpm": 1000.0,
+            "oil_viscosity_cst": 5.0,
+            "load_pct": 90.0,
+            "oil_temp_c": 125.0,
+            "smoke_detector_on": True,
+        },
+    }
+    resp = client.post("/notifications/send", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["delivered"] is True
+    assert body["notifications"], "expected an alert email"
+    subjects = " ".join(n["subject"] for n in body["notifications"])
+    assert "CRITICAL" in subjects
+    eml_files = list((tmp_path / "notes").glob("*.eml"))
+    assert len(eml_files) >= 1
+    assert "WTG-NOTIF" in eml_files[0].read_text(encoding="utf-8")
+
+
+def test_notifications_send_healthy_snapshot_force_reports(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("AV_NOTIFY_DIR", str(tmp_path / "notes2"))
+    monkeypatch.delenv("AV_SMTP_HOST", raising=False)
+    monkeypatch.setenv("AV_REPORT_RECIPIENTS", "maint@example.com")
+    payload = {
+        "asset_id": "WTG-FINE",
+        "model_key": "NREL-5MW",
+        "telemetry": {
+            "vibration_mms": 2.0,
+            "temperature_c": 55.0,
+            "rpm": 950.0,
+            "oil_viscosity_cst": 32.0,
+            "load_pct": 70.0,
+        },
+        "force_report": True,
+        "subject": "Overnight check",
+    }
+    resp = client.post("/notifications/send", json=payload)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["delivered"] is True
+    assert len(body["notifications"]) == 1
+    assert "Overnight check" in body["notifications"][0]["subject"]
+
+
+def test_faults_sensors_route(client):
+    resp = client.get("/faults/sensors")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["summary"]["n_sensors"] >= 40
+    assert body["summary"]["n_fault_types_covered"] >= 75
+    fire = client.get("/faults/sensors?subsystem=gearbox")
+    assert fire.status_code == 200
+    assert all(s["category"] for s in fire.json()["sensors"])
+    bad = client.get("/faults/sensors?subsystem=nope")
+    assert bad.status_code == 404
+
+
+# --------------------------------------------------------------------------- #
+# Alert workflow, webhooks, digest, history/trends, work orders                 #
+# --------------------------------------------------------------------------- #
+def test_alerts_ack_and_resolve_workflow(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("AV_NOTIFY_DIR", str(tmp_path / "alerts"))
+    # Seed a tracked alert by sending a faulty snapshot.
+    resp = client.post(
+        "/notifications/send",
+        json={
+            "asset_id": "WTG-ACK",
+            "model_key": "NREL-5MW",
+            "telemetry": {
+                "vibration_mms": 9.0,
+                "temperature_c": 60.0,
+                "rpm": 1000.0,
+                "oil_viscosity_cst": 5.0,
+                "load_pct": 90.0,
+            },
+        },
+    )
+    assert resp.status_code == 200
+    alerts = client.get("/notifications/alerts").json()
+    assert alerts["n_open"] >= 1
+    assert any(a["asset_id"] == "WTG-ACK" for a in alerts["alerts"])
+
+    ack = client.post(
+        "/notifications/alerts/ack",
+        json={"asset_id": "WTG-ACK", "fault_id": "GB-02", "operator": "ops-1"},
+    )
+    assert ack.status_code == 200
+    assert ack.json()["acknowledged"] is True
+    state = {a["fault_id"]: a for a in client.get("/notifications/alerts").json()["alerts"]}
+    assert state["GB-02"]["acknowledged"] is True
+
+    resolved = client.post(
+        "/notifications/alerts/resolve",
+        json={"asset_id": "WTG-ACK", "fault_id": "GB-02", "operator": "crew"},
+    )
+    assert resolved.status_code == 200
+    assert resolved.json()["resolved"] is True
+    open_ids = {a["fault_id"] for a in client.get("/notifications/alerts").json()["alerts"]}
+    assert "GB-02" not in open_ids
+
+
+def test_webhooks_status_and_test_requires_urls(client):
+    status = client.get("/notifications/webhooks/status").json()
+    assert "enabled" in status and "n_webhooks" in status
+    test = client.post("/notifications/webhooks/test")
+    assert test.status_code == 422  # no URLs configured in test env
+
+
+def test_digest_requires_twins(client):
+    resp = client.post("/notifications/digest")
+    assert resp.status_code == 422  # no tracked twins with reports
+
+
+def test_digest_after_twin_simulation(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("AV_NOTIFY_DIR", str(tmp_path / "digest"))
+    monkeypatch.setenv("AV_REPORT_RECIPIENTS", "maint@example.com")
+    # Register + populate a twin via the simulate route.
+    sim = client.post(
+        "/twin/simulate",
+        json={"asset_id": "WTG-DG", "model": "NREL-5MW", "profile": "overload", "hours": 3},
+    )
+    assert sim.status_code == 200
+    resp = client.post("/notifications/digest", json={"title": "Manual digest"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["result"]["delivered"] is True
+    assert "Manual digest" in body["result"]["subject"]
+    assert body["n_assets"] >= 1
+    assert list((tmp_path / "digest").glob("*.eml"))
+
+
+def test_faults_history_and_trends(client):
+    sim = client.post(
+        "/twin/simulate",
+        json={"asset_id": "WTG-HST", "model": "NREL-5MW", "profile": "overload", "hours": 4},
+    )
+    assert sim.status_code == 200
+    history = client.get("/faults/history?asset_id=WTG-HST&limit=10")
+    assert history.status_code == 200
+    body = history.json()
+    assert body["asset_id"] == "WTG-HST"
+    assert body["n_records"] >= 1
+    assert "timeline" in body and "health_score" in body["timeline"][0]
+
+    trends = client.get("/faults/trends")
+    assert trends.status_code == 200
+    tbody = trends.json()
+    assert tbody["n_assets"] >= 1
+    assert "severity_rollup" in tbody and "subsystem_rollup" in tbody
+    assert "top_faults" in tbody
+    assert all("name" in f for f in tbody["top_faults"])
+
+
+def test_maintenance_workorder_generate_and_list(client):
+    resp = client.post(
+        "/maintenance/workorder",
+        json={
+            "asset_id": "WTG-WO",
+            "model_key": "NREL-5MW",
+            "telemetry": {
+                "vibration_mms": 9.0,
+                "temperature_c": 60.0,
+                "rpm": 1000.0,
+                "oil_viscosity_cst": 5.0,
+                "load_pct": 90.0,
+                "oil_water_ppm": 1500.0,
+            },
+        },
+    )
+    assert resp.status_code == 200
+    wo = resp.json()
+    assert wo["wo_id"].startswith("WO-")
+    assert wo["asset_id"] == "WTG-WO"
+    assert wo["priority"].startswith("P1") or wo["priority"].startswith("P0")
+    assert wo["advisory_only"] is True
+    assert wo["sensors"], "work order lists involved sensors"
+    assert any(a.startswith("[GB-02]") for a in wo["recommended_actions"])
+
+    listing = client.get("/maintenance/workorders")
+    assert listing.status_code == 200
+    assert listing.json()["n_workorders"] >= 1
+    assert any(o["wo_id"] == wo["wo_id"] for o in listing.json()["workorders"])
+
+
+def test_notifications_email_test(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("AV_NOTIFY_DIR", str(tmp_path / "etest"))
+    monkeypatch.setenv("AV_ALERT_RECIPIENTS", "ops@example.com")
+    resp = client.post("/notifications/email/test")
+    assert resp.status_code == 200
+    assert resp.json()["result"]["delivered"] is True
+    assert "TEST" in resp.json()["result"]["subject"]
+
+
+# --------------------------------------------------------------------------- #
+# Maintenance mode, notification history, limits, export, plan, simulate        #
+# --------------------------------------------------------------------------- #
+def test_suppress_unsuppress_workflow(client):
+    suppress = client.post(
+        "/notifications/suppress?asset_id=WTG-SUP&reason=gearbox+swap&operator=crew"
+    )
+    assert suppress.status_code == 200
+    assert suppress.json()["suppressed"] is True
+    listing = client.get("/notifications/suppressions").json()
+    assert any(a["asset_id"] == "WTG-SUP" for a in listing["assets"])
+    # Alerts for the suppressed asset are held back with a visible result.
+    send = client.post(
+        "/notifications/send",
+        json={
+            "asset_id": "WTG-SUP",
+            "model_key": "NREL-5MW",
+            "telemetry": {
+                "vibration_mms": 12.0,
+                "temperature_c": 60.0,
+                "rpm": 1000.0,
+                "oil_viscosity_cst": 5.0,
+                "load_pct": 90.0,
+                "oil_temp_c": 126.0,
+                "smoke_detector_on": True,
+            },
+        },
+    )
+    assert send.status_code == 200
+    assert send.json()["delivered"] is False
+    assert "maintenance mode" in send.json()["notifications"][0]["detail"]
+    unsuppress = client.post("/notifications/unsuppress?asset_id=WTG-SUP")
+    assert unsuppress.status_code == 200
+    assert unsuppress.json()["suppressed"] is False
+
+
+def test_notification_history_records_sends(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("AV_NOTIFY_DIR", str(tmp_path / "hist"))
+    monkeypatch.setenv("AV_ALERT_RECIPIENTS", "ops@example.com")
+    client.post(
+        "/notifications/send",
+        json={
+            "asset_id": "WTG-HIST",
+            "model_key": "NREL-5MW",
+            "telemetry": {
+                "vibration_mms": 9.0,
+                "temperature_c": 60.0,
+                "rpm": 1000.0,
+                "oil_viscosity_cst": 5.0,
+                "load_pct": 90.0,
+            },
+        },
+    )
+    history = client.get("/notifications/history?asset_id=WTG-HIST").json()
+    assert history["n_records"] >= 1
+    record = history["notifications"][0]
+    assert record["asset_id"] == "WTG-HIST"
+    assert record["channel"] in ("eml", "email")
+    assert "delivered" in record
+
+
+def test_limits_get_put_delete(client):
+    # Defaults for GE-1.5.
+    defaults = client.get("/faults/limits?asset_id=WTG-L&model=GE-1.5").json()
+    assert defaults["limits"]["vibration_limit_mms"] == 4.5
+    assert defaults["limits"]["rpm_limit_hss"] == 1800.0
+    put = client.put(
+        "/faults/limits",
+        json={
+            "asset_id": "WTG-L",
+            "overrides": {"vibration_limit_mms": 6.5, "temperature_limit_c": 90.0},
+            "operator": "ops-2",
+        },
+    )
+    assert put.status_code == 200
+    assert put.json()["overrides"]["vibration_limit_mms"] == 6.5
+    effective = client.get("/faults/limits?asset_id=WTG-L&model=GE-1.5").json()
+    assert effective["limits"]["vibration_limit_mms"] == 6.5
+    assert effective["limits"]["temperature_limit_c"] == 90.0
+    assert effective["overrides_applied"]["vibration_limit_mms"] == 6.5
+    # Unknown override key rejected.
+    bad = client.put(
+        "/faults/limits", json={"asset_id": "WTG-L", "overrides": {"blade_length_m": 50.0}}
+    )
+    assert bad.status_code == 422
+    deleted = client.delete("/faults/limits?asset_id=WTG-L")
+    assert deleted.status_code == 200
+    assert deleted.json()["removed"] is True
+    back = client.get("/faults/limits?asset_id=WTG-L&model=GE-1.5").json()
+    assert back["limits"]["vibration_limit_mms"] == 4.5
+
+
+def test_limits_override_affects_detection(client):
+    client.put(
+        "/faults/limits",
+        json={
+            "asset_id": "WTG-LD",
+            "overrides": {"vibration_limit_mms": 6.5},
+            "operator": "ops",
+        },
+    )
+    resp = client.post(
+        "/faults/detect",
+        json={
+            "asset_id": "WTG-LD",
+            "model_key": "GE-1.5",
+            "telemetry": {
+                "vibration_mms": 5.5,
+                "temperature_c": 55.0,
+                "rpm": 1500.0,
+                "oil_viscosity_cst": 30.0,
+                "load_pct": 70.0,
+            },
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["summary"]["n_faults"] == 0  # 5.5 < 6.5 override
+    client.delete("/faults/limits?asset_id=WTG-LD")
+
+
+def test_fleet_export_csv_and_json(client):
+    client.post(
+        "/twin/simulate",
+        json={
+            "asset_id": "WTG-EXP",
+            "model": "NREL-5MW",
+            "farm": "Alpha",
+            "profile": "overload",
+            "hours": 2,
+        },
+    )
+    csv_resp = client.get("/fleet/export?format=csv")
+    assert csv_resp.status_code == 200
+    assert csv_resp.headers["content-type"].startswith("text/csv")
+    body = csv_resp.text
+    assert body.startswith("asset_id,farm,model,status")
+    assert "WTG-EXP" in body
+    assert "Alpha" in body
+    json_resp = client.get("/fleet/export?format=json&farm=Alpha")
+    assert json_resp.status_code == 200
+    assets = json_resp.json()["assets"]
+    assert all(a["farm"] == "Alpha" for a in assets)
+    bad = client.get("/fleet/export?format=xml")
+    assert bad.status_code == 422
+
+
+def test_html_report_downloads(client):
+    client.post(
+        "/twin/simulate",
+        json={"asset_id": "WTG-RPT", "model": "NREL-5MW", "profile": "overload", "hours": 2},
+    )
+    fleet = client.get("/reports/fleet.html")
+    assert fleet.status_code == 200
+    assert "text/html" in fleet.headers["content-type"]
+    assert "AeroVigil Health Report" in fleet.text
+    asset = client.get("/reports/asset/WTG-RPT.html")
+    assert asset.status_code == 200
+    assert "WTG-RPT" in asset.text
+    missing = client.get("/reports/asset/NOPE.html")
+    assert missing.status_code == 404
+
+
+def test_maintenance_plan_endpoint(client):
+    client.post(
+        "/twin/simulate",
+        json={
+            "asset_id": "WTG-PLN",
+            "model": "NREL-5MW",
+            "farm": "Beta",
+            "profile": "overload",
+            "hours": 3,
+        },
+    )
+    plan = client.get("/maintenance/plan?days=30")
+    assert plan.status_code == 200
+    body = plan.json()
+    assert body["n_assets_planned"] >= 1
+    assert body["n_tasks_planned"] >= 1
+    assert body["calendar"]
+    assert "summary" in body
+    farm_plan = client.get("/maintenance/plan?farm=DoesNotExist")
+    assert farm_plan.json()["n_assets_planned"] == 0
+
+
+def test_simulate_snapshot_endpoint(client):
+    resp = client.post(
+        "/simulate/snapshot",
+        json={"asset_id": "WTG-DEMO", "model_key": "NREL-5MW", "scenario": "critical", "seed": 3},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["scenario"] == "critical"
+    assert body["report"]["overall_status"] == "CRITICAL"
+    ids = {f["fault_id"] for f in body["report"]["faults"]}
+    assert "RB-07" in ids and "GB-15" in ids
+    healthy = client.post(
+        "/simulate/snapshot", json={"asset_id": "WTG-DEMO", "scenario": "healthy"}
+    )
+    assert healthy.json()["report"]["overall_status"] == "OK"
+    bad = client.post("/simulate/snapshot", json={"asset_id": "WTG-DEMO", "scenario": "meltdown"})
+    assert bad.status_code == 422

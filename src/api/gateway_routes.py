@@ -39,8 +39,6 @@ from typing import Any
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 
-from src.jobs import ALLOWED_JOB_TYPES, get_job_manager
-
 # Six-signal PG-BNN schemas and handlers, reused so the canonical ``/api``
 # surface exposes the full model capability without a second (legacy) mount.
 from src.aerovigil_pg_bnn.api import (
@@ -52,6 +50,7 @@ from src.aerovigil_pg_bnn.api import (
     predict_stream,
     predict_trend,
 )
+from src.jobs import ALLOWED_JOB_TYPES, get_job_manager
 
 logger = logging.getLogger(__name__)
 

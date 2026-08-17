@@ -26,12 +26,21 @@ __all__ = [
     "AdvisoryResponse",
     "AgentAskRequest",
     "AgentReviewRequest",
+    "AlertAckRequest",
     "BNNState",
+    "DigestRequest",
+    "FaultDetectRequest",
+    "FaultDetectResponse",
     "FleetRequest",
     "FleetResponse",
     "FleetSummary",
     "HealthResponse",
+    "LimitsRequest",
+    "NotificationSendRequest",
+    "NotificationSendResponse",
+    "NotificationStatusResponse",
     "REVIEW_DECISIONS",
+    "SimulateRequest",
     "Telemetry",
     "TelemetryCompressRequest",
     "TelemetryCompressResponse",
@@ -41,6 +50,7 @@ __all__ = [
     "TurbinePayload",
     "TwinScenariosRequest",
     "TwinSimulateRequest",
+    "WorkOrderRequest",
 ]
 
 
@@ -73,6 +83,123 @@ class TelemetryWindow(BaseModel):
         if len(lengths) != 1:
             raise ValueError("all telemetry_window channels must have equal sample counts")
         return self
+
+
+class FaultDetectRequest(BaseModel):
+    """Request body for POST /faults/detect.
+
+    ``telemetry`` carries the canonical five SCADA channels plus any optional
+    condition-monitoring channels the fault rules understand (oil water/ppm,
+    ISO 4406 particle codes, yaw error, brake wear, converter temperature,
+    inspection flags, ...). Extra channels are allowed on purpose: more
+    channels simply enable more of the fault catalog.
+    """
+
+    asset_id: str = Field("WTG-000", min_length=1)
+    model_key: str = Field("GE-1.5", min_length=1)
+    telemetry: dict[str, Any] = Field(..., description="Telemetry snapshot dict")
+
+
+class FaultDetectResponse(BaseModel):
+    """Result of whole-turbine fault detection (see ``src.faults``)."""
+
+    asset_id: str
+    timestamp: str
+    health_score: float = Field(..., ge=0.0, le=100.0)
+    overall_status: str
+    summary: dict[str, Any]
+    oil: dict[str, Any]
+    faults: list[dict[str, Any]]
+
+
+class NotificationSendRequest(BaseModel):
+    """Request body for POST /notifications/send.
+
+    Detects faults from the snapshot and emails an alert (CRITICAL/HIGH
+    findings) or a health report (anything else) to ``recipient`` (falls back
+    to the configured alert/report recipients).
+    """
+
+    asset_id: str = Field("WTG-000", min_length=1)
+    model_key: str = Field("GE-1.5", min_length=1)
+    telemetry: dict[str, Any] = Field(..., description="Telemetry snapshot dict")
+    recipient: str | None = Field(None, description="Explicit recipient email")
+    subject: str | None = Field(None, description="Optional report subject/title")
+    force_report: bool = Field(
+        False, description="Send the digest-style health report instead of an alert"
+    )
+
+
+class NotificationSendResponse(BaseModel):
+    """Result of one notification send."""
+
+    asset_id: str
+    report: dict[str, Any]
+    notifications: list[dict[str, Any]]
+    delivered: bool
+
+
+class NotificationStatusResponse(BaseModel):
+    """Configuration summary of the email notifier (no secrets)."""
+
+    mode: str
+    configured_mode: str
+    smtp_host: str
+    smtp_port: int
+    smtp_tls: bool
+    from_: str = Field(..., alias="from")
+    alert_recipients: list[str]
+    report_recipients: list[str]
+    artifact_dir: str
+    alert_severities: list[str]
+    cooldown_hours: dict[str, float]
+    tracked_alerts: int
+    advisory_only: bool
+    webhooks: dict[str, Any] = Field(default_factory=dict)
+    digest: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class AlertAckRequest(BaseModel):
+    """Operator action on a tracked alert (acknowledge or resolve)."""
+
+    asset_id: str = Field(..., min_length=1)
+    fault_id: str = Field(..., min_length=1, description="e.g. GB-02")
+    operator: str = Field("", description="Operator id/email for the audit trail")
+
+
+class DigestRequest(BaseModel):
+    """Manual trigger for the fleet health digest."""
+
+    title: str | None = None
+    recipients: list[str] | None = Field(None, max_length=50)
+
+
+class WorkOrderRequest(BaseModel):
+    """Generate a maintenance work order from a telemetry snapshot."""
+
+    asset_id: str = Field("WTG-000", min_length=1)
+    model_key: str = Field("GE-1.5", min_length=1)
+    telemetry: dict[str, Any] = Field(..., description="Telemetry snapshot dict")
+
+
+class SimulateRequest(BaseModel):
+    """Generate a deterministic demo telemetry snapshot and detect faults."""
+
+    asset_id: str = Field("WTG-DEMO", min_length=1)
+    model_key: str = Field("GE-1.5", min_length=1)
+    scenario: str = Field("healthy", pattern="^(healthy|faulty|critical|random)$")
+    seed: int = Field(0, ge=0, le=2**31 - 1)
+    notify: bool = Field(False, description="Send email/webhook alerts for the result")
+
+
+class LimitsRequest(BaseModel):
+    """Set per-asset detection-limit overrides."""
+
+    asset_id: str = Field(..., min_length=1)
+    overrides: dict[str, Any] = Field(..., description="Numeric limit overrides")
+    operator: str = Field("", description="Operator id for the audit trail")
 
 
 class TelemetryCompressRequest(BaseModel):
@@ -184,6 +311,7 @@ class TwinSimulateRequest(BaseModel):
 
     asset_id: str = Field(..., min_length=1)
     model: str = "GE-1.5"
+    farm: str = Field("", description="Optional farm grouping")
     profile: str = Field("nominal", pattern="^(nominal|overload|derated|viscosity_loss)$")
     hours: float = Field(24.0, gt=0.0, le=720.0)
 
@@ -208,7 +336,7 @@ class TwinScenariosRequest(BaseModel):
     hours: float = Field(24.0, gt=0.0, le=720.0)
 
     @model_validator(mode="after")
-    def _check_profiles(self) -> "TwinScenariosRequest":
+    def _check_profiles(self) -> TwinScenariosRequest:
         allowed = {"nominal", "overload", "derated", "viscosity_loss"}
         bad = [p for p in self.profiles if p not in allowed]
         if bad:
@@ -246,11 +374,9 @@ class AgentReviewRequest(BaseModel):
     note: str | None = Field(default=None, max_length=300)
 
     @model_validator(mode="after")
-    def _check_decision(self) -> "AgentReviewRequest":
+    def _check_decision(self) -> AgentReviewRequest:
         if self.decision not in REVIEW_DECISIONS:
-            raise ValueError(
-                f"decision must be one of: {' | '.join(REVIEW_DECISIONS)}"
-            )
+            raise ValueError(f"decision must be one of: {' | '.join(REVIEW_DECISIONS)}")
         return self
 
 
